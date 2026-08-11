@@ -455,11 +455,16 @@ function _marcarGuardado(clave){
     setTimeout(() => { if(el) el.textContent = ''; }, 1800);
 }
 
+function pareceEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v||''); }
+
 async function agregarUsuario(){
     const usuario = document.getElementById('new-usuario').value.trim();
     const password = document.getElementById('new-password').value;
     const rol = document.getElementById('new-rol').value;
-    const email = document.getElementById('new-email').value.trim();
+    // Si no se completó "Email para avisarle" pero el Usuario ya es un email
+    // (ej. "diego@gmail.com"), se usa ese mismo como destino automáticamente.
+    const emailCampo = document.getElementById('new-email').value.trim();
+    const email = emailCampo || (pareceEmail(usuario) ? usuario : '');
     if(!usuario || !password){ alert('Completá usuario y contraseña.'); return; }
     const accesos = {};
     document.querySelectorAll('#new-tools input:checked').forEach(cb => accesos[cb.value] = true);
