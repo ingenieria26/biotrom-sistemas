@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BIOTROM — Inicio</title>
+    <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -263,6 +264,25 @@
 // bloquear a alguien que se lo propone en serio.
 // ══════════════════════════════════════════════════════
 const FB_BASE_USUARIOS = 'https://biotrom-carga-maquina-default-rtdb.firebaseio.com/usuarios';
+
+// ── Envío de mail de bienvenida (EmailJS) ──
+// Solo se manda si al crear el usuario se completa el campo Email. La Public
+// Key de EmailJS es de uso público a propósito (así funciona el servicio:
+// identifica la cuenta, no da acceso a mandar mails sin el Service/Template
+// configurados). Nunca poner ahí la Private Key.
+const EMAILJS_PUBLIC_KEY = 'wsC3mGf9peTQcibh5';
+const EMAILJS_SERVICE_ID = 'ingenieria.biotrom@gmail';
+const EMAILJS_TEMPLATE_ID = 'template_pc7j3hc';
+
+async function enviarMailBienvenida(email, usuario, password){
+    if (!email || !window.emailjs) return;
+    try{
+        await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+            to_email: email, to_name: usuario, usuario: usuario, password: password
+        }, {publicKey: EMAILJS_PUBLIC_KEY});
+    }catch(e){ console.warn('No se pudo enviar el mail de bienvenida:', e); }
+}
+
 const TOOLS = [
     {slug:'costos', nombre:'Calculadora de Costos'},
     {slug:'panel_ejecutivo', nombre:'Panel Ejecutivo'},
@@ -376,6 +396,9 @@ function renderAdmin(usuarios){
                     <option value="admin">Administrador</option>
                 </select>
             </div>
+            <div class="adm-user-row">
+                <input type="email" id="new-email" placeholder="Email para avisarle (opcional)" style="flex:1;min-width:220px">
+            </div>
             <div class="adm-tools" id="new-tools">
                 ${TOOLS.map(t => `<label><input type="checkbox" value="${t.slug}">${t.nombre}</label>`).join('')}
             </div>
@@ -436,11 +459,13 @@ async function agregarUsuario(){
     const usuario = document.getElementById('new-usuario').value.trim();
     const password = document.getElementById('new-password').value;
     const rol = document.getElementById('new-rol').value;
+    const email = document.getElementById('new-email').value.trim();
     if(!usuario || !password){ alert('Completá usuario y contraseña.'); return; }
     const accesos = {};
     document.querySelectorAll('#new-tools input:checked').forEach(cb => accesos[cb.value] = true);
     const clave = _claveUsuario(usuario);
-    await _fbGuardarUsuario(clave, {usuario, password, rol, accesos});
+    await _fbGuardarUsuario(clave, {usuario, password, rol, accesos, email});
+    if(email) await enviarMailBienvenida(email, usuario, password);
     renderAdmin(await _fbUsuarios());
 }
 async function borrarUsuario(clave, usuario){
