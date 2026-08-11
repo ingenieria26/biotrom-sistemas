@@ -633,7 +633,7 @@ function promptCodCarta(cod_prod) {
   wrap.innerHTML =
     '<div style="display:flex;gap:4px;align-items:center;margin-top:4px">'
     + '<input id="dp-carta-inp" value="' + esc(cur) + '" style="flex:1;font-family:monospace;font-size:.75rem;padding:2px 5px;background:var(--bg2);border:1px solid var(--accent);border-radius:3px;color:var(--text)">'
-    + '<button onclick="saveCodCarta(' + JSON.stringify(cod_prod) + ')" style="font-size:.7rem;padding:2px 8px;background:var(--accent);color:#fff;border:none;border-radius:3px;cursor:pointer">OK</button>'
+    + '<button onclick="saveCodCarta(\'' + cod_prod + '\')" style="font-size:.7rem;padding:2px 8px;background:var(--accent);color:#fff;border:none;border-radius:3px;cursor:pointer">OK</button>'
     + '<button onclick="document.getElementById(\'dp-carta-edit-wrap\').innerHTML=\'\'" style="font-size:.7rem;padding:2px 6px;background:transparent;border:1px solid var(--border);border-radius:3px;cursor:pointer;color:var(--text-dim)">✕</button>'
     + '</div>';
   document.getElementById('dp-carta-inp').focus();
@@ -2237,7 +2237,7 @@ function showDoc(cod) {
     h += '<div style="display:flex;align-items:center;gap:6px;font-size:.72rem">'
        + '<span>' + esc(item.cod_carta) + (item.desc_carta && item.desc_carta !== item.cod_carta ? ' — ' + esc(item.desc_carta) : '') + '</span>'
        + (hasOvCarta ? '<span style="color:var(--yellow);font-size:.62rem">(corregido)</span>' : '')
-       + '<button onclick="promptCodCarta(' + JSON.stringify(cod) + ')" style="font-size:.6rem;padding:1px 5px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--text-dim);cursor:pointer">✎</button>'
+       + '<button onclick="promptCodCarta(\'' + cod + '\')" style="font-size:.6rem;padding:1px 5px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--text-dim);cursor:pointer">✎</button>'
        + '</div>';
     if (item.version) h += '<div style="font-size:.68rem">Versión: ' + esc(item.version) + '</div>';
     const cartaUrl = findCartaUrl(item.cod_carta);
@@ -2251,6 +2251,40 @@ function showDoc(cod) {
     h += '<div style="color:var(--red)">Sin carta</div>';
   }
   h += '</div>';
+
+  // Componentes del ensamble
+  if (isAsm && item.cod_carta) {
+    const codCarta = item.cod_carta.toUpperCase();
+    const comps = BASE_ITEMS.map(getItem).filter(c =>
+      c.cod_prod !== cod && (c.cod_carta||'').toUpperCase() === codCarta &&
+      (c.estado_prod||'').toUpperCase() !== 'DISCONTINUO'
+    );
+    h += '<div class="dp-sec"><div class="dp-lbl">COMPONENTES</div>';
+    if (comps.length === 0) {
+      h += '<div style="color:var(--text-dim);font-size:.68rem">Sin componentes con misma carta (cod_carta: ' + esc(item.cod_carta) + ')</div>';
+    } else {
+      h += '<table style="width:100%;border-collapse:collapse;font-size:.68rem">';
+      h += '<tr style="color:var(--text-dim);border-bottom:1px solid var(--border)"><th style="text-align:left;padding:2px 4px">Cód.</th><th style="text-align:left;padding:2px 4px">Descripción</th><th style="padding:2px 4px">Plano</th><th style="padding:2px 4px">Carta</th></tr>';
+      comps.forEach(c => {
+        const plUrl = findPlanoUrl(c.cod_prod);
+        const caUrl = findCartaUrl(c.cod_carta);
+        const plano = plUrl
+          ? '<a href="' + plUrl + '" target="_blank" style="color:var(--cyan)">▶</a>'
+          : '<span style="color:var(--text-dim)">—</span>';
+        const carta = caUrl
+          ? '<a href="' + caUrl + '" target="_blank" style="color:var(--cyan)">▶</a>'
+          : '<span style="color:var(--text-dim)">—</span>';
+        h += '<tr style="border-bottom:1px solid var(--border)">'
+           + '<td style="padding:2px 4px;font-family:monospace;white-space:nowrap"><a href="#" onclick="showDoc(\'' + c.cod_prod + '\');return false" style="color:var(--accent)">' + esc(c.cod_prod) + '</a></td>'
+           + '<td style="padding:2px 4px">' + esc(c.desc_prod) + '</td>'
+           + '<td style="text-align:center;padding:2px 4px">' + plano + '</td>'
+           + '<td style="text-align:center;padding:2px 4px">' + carta + '</td>'
+           + '</tr>';
+      });
+      h += '</table>';
+    }
+    h += '</div>';
+  }
 
   // CNC
   h += '<div class="dp-sec"><div class="dp-lbl">PROGRAMA CNC</div>';
