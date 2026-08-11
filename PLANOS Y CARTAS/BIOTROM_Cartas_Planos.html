@@ -8,6 +8,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <title>BIOTROM · Cartas & Planos</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
@@ -450,6 +451,14 @@
     border-radius:5px;cursor:pointer;font-family:var(--font);font-size:.75rem;font-weight:600;">
     &#10004; Aplicar cambios al sistema
   </button>
+  <button onclick="descargarPaquetePlanos()"
+    style="margin-top:14px;margin-left:8px;padding:7px 20px;background:var(--bg2);color:var(--cyan);border:1px solid var(--cyan);
+    border-radius:5px;cursor:pointer;font-family:var(--font);font-size:.75rem;font-weight:600;">
+    &#128230; Descargar paquete para la nube
+  </button>
+  <p style="font-size:.65rem;color:var(--text-dim);margin-top:6px;">
+    Descarga un .zip con estos PDFs renombrados por c&#243;digo. Descomprimilo dentro de la carpeta <strong>PLANOS Y CARTAS\pdfs\</strong> para que queden disponibles como &quot;Abrir plano PDF&quot; (ver e imprimir) desde cualquier computadora.
+  </p>
 </div>
 
 <!-- VERIFICAR VERSIONES DE CARTAS -->
@@ -483,6 +492,14 @@
   </div>
   <div id="carta-progress" style="font-size:.70rem;color:var(--text-dim);margin-top:4px;"></div>
   <div id="carta-results" style="margin-top:14px;overflow-x:auto;"></div>
+  <button onclick="descargarPaqueteCartas()"
+    style="margin-top:14px;padding:7px 20px;background:var(--bg2);color:var(--cyan);border:1px solid var(--cyan);
+    border-radius:5px;cursor:pointer;font-family:var(--font);font-size:.75rem;font-weight:600;">
+    &#128230; Descargar paquete para la nube
+  </button>
+  <p style="font-size:.65rem;color:var(--text-dim);margin-top:6px;">
+    Descarga un .zip con estas cartas renombradas por c&#243;digo. Descomprimilo dentro de <strong>PLANOS Y CARTAS\pdfs\</strong> (reemplazando si ya existe) para publicarlas.
+  </p>
 </div>
 </div><!-- /tab-pdf -->
 
@@ -1394,7 +1411,7 @@ async function processCarta(files) {
     else if (pdfVer === sysVer) { status = '✔ Coincide';   color = 'var(--green)';    ok++; }
     else              { status = '✗ Diferente';              color = 'var(--red)';      diff++; hasDiff = true; }
 
-    _cartaExtracted.push({ codCarta, items: items.map(it=>it.cod_prod), pdfVer, sysVer, status });
+    _cartaExtracted.push({ codCarta, items: items.map(it=>it.cod_prod), pdfVer, sysVer, status, fileObj: file });
 
     const trBg = (pdfVer && sysVer && pdfVer !== sysVer) ? 'background:#fff2f2' : '';
     rows += `<tr style="${trBg}">
@@ -1711,6 +1728,44 @@ async function processPDFs(files) {
   prog.textContent = `? Procesados: ${arr.length} PDFs ? Con datos: ${count} ? Sin match: ${arr.length - count}`;
   document.getElementById('btn-apply').disabled = count === 0;
   setTimeout(() => { barW.style.display = 'none'; }, 1000);
+}
+
+// ── Empaquetar PDFs cargados para subirlos a la nube ──
+// Genera un .zip con los PDFs ya renombrados por código (planos/<COD>.pdf o
+// cartas/<COD_CARTA>.pdf). El usuario lo descomprime dentro de la carpeta
+// "pdfs" de este mismo módulo (sobreescribiendo si ya existe) y el publicador
+// automático de BIOTROM lo sube al sitio en los próximos minutos.
+async function _descargarZip(nombreZip, entradas, mensajeVacio) {
+  if (!entradas.length) { alert(mensajeVacio); return; }
+  const zip = new JSZip();
+  let count = 0;
+  for (const { ruta, fileObj } of entradas) {
+    if (!fileObj) continue;
+    try {
+      zip.file(ruta, await fileObj.arrayBuffer());
+      count++;
+    } catch (e) {}
+  }
+  if (!count) { alert(mensajeVacio); return; }
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = nombreZip;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  alert(`Descargado "${nombreZip}" con ${count} archivo(s).\n\nDescomprimilo dentro de la carpeta "PLANOS Y CARTAS\\pdfs\\" (reemplazando si ya existe) y en unos minutos queda publicado en la nube.`);
+}
+function descargarPaquetePlanos() {
+  const entradas = [];
+  pdfExtracted.forEach(({ code, fileObj, matches }) => {
+    const targets = (matches && matches.length) ? matches : (code ? [code] : []);
+    targets.forEach(cod => entradas.push({ ruta: 'planos/' + cod.toUpperCase() + '.pdf', fileObj }));
+  });
+  _descargarZip('planos_para_nube.zip', entradas, 'Primero cargá los PDFs de planos en esta pestaña.');
+}
+function descargarPaqueteCartas() {
+  const entradas = _cartaExtracted.map(({ codCarta, fileObj }) => ({ ruta: 'cartas/' + codCarta.toUpperCase() + '.pdf', fileObj }));
+  _descargarZip('cartas_para_nube.zip', entradas, 'Primero cargá los PDFs de cartas en esta pestaña.');
 }
 
 function applyPDFData() {
@@ -2188,6 +2243,33 @@ function findCartaUrl(cod) {
   let idx; try { idx = _CARTA_IDX; } catch(e) { return null; }
   return idx.get(cod.toUpperCase()) || null;
 }
+
+// ── PDFs en la nube (carpeta "pdfs/" publicada junto a esta página) ──
+// Convención: el plano de un producto vive en pdfs/planos/<COD_PROD>.pdf y la
+// carta de proceso en pdfs/cartas/<COD_CARTA>.pdf. Se suben con el botón
+// "Descargar paquete para la nube" de la pestaña Importar PDFs (el usuario
+// descomprime el .zip resultante dentro de esta misma carpeta "pdfs").
+function cloudPlanoUrl(cod) {
+  if (!cod) return null;
+  return 'pdfs/planos/' + encodeURIComponent(cod.toUpperCase()) + '.pdf';
+}
+function cloudCartaUrl(codCarta) {
+  if (!codCarta) return null;
+  return 'pdfs/cartas/' + encodeURIComponent(codCarta.toUpperCase()) + '.pdf';
+}
+async function urlExists(url) {
+  try {
+    const res = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+    return res.ok;
+  } catch (e) { return false; }
+}
+function printPdfFrame(id) {
+  const f = document.getElementById(id);
+  if (!f) return;
+  try { f.contentWindow.focus(); f.contentWindow.print(); }
+  catch (e) { window.open(f.src, '_blank'); }
+}
+
 let progLinks = JSON.parse(localStorage.getItem(PROG_STORE)||'{}');
 
 // Pre-build keyword index once for fast autoMatch
@@ -2196,7 +2278,7 @@ let progLinks = JSON.parse(localStorage.getItem(PROG_STORE)||'{}');
 
 
 // ── Doc panel ─────────────────────────────────────────────────
-function showDoc(cod) {
+async function showDoc(cod) {
   const item = BASE_ITEMS.map(getItem).find(i => i.cod_prod === cod);
   if (!item) return;
   const isAsm = item.desc_prod.includes('(A)');
@@ -2213,16 +2295,24 @@ function showDoc(cod) {
     if (item.plano_dib)     h += '<div style="font-size:.68rem">Dibujó: ' + esc(item.plano_dib) + (item.plano_dib_fecha?' ('+esc(item.plano_dib_fecha)+')':'') + '</div>';
     if (item.plano_rev)     h += '<div style="font-size:.68rem">Revisó: ' + esc(item.plano_rev) + (item.plano_rev_fecha?' ('+esc(item.plano_rev_fecha)+')':'') + '</div>';
     if (item.plano_apr)     h += '<div style="font-size:.68rem">Aprobó: ' + esc(item.plano_apr) + (item.plano_apr_fecha?' ('+esc(item.plano_apr_fecha)+')':'') + '</div>';
+    let planoPdfUrl = null;
     if (pdfFiles[cod]) {
-      const url = URL.createObjectURL(pdfFiles[cod]);
-      h += '<div style="margin-top:6px"><a href="' + url + '" target="_blank" class="dp-btn">▶ Abrir plano PDF</a></div>';
-      h += '<iframe src="' + url + '" style="width:100%;height:320px;border:1px solid var(--border);border-radius:4px;margin-top:8px"></iframe>';
+      planoPdfUrl = URL.createObjectURL(pdfFiles[cod]);
+    } else if (await urlExists(cloudPlanoUrl(cod))) {
+      planoPdfUrl = cloudPlanoUrl(cod);
+    }
+    if (planoPdfUrl) {
+      h += '<div style="margin-top:6px;display:flex;gap:8px">'
+         + '<a href="' + planoPdfUrl + '" target="_blank" class="dp-btn">▶ Abrir plano PDF</a>'
+         + '<button class="dp-btn" style="border:none" onclick="printPdfFrame(\'dp-plano-frame\')">🖶 Imprimir</button>'
+         + '</div>';
+      h += '<iframe id="dp-plano-frame" src="' + planoPdfUrl + '" style="width:100%;height:320px;border:1px solid var(--border);border-radius:4px;margin-top:8px"></iframe>';
     } else {
       const svUrl = findPlanoUrl(cod);
       if (svUrl) {
-        h += '<div style="margin-top:6px"><a href="' + svUrl + '" target="_blank" class="dp-btn">▶ Abrir plano (servidor)</a></div>';
+        h += '<div style="margin-top:6px"><a href="' + svUrl + '" target="_blank" class="dp-btn">▶ Abrir plano (servidor local)</a></div>';
       } else {
-        h += '<div style="color:var(--text-dim);font-size:.68rem;margin-top:4px">No localizado en índice de servidor</div>';
+        h += '<div style="color:var(--text-dim);font-size:.68rem;margin-top:4px">Todavía no subido a la nube</div>';
       }
     }
   } else {
@@ -2240,12 +2330,22 @@ function showDoc(cod) {
        + '<button onclick="promptCodCarta(\'' + cod + '\')" style="font-size:.6rem;padding:1px 5px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--text-dim);cursor:pointer">✎</button>'
        + '</div>';
     if (item.version) h += '<div style="font-size:.68rem">Versión: ' + esc(item.version) + '</div>';
-    const cartaUrl = findCartaUrl(item.cod_carta);
     h += '<div id="dp-carta-edit-wrap"></div>';
-    if (cartaUrl) {
-      h += '<div style="margin-top:6px"><a href="' + cartaUrl + '" target="_blank" class="dp-btn">▶ Abrir carta (servidor)</a></div>';
+    let cartaPdfUrl = null;
+    if (await urlExists(cloudCartaUrl(item.cod_carta))) cartaPdfUrl = cloudCartaUrl(item.cod_carta);
+    if (cartaPdfUrl) {
+      h += '<div style="margin-top:6px;display:flex;gap:8px">'
+         + '<a href="' + cartaPdfUrl + '" target="_blank" class="dp-btn">▶ Abrir carta PDF</a>'
+         + '<button class="dp-btn" style="border:none" onclick="printPdfFrame(\'dp-carta-frame\')">🖶 Imprimir</button>'
+         + '</div>';
+      h += '<iframe id="dp-carta-frame" src="' + cartaPdfUrl + '" style="width:100%;height:320px;border:1px solid var(--border);border-radius:4px;margin-top:8px"></iframe>';
     } else {
-      h += '<div style="color:var(--text-dim);font-size:.68rem;margin-top:4px">No localizada en índice de servidor</div>';
+      const cartaUrl = findCartaUrl(item.cod_carta);
+      if (cartaUrl) {
+        h += '<div style="margin-top:6px"><a href="' + cartaUrl + '" target="_blank" class="dp-btn">▶ Abrir carta (servidor local)</a></div>';
+      } else {
+        h += '<div style="color:var(--text-dim);font-size:.68rem;margin-top:4px">Todavía no subida a la nube</div>';
+      }
     }
   } else {
     h += '<div style="color:var(--red)">Sin carta</div>';
@@ -2266,8 +2366,8 @@ function showDoc(cod) {
       h += '<table style="width:100%;border-collapse:collapse;font-size:.68rem">';
       h += '<tr style="color:var(--text-dim);border-bottom:1px solid var(--border)"><th style="text-align:left;padding:2px 4px">Cód.</th><th style="text-align:left;padding:2px 4px">Descripción</th><th style="padding:2px 4px">Plano</th><th style="padding:2px 4px">Carta</th></tr>';
       comps.forEach(c => {
-        const plUrl = findPlanoUrl(c.cod_prod);
-        const caUrl = findCartaUrl(c.cod_carta);
+        const plUrl = findPlanoUrl(c.cod_prod) || cloudPlanoUrl(c.cod_prod);
+        const caUrl = findCartaUrl(c.cod_carta) || cloudCartaUrl(c.cod_carta);
         const plano = plUrl
           ? '<a href="' + plUrl + '" target="_blank" style="color:var(--cyan)">▶</a>'
           : '<span style="color:var(--text-dim)">—</span>';

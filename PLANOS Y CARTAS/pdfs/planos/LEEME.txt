@@ -1,0 +1,8 @@
+Cada plano va acá con el nombre exacto: <CODIGO_DE_PRODUCTO>.pdf (mayúsculas)
+Ejemplo: 1AX00003.pdf
+
+No hace falta subirlos a mano: usá el botón "Descargar paquete para la nube"
+en la pestaña "Importar PDFs" de BIOTROM_Cartas_Planos.html, y descomprimí el
+.zip descargado directamente dentro de esta carpeta (reemplazando si ya existe).
+
+En unos minutos el publicador automático de BIOTROM sube los cambios al sitio.

@@ -1,0 +1,9 @@
+Cada carta de proceso va acá con el nombre exacto: <CODIGO_DE_CARTA>.pdf (mayúsculas)
+Ejemplo: 1AA00001.pdf
+
+No hace falta subirlos a mano: usá el botón "Descargar paquete para la nube"
+en la sección "Verificar versiones de cartas" de BIOTROM_Cartas_Planos.html, y
+descomprimí el .zip descargado directamente dentro de esta carpeta
+(reemplazando si ya existe).
+
+En unos minutos el publicador automático de BIOTROM sube los cambios al sitio.
