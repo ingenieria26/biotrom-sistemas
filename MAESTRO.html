@@ -771,6 +771,22 @@ if(document.readyState==='loading'){
     });
   }
 
+  /* Ajusta PEDIR sumando EN CAJAS (unidades comprometidas que hay que reponer) */
+  function applyPedirWithCajas(data){
+    if(!data||!data.length) return;
+    data.forEach(function(row){
+      var cod=String(row['Codigo']||'').trim();
+      var cajas=(window.CAJAS_PT&&window.CAJAS_PT[cod])||0;
+      if(cajas<=0) return;
+      var est=String(row['Estado']||'').trim().toUpperCase();
+      if(est==='DISCONTINUO') return;
+      var quiero=parseFloat(row['Quiero Tener'])||0;
+      var stk=parseFloat(row['Stock DPT'])||0;
+      /* Pedir = max(0, QuieroTener - StockDPT + EnCajas) */
+      row['Pedir']=Math.max(0,Math.round(quiero-stk+cajas));
+    });
+  }
+
   function hookFAR(){
     if(!window._ppState||!window._ppState.filterAndRender){
       setTimeout(hookFAR,300); return;
@@ -778,6 +794,7 @@ if(document.readyState==='loading'){
     var orig=window._ppState.filterAndRender;
     var hooked=function(){
       applyCompDemand(window._ppState.data);
+      applyPedirWithCajas(window._ppState.data);
       orig.call(window._ppState);
     };
     window._ppState.filterAndRender=hooked;
