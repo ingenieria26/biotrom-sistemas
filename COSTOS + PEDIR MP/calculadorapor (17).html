@@ -99,6 +99,20 @@ async function leerPdfOC(file) {
     return parseTextoOC(lineas, file.name);
 }
 
+// Si la descripcion termina en un color sin parentesis (ej. "POM BARRA #30
+// BLANCO"), lo envuelve entre parentesis ("POM BARRA #30 (BLANCO)") - el color
+// va a pasar a ir asi en el maestro de MP de BIOTROM mas adelante, asi que se
+// deja ya en ese formato para no tener que reprocesar las OC guardadas.
+const OC_COLORES = ["BLANCO", "NEGRO", "GRIS", "AZUL", "ROJO", "VERDE", "AMARILLO",
+    "NATURAL", "TRANSPARENTE", "MARRON", "BEIGE", "DORADO", "PLATEADO"];
+function normalizarColorDescripcion(desc) {
+    if (/\([^)]+\)\s*$/.test(desc)) return desc; // ya viene entre parentesis
+    const rx = new RegExp("\\b(" + OC_COLORES.join("|") + ")\\s*$", "i");
+    const m = rx.exec(desc);
+    if (!m) return desc;
+    return desc.slice(0, m.index).trim() + " (" + m[1].toUpperCase() + ")";
+}
+
 // Parsea el texto de una Orden de Compra BIOTROM (mismo formato en todas: N. OC,
 // Fecha, Proveedor, Direccion, Telefono, tabla Cant/Descripcion/P.U./Total,
 // Subtotal, IVA, Total, condiciones). Devuelve campos vacios si no aparecen.
@@ -119,15 +133,23 @@ function parseTextoOC(lineas, nombreArchivo) {
     const formaEntrega = buscar(/Forma\s*de\s*entrega:\s*(.+)/i);
     const plazoEntrega = buscar(/Plazo\s*de\s*entrega:\s*(.+)/i);
 
-    // Items: entre el encabezado de la tabla ("CANT. Mts ...") y "Subtotal"
-    const idxHeader = lineas.findIndex(l => /CANT\.?\s*MTS?/i.test(l));
+    // Items: entre el encabezado de la tabla y "Subtotal". El encabezado a veces
+    // dice "CANT. Mts" y a veces solo "CANT." (con la unidad "MTS"/"KG"/etc.
+    // pegada al numero en la fila del item, no en el encabezado) - por eso el
+    // detector de encabezado solo pide "CANT" + "DESCRIPCI" en la misma linea,
+    // y la fila de item separa un posible token de unidad antes de la descripcion.
+    const idxHeader = lineas.findIndex(l => /CANT\.?.*DESCRIPCI/i.test(l));
     const idxSubtotal = lineas.findIndex(l => /^Subtotal/i.test(l));
     const items = [];
     if (idxHeader !== -1) {
         const fin = idxSubtotal !== -1 ? idxSubtotal : lineas.length;
         for (let i = idxHeader + 1; i < fin; i++) {
-            const m = /^(\d+(?:[.,]\d+)?)\s+(.+?)\s+\$\s*([\d.,]+)\s+\$\s*([\d.,]+)\s*$/.exec(lineas[i]);
-            if (m) items.push({ cantidad: m[1], descripcion: m[2].trim(), precioUnitario: m[3], total: m[4] });
+            const m = /^(\d+(?:[.,]\d+)?)\s*(MTS?|KGS?|UN|UNI?|PZAS?|LTS?)?\s+(.+?)\s+\$\s*([\d.,]+)\s+\$\s*([\d.,]+)\s*$/i.exec(lineas[i]);
+            if (m) items.push({
+                cantidad: m[1], unidad: (m[2] || "").toUpperCase(),
+                descripcion: normalizarColorDescripcion(m[3].trim()),
+                precioUnitario: m[4], total: m[5],
+            });
         }
     }
 
@@ -180,4 +202,51 @@ function eliminarOC(numero) {
 }
 
 renderOrdenesCompra();
+
+// ── Sincronización del Historial de Cálculos entre computadoras (Firebase) ──
+// Antes el Historial (LS_HISTORIAL) solo vivía en localStorage de cada PC/origen
+// (file:// en el escritorio vs. https://...github.io en el sitio publicado son
+// orígenes distintos para el navegador, así que nunca compartían el mismo
+// localStorage). Se agrega el mismo patrón de sync que ya usan las máquinas
+// (FB_BASE_CALCPP) en un nodo aparte "historial" para no pisar nada.
+const FB_BASE_CALCPP_HIST = FB_BASE_CALCPP + "/historial";
+let _calcppHistUltimoRemoto = null;
+async function _fbHistorialPush() {
+  try {
+    const val = localStorage.getItem(LS_HISTORIAL);
+    if (val === null) return;
+    const res = await BiotromAuth.fetch(FB_BASE_CALCPP_HIST + ".json", {
+      method: "PUT", body: val, keepalive: true
+    });
+    if (res.ok) _calcppHistUltimoRemoto = val;
+  } catch (e) {}
+}
+async function _fbHistorialPull(esInicial) {
+  try {
+    const res = await BiotromAuth.fetch(FB_BASE_CALCPP_HIST + ".json");
+    if (!res.ok) return;
+    const remoto = await res.json();
+    if (remoto === null) {
+      if (esInicial) {
+        const local = localStorage.getItem(LS_HISTORIAL);
+        if (local && local !== "[]" && local !== "null") _fbHistorialPush();
+      }
+      return;
+    }
+    const remotoStr = JSON.stringify(remoto);
+    if (remotoStr === _calcppHistUltimoRemoto) return;
+    _calcppHistUltimoRemoto = remotoStr;
+    localStorage.setItem(LS_HISTORIAL, remotoStr);
+    renderHistorial();
+  } catch (e) {}
+}
+(function () {
+  const origSetItem = localStorage.setItem.bind(localStorage);
+  localStorage.setItem = function (k, v) {
+    origSetItem(k, v);
+    if (k === LS_HISTORIAL) _fbHistorialPush();
+  };
+})();
+_fbHistorialPull(true);
+setInterval(() => _fbHistorialPull(false), 8000);
 </script></div></body></html>
