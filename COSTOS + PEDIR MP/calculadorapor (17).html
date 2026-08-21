@@ -120,7 +120,10 @@ function parseTextoOC(lineas, nombreArchivo) {
     const texto = lineas.join("\n");
     const buscar = (rx) => { const m = rx.exec(texto); return m ? m[1].trim() : ""; };
 
-    const numero = buscar(/ORDEN DE COMPRA\s*N[\u00ba\u00b0o]?\s*(\d+)/i);
+    // El titulo "ORDEN DE COMPRA Nº ####" a veces se corta en dos filas visuales
+    // (el "ATENCION: ..." de al lado empuja "Nº ####" a la fila siguiente) - por
+    // eso el numero se busca solo, sin exigir "ORDEN DE COMPRA" pegado antes.
+    const numero = buscar(/N[\u00ba\u00b0o]\s*(\d{3,6})\b/i);
     const fecha = buscar(/FECHA:\s*([\d\/]+)/i);
     const proveedor = buscar(/PROVEEDOR:\s*(.+)/i);
     const direccion = buscar(/Direcci[o\u00f3]n:\s*(.+)/i);
@@ -131,7 +134,8 @@ function parseTextoOC(lineas, nombreArchivo) {
     const total = totalMatch ? totalMatch[1].trim() : "";
     const condPago = buscar(/Cond\.?\s*de\s*pago:\s*(.+)/i);
     const formaEntrega = buscar(/Forma\s*de\s*entrega:\s*(.+)/i);
-    const plazoEntrega = buscar(/Plazo\s*de\s*entrega:\s*(.+)/i);
+    // "Plazo de entrega" en la mayoria, pero algunos proveedores (insumos/herramientas) dicen "Plazo de fabricacion"
+    const plazoEntrega = buscar(/Plazo\s*de\s*(?:entrega|fabricaci[o\u00f3]n):\s*(.+)/i);
 
     // Items: entre el encabezado de la tabla y "Subtotal". El encabezado a veces
     // dice "CANT. Mts" y a veces solo "CANT." (con la unidad "MTS"/"KG"/etc.
@@ -180,7 +184,7 @@ function renderOrdenesCompra() {
 
     tbody.innerHTML = lista.map(oc => {
         const itemsTxt = (oc.items || []).map(it =>
-            it.cantidad + " x " + it.descripcion + " - $" + it.precioUnitario
+            it.cantidad + (it.unidad ? " " + it.unidad : "") + " x " + it.descripcion + " - $" + it.precioUnitario
         ).join("<br>");
         return '<tr>'
             + '<td><strong>' + oc.numero + '</strong></td>'
