@@ -1,21 +1,30 @@
 // ══════════════════════════════════════════════════════════════════
-// BIOTROM · Base de datos local de PDFs (cartas de proceso y planos)
+// BIOTROM · Base de datos local + sincronizada de PDFs (cartas y planos)
 // ══════════════════════════════════════════════════════════════════
-// Guarda los PDFs reales (no solo el nombre/ruta) en IndexedDB, adentro del
-// navegador de esta computadora. Una vez guardado un PDF, se puede volver a
-// abrir sin conexión a internet -- IndexedDB es 100% local, no depende de
-// wifi, del servidor de la fábrica ni de que el sitio de GitHub esté online.
+// Cada PDF se guarda DOS veces:
+//   1) En IndexedDB de esta computadora -- se abre al instante y sin
+//      internet una vez que ya se guardó/descargó una vez acá.
+//   2) En la misma base Firebase que ya usan Cartas/Planos, Máquinas e
+//      Historial de Costos (nodo aparte "pdfs_binarios"), como texto en
+//      base64 -- así cualquier otra PC que abra el mismo código lo puede
+//      bajar, aunque nunca se haya guardado ahí antes. Al bajarlo una vez,
+//      esa PC también lo deja guardado localmente para las próximas veces.
 //
-// Todos los HTML de BIOTROM que abren esta base comparten los mismos datos,
-// porque en el navegador, todas las páginas abiertas como archivo local
-// (file:///...) caen dentro del mismo origen de almacenamiento -- no importa
-// en qué carpeta esté cada .html, todas ven la misma base.
+// No hace falta ninguna configuración nueva: usa el mismo BiotromAuth.fetch
+// (si el HTML que lo usa ya incluye biotrom-auth.js) o un fetch normal si no.
+//
+// Aviso de capacidad: el plan gratis de Firebase tiene un tope de almacenamiento
+// total (~1 GB). Los PDFs de más de 5 MB no se suben a la nube (quedan solo
+// locales, para no arriesgar ese tope) -- se avisa por consola cuando pasa.
+// Si con el tiempo se acumulan muchos cientos de planos, en algún momento va a
+// hacer falta revisar el uso de Firebase.
 //
 // Uso desde cualquier herramienta:
+//   <script src="../assets/biotrom-auth.js"></script>   (opcional, pero recomendado)
 //   <script src="../assets/biotrom-pdf-db.js"></script>
-//   await BiotromPDF.guardar('1AX00003', 'plano', archivoOBlob);
-//   await BiotromPDF.abrir('1AX00003', 'plano');           // lo abre en pestaña nueva
-//   const blob = await BiotromPDF.obtener('1AX00003', 'plano'); // o lo tomás vos
+//   await BiotromPDF.guardar('1AX00003', 'plano', archivoOBlob);   // guarda local + nube
+//   await BiotromPDF.abrir('1AX00003', 'plano');                   // busca local, si no está lo baja de la nube, y lo abre
+//   const blob = await BiotromPDF.obtener('1AX00003', 'plano');    // o lo tomás vos
 //
 // "tipo" es 'plano' o 'carta' (son dos casilleros separados, un mismo código
 // puede tener las dos cosas guardadas a la vez).
@@ -23,7 +32,13 @@ window.BiotromPDF = (() => {
   const DB_NAME = "biotrom_pdfs";
   const DB_VERSION = 1;
   const STORE = "archivos";
+  const FB_BASE = "https://biotrom-carga-maquina-default-rtdb.firebaseio.com/pdfs_binarios";
+  const MAX_SUBIDA_BYTES = 5 * 1024 * 1024; // 5 MB por archivo, deja margen bajo los límites de Firebase
   let _dbPromise = null;
+
+  function _fetch(url, opts) {
+    return (window.BiotromAuth ? BiotromAuth.fetch(url, opts) : fetch(url, opts));
+  }
 
   function _abrirDB() {
     if (_dbPromise) return _dbPromise;
@@ -42,27 +57,80 @@ window.BiotromPDF = (() => {
     return _dbPromise;
   }
 
+  function _clave(codigo) {
+    return String(codigo || "").toUpperCase().trim().replace(/[.$#\[\]\/]/g, "_");
+  }
   function _id(codigo, tipo) {
-    return (tipo || "plano") + ":" + String(codigo || "").toUpperCase().trim();
+    return (tipo || "plano") + ":" + _clave(codigo);
+  }
+
+  function _blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  }
+  function _base64ToBlob(base64, mime) {
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime || "application/pdf" });
+  }
+
+  async function _guardarLocal(codigo, tipo, blobOrFile, nombreArchivo) {
+    const db = await _abrirDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put({
+        id: _id(codigo, tipo),
+        codigo: _clave(codigo),
+        tipo: tipo || "plano",
+        blob: blobOrFile,
+        nombreArchivo: nombreArchivo !== undefined ? nombreArchivo : (blobOrFile.name || ""),
+        guardado: new Date().toISOString()
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  async function _subirALaNube(codigo, tipo, blobOrFile) {
+    try {
+      if (blobOrFile.size > MAX_SUBIDA_BYTES) {
+        console.warn(`BiotromPDF: "${codigo}" pesa ${(blobOrFile.size/1024/1024).toFixed(1)} MB, no se sube a la nube (queda solo en esta PC).`);
+        return false;
+      }
+      const base64 = await _blobToBase64(blobOrFile);
+      const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
+      const res = await _fetch(path, {
+        method: "PUT", keepalive: true,
+        body: JSON.stringify({ data: base64, mime: blobOrFile.type || "application/pdf", nombreArchivo: blobOrFile.name || "", guardado: new Date().toISOString() })
+      });
+      return res.ok;
+    } catch (e) { console.warn("BiotromPDF._subirALaNube:", e); return false; }
+  }
+
+  async function _bajarDeLaNube(codigo, tipo) {
+    try {
+      const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
+      const res = await _fetch(path);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !data.data) return null;
+      const blob = _base64ToBlob(data.data, data.mime);
+      await _guardarLocal(codigo, tipo, blob, data.nombreArchivo || "");
+      return blob;
+    } catch (e) { console.warn("BiotromPDF._bajarDeLaNube:", e); return null; }
   }
 
   async function guardar(codigo, tipo, blobOrFile) {
     if (!codigo || !blobOrFile) return false;
     try {
-      const db = await _abrirDB();
-      return await new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, "readwrite");
-        tx.objectStore(STORE).put({
-          id: _id(codigo, tipo),
-          codigo: String(codigo).toUpperCase().trim(),
-          tipo: tipo || "plano",
-          blob: blobOrFile,
-          nombreArchivo: blobOrFile.name || "",
-          guardado: new Date().toISOString()
-        });
-        tx.oncomplete = () => resolve(true);
-        tx.onerror = () => reject(tx.error);
-      });
+      await _guardarLocal(codigo, tipo, blobOrFile);
+      _subirALaNube(codigo, tipo, blobOrFile); // en segundo plano, no bloquea el guardado local
+      return true;
     } catch (e) { console.warn("BiotromPDF.guardar:", e); return false; }
   }
 
@@ -70,13 +138,15 @@ window.BiotromPDF = (() => {
     if (!codigo) return null;
     try {
       const db = await _abrirDB();
-      return await new Promise((resolve, reject) => {
+      const local = await new Promise((resolve, reject) => {
         const tx = db.transaction(STORE, "readonly");
         const req = tx.objectStore(STORE).get(_id(codigo, tipo));
         req.onsuccess = () => resolve(req.result ? req.result.blob : null);
         req.onerror = () => reject(req.error);
       });
-    } catch (e) { console.warn("BiotromPDF.obtener:", e); return null; }
+      if (local) return local;
+    } catch (e) { console.warn("BiotromPDF.obtener (local):", e); }
+    return await _bajarDeLaNube(codigo, tipo);
   }
 
   async function existe(codigo, tipo) {
@@ -125,5 +195,22 @@ window.BiotromPDF = (() => {
     return { cantidad: items.length, totalMB: +(totalBytes / 1024 / 1024).toFixed(1) };
   }
 
-  return { guardar, obtener, existe, abrir, listar, eliminar, estadisticas };
+  // Sube a la nube todo lo que ya está guardado en esta PC (útil para lo que
+  // se guardó localmente antes de que existiera esta sincronización, o para
+  // forzar una subida manual). No vuelve a bajar nada, solo empuja lo local.
+  async function sincronizarTodo() {
+    const items = await listar();
+    let subidos = 0, saltados = 0;
+    for (const it of items) {
+      try {
+        const blob = await obtener(it.codigo, it.tipo);
+        if (!blob) { saltados++; continue; }
+        const ok = await _subirALaNube(it.codigo, it.tipo, blob);
+        if (ok) subidos++; else saltados++;
+      } catch (e) { saltados++; }
+    }
+    return { subidos, saltados, total: items.length };
+  }
+
+  return { guardar, obtener, existe, abrir, listar, eliminar, estadisticas, sincronizarTodo };
 })();

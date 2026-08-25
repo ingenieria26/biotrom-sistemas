@@ -16,7 +16,7 @@
 </div>
 <div style="overflow-x:auto; margin-top:10px;">
     <table id="oc_tabla" style="width:100%; font-size:12px;">
-        <thead><tr><th>N&deg; OC</th><th>Fecha</th><th>Proveedor</th><th>Items comprados</th><th>Total</th><th>Archivo</th><th></th></tr></thead>
+        <thead><tr><th>N&deg; OC</th><th>Fecha</th><th>Proveedor</th><th>Items comprados</th><th>Total (USD)</th><th>Archivo</th><th></th></tr></thead>
         <tbody id="oc_tbody"></tbody>
     </table>
 </div>
@@ -290,14 +290,14 @@ function renderOrdenesCompra() {
 
     tbody.innerHTML = lista.map(oc => {
         const itemsTxt = (oc.items || []).map(it =>
-            it.cantidad + (it.unidad ? " " + it.unidad : "") + " x " + it.descripcion + " - $" + it.precioUnitario
+            it.cantidad + (it.unidad ? " " + it.unidad : "") + " x " + it.descripcion + " - USD $" + it.precioUnitario
         ).join("<br>");
         return '<tr>'
             + '<td><strong>' + oc.numero + '</strong></td>'
             + '<td>' + (oc.fecha || "-") + '</td>'
             + '<td>' + (oc.proveedor || "-") + '</td>'
             + '<td style="font-size:11px;">' + (itemsTxt || "-") + '</td>'
-            + '<td>$' + (oc.total || "-") + '</td>'
+            + '<td>USD $' + (oc.total || "-") + '</td>'
             + '<td style="font-size:10px; color:var(--color-text-tertiary);">' + (oc.archivo || "") + '</td>'
             + '<td><button onclick="eliminarOC(\'' + oc.numero + '\')" title="Quitar" style="background:none; border:none; color:#c00; cursor:pointer; font-size:13px;">x</button></td>'
             + '</tr>';
