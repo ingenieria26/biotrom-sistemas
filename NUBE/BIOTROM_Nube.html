@@ -117,6 +117,7 @@
     <div class="toolbar">
       <input id="nb-buscar" placeholder="🔍 Buscar por código, tipo o nombre de archivo…" oninput="nbRenderTabla()">
       <button class="btn" onclick="nbCargarTodo()">↻ Actualizar</button>
+      <button class="btn" onclick="nbResincronizar()" title="Vuelve a subir a la nube todo lo que esta computadora tiene guardado localmente — usar si algo que subiste no aparece en otras PCs">☁ Re-subir todo lo local</button>
     </div>
     <div id="nb-sel-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px">
       <strong id="nb-sel-count" style="font-size:.72rem"></strong>
@@ -142,7 +143,7 @@ async function nbCargarTodo(){
 }
 
 let nbSeleccion = new Set();
-function nbClave(i){ return i.tipo + ' ' + i.codigo; }
+function nbClave(i){ return JSON.stringify([i.tipo, i.codigo]); }
 
 function nbRenderTabla(){
   const q = (document.getElementById('nb-buscar').value || '').toLowerCase().trim();
@@ -188,7 +189,7 @@ function nbFila(i){
 let nbVisibles = [];
 
 function nbToggleUno(codigo, tipo, cb){
-  const clave = tipo + ' ' + codigo;
+  const clave = JSON.stringify([tipo, codigo]);
   if (cb.checked) nbSeleccion.add(clave); else nbSeleccion.delete(clave);
   nbActualizarBarraSeleccion();
   const todos = document.getElementById('nb-check-todos');
@@ -213,7 +214,7 @@ function nbActualizarBarraSeleccion(){
 }
 
 async function nbEliminarSeleccionados(){
-  const items = Array.from(nbSeleccion).map(k => { const [tipo, codigo] = k.split(' '); return {tipo, codigo}; });
+  const items = Array.from(nbSeleccion).map(k => { const [tipo, codigo] = JSON.parse(k); return {tipo, codigo}; });
   if (!items.length) return;
   if (!confirm(`¿Eliminar ${items.length} archivo(s)? Se borran de esta PC y de la nube, para todas las demás también. No se puede deshacer.`)) return;
   nbStatus(`Eliminando ${items.length} archivo(s)…`);
@@ -226,7 +227,7 @@ async function nbEliminarSeleccionados(){
 async function nbCambiarTipoSeleccionados(){
   const nuevoTipo = (document.getElementById('nb-sel-tipo-nuevo').value || '').trim();
   if (!nuevoTipo){ nbStatus('Escribí el tipo nuevo antes de cambiar.', true); return; }
-  const items = Array.from(nbSeleccion).map(k => { const [tipo, codigo] = k.split(' '); return {tipo, codigo}; });
+  const items = Array.from(nbSeleccion).map(k => { const [tipo, codigo] = JSON.parse(k); return {tipo, codigo}; });
   if (!items.length) return;
   if (!confirm(`¿Cambiar el tipo de ${items.length} archivo(s) a "${nuevoTipo}"?`)) return;
   nbStatus(`Cambiando tipo de ${items.length} archivo(s)…`);
@@ -249,7 +250,7 @@ async function nbVer(codigo, tipo){
 async function nbEliminar(codigo, tipo){
   if (!confirm(`¿Eliminar "${codigo}" (${tipo})? Se borra de esta PC y de la nube, para todas las demás también. No se puede deshacer.`)) return;
   await BiotromPDF.eliminar(codigo, tipo);
-  nbSeleccion.delete(tipo + ' ' + codigo);
+  nbSeleccion.delete(JSON.stringify([tipo, codigo]));
   nbStatus('Eliminado.');
   nbCargarTodo();
 }
@@ -316,6 +317,13 @@ const codigoManual = (document.getElementById('nb-codigo').value || '').trim();
   nbStatus(`✓ ${ok} guardado(s)` + (error ? ` — ${error} con error` : ''));
   document.getElementById('nb-input').value = '';
   document.getElementById('nb-codigo').value = '';
+  nbCargarTodo();
+}
+
+async function nbResincronizar(){
+  nbStatus('Re-subiendo a la nube todo lo guardado en esta computadora…');
+  const r = await BiotromPDF.sincronizarTodo();
+  nbStatus(r.total ? `✓ ${r.subidos}/${r.total} subido(s)` + (r.saltados ? ` — ${r.saltados} se saltearon (¿muy pesados?)` : '') : 'No hay nada guardado localmente en esta PC.');
   nbCargarTodo();
 }
 
