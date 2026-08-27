@@ -108,8 +108,11 @@ window.BiotromPDF = (() => {
       }
       const base64 = await _blobToBase64(blobOrFile);
       const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
+      // Sin keepalive: el navegador limita esos pedidos a 64 KB de cuerpo, y
+      // un PDF en base64 los supera fácil -- con keepalive el pedido fallaba
+      // en silencio para cualquier archivo que no fuera minúsculo.
       const res = await _fetch(path, {
-        method: "PUT", keepalive: true,
+        method: "PUT",
         body: JSON.stringify({
           data: base64,
           meta: { mime: blobOrFile.type || "application/pdf", nombreArchivo: blobOrFile.name || "", guardado: new Date().toISOString(), tamanoBytes: blobOrFile.size }
