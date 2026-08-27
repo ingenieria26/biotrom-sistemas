@@ -261,6 +261,18 @@ window.BiotromPDF = (() => {
     return localOk || nubeOk;
   }
 
+  // Recategoriza un archivo ya guardado (ej: se subió como "plano" pero en
+  // realidad es "controlprod"). Baja/toma el archivo, lo guarda bajo el tipo
+  // nuevo y borra la entrada vieja. El código no cambia.
+  async function mover(codigo, tipoViejo, tipoNuevo) {
+    if (!codigo || !tipoNuevo || tipoViejo === tipoNuevo) return false;
+    const blob = await obtener(codigo, tipoViejo);
+    if (!blob) return false;
+    const ok = await guardar(codigo, tipoNuevo, blob);
+    if (ok) await eliminar(codigo, tipoViejo);
+    return ok;
+  }
+
   async function estadisticas() {
     const items = await listar();
     const totalBytes = items.reduce((s, i) => s + (i.tamanoBytes || 0), 0);
@@ -295,5 +307,5 @@ window.BiotromPDF = (() => {
     return Array.from(porClave.values());
   }
 
-  return { guardar, obtener, existe, abrir, listar, eliminar, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo, listarTiposNube, listarTodoGlobal };
+  return { guardar, obtener, existe, abrir, listar, eliminar, mover, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo, listarTiposNube, listarTodoGlobal };
 })();

@@ -118,6 +118,13 @@
       <input id="nb-buscar" placeholder="🔍 Buscar por código, tipo o nombre de archivo…" oninput="nbRenderTabla()">
       <button class="btn" onclick="nbCargarTodo()">↻ Actualizar</button>
     </div>
+    <div id="nb-sel-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px">
+      <strong id="nb-sel-count" style="font-size:.72rem"></strong>
+      <input id="nb-sel-tipo-nuevo" placeholder="nuevo tipo…" list="nb-tipos-list" style="padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-family:var(--font);font-size:.72rem;width:150px">
+      <button class="btn" onclick="nbCambiarTipoSeleccionados()">↪ Cambiar tipo</button>
+      <button class="btn er" onclick="nbEliminarSeleccionados()">🗑 Eliminar seleccionados</button>
+      <button class="btn" style="margin-left:auto" onclick="nbLimpiarSeleccion()">Cancelar selección</button>
+    </div>
     <div id="nb-tabla-wrap"><div class="empty">Cargando…</div></div>
   </div>
 
@@ -134,6 +141,9 @@ async function nbCargarTodo(){
   nbRenderTabla();
 }
 
+let nbSeleccion = new Set();
+function nbClave(i){ return i.tipo + ' ' + i.codigo; }
+
 function nbRenderTabla(){
   const q = (document.getElementById('nb-buscar').value || '').toLowerCase().trim();
   const wrap = document.getElementById('nb-tabla-wrap');
@@ -143,10 +153,14 @@ function nbRenderTabla(){
     (i.tipo||'').toLowerCase().includes(q) ||
     (i.nombreArchivo||'').toLowerCase().includes(q)
   );
-  if (!items.length){ wrap.innerHTML = '<div class="empty">No hay nada guardado todavía.</div>'; return; }
+  nbVisibles = items;
+  if (!items.length){ wrap.innerHTML = '<div class="empty">No hay nada guardado todavía.</div>'; nbActualizarBarraSeleccion(); return; }
+  const todosMarcados = items.length && items.every(i => nbSeleccion.has(nbClave(i)));
   wrap.innerHTML = `<table><thead><tr>
+      <th style="width:26px"><input type="checkbox" id="nb-check-todos" ${todosMarcados?'checked':''} onchange="nbToggleTodos(this)"></th>
       <th>Tipo</th><th>Código</th><th>Archivo</th><th>Tamaño</th><th>Guardado</th><th>Estado</th><th></th>
     </tr></thead><tbody>${items.map(nbFila).join('')}</tbody></table>`;
+  nbActualizarBarraSeleccion();
 }
 
 function nbFila(i){
@@ -155,7 +169,9 @@ function nbFila(i){
   const estado = i.enEstaPC
     ? '<span class="badge-local">✔ en esta PC</span>'
     : '<span class="badge-nube">☁ solo en la nube</span>';
+  const marcado = nbSeleccion.has(nbClave(i));
   return `<tr>
+    <td><input type="checkbox" class="nb-check" ${marcado?'checked':''} onchange="nbToggleUno('${nbAttr(i.codigo)}','${nbAttr(i.tipo)}',this)"></td>
     <td><span class="tag">${nbEsc(i.tipo)}</span></td>
     <td><strong>${nbEsc(i.codigo)}</strong></td>
     <td>${nbEsc(i.nombreArchivo||'—')}</td>
@@ -169,6 +185,62 @@ function nbFila(i){
   </tr>`;
 }
 
+let nbVisibles = [];
+
+function nbToggleUno(codigo, tipo, cb){
+  const clave = tipo + ' ' + codigo;
+  if (cb.checked) nbSeleccion.add(clave); else nbSeleccion.delete(clave);
+  nbActualizarBarraSeleccion();
+  const todos = document.getElementById('nb-check-todos');
+  if (todos) todos.checked = nbVisibles.length > 0 && nbVisibles.every(i => nbSeleccion.has(nbClave(i)));
+}
+
+function nbToggleTodos(cb){
+  nbVisibles.forEach(i => { if (cb.checked) nbSeleccion.add(nbClave(i)); else nbSeleccion.delete(nbClave(i)); });
+  nbRenderTabla();
+}
+
+function nbLimpiarSeleccion(){
+  nbSeleccion.clear();
+  nbRenderTabla();
+}
+
+function nbActualizarBarraSeleccion(){
+  const bar = document.getElementById('nb-sel-bar');
+  const n = nbSeleccion.size;
+  bar.style.display = n ? 'flex' : 'none';
+  if (n) document.getElementById('nb-sel-count').textContent = `${n} seleccionado(s)`;
+}
+
+async function nbEliminarSeleccionados(){
+  const items = Array.from(nbSeleccion).map(k => { const [tipo, codigo] = k.split(' '); return {tipo, codigo}; });
+  if (!items.length) return;
+  if (!confirm(`¿Eliminar ${items.length} archivo(s)? Se borran de esta PC y de la nube, para todas las demás también. No se puede deshacer.`)) return;
+  nbStatus(`Eliminando ${items.length} archivo(s)…`);
+  for (const it of items) await BiotromPDF.eliminar(it.codigo, it.tipo);
+  nbSeleccion.clear();
+  nbStatus(`✓ ${items.length} archivo(s) eliminado(s)`);
+  nbCargarTodo();
+}
+
+async function nbCambiarTipoSeleccionados(){
+  const nuevoTipo = (document.getElementById('nb-sel-tipo-nuevo').value || '').trim();
+  if (!nuevoTipo){ nbStatus('Escribí el tipo nuevo antes de cambiar.', true); return; }
+  const items = Array.from(nbSeleccion).map(k => { const [tipo, codigo] = k.split(' '); return {tipo, codigo}; });
+  if (!items.length) return;
+  if (!confirm(`¿Cambiar el tipo de ${items.length} archivo(s) a "${nuevoTipo}"?`)) return;
+  nbStatus(`Cambiando tipo de ${items.length} archivo(s)…`);
+  let ok = 0, error = 0;
+  for (const it of items){
+    const r = await BiotromPDF.mover(it.codigo, it.tipo, nuevoTipo);
+    if (r) ok++; else error++;
+  }
+  nbSeleccion.clear();
+  document.getElementById('nb-sel-tipo-nuevo').value = '';
+  nbStatus(`✓ ${ok} movido(s)` + (error ? ` — ${error} con error` : ''));
+  nbCargarTodo();
+}
+
 async function nbVer(codigo, tipo){
   const ok = await BiotromPDF.abrir(codigo, tipo);
   if (!ok) nbStatus('No se pudo abrir (¿se borró de la nube?)', true);
@@ -177,6 +249,7 @@ async function nbVer(codigo, tipo){
 async function nbEliminar(codigo, tipo){
   if (!confirm(`¿Eliminar "${codigo}" (${tipo})? Se borra de esta PC y de la nube, para todas las demás también. No se puede deshacer.`)) return;
   await BiotromPDF.eliminar(codigo, tipo);
+  nbSeleccion.delete(tipo + ' ' + codigo);
   nbStatus('Eliminado.');
   nbCargarTodo();
 }
