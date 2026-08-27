@@ -96,6 +96,10 @@ window.BiotromPDF = (() => {
     });
   }
 
+  // Cada archivo se guarda en dos ramas separadas en Firebase:
+  //   .../<tipo>/<clave>/meta  -> liviano (nombre, tamaño, fecha) para listar rápido
+  //   .../<tipo>/<clave>/data  -> pesado (el archivo en base64), se pide aparte
+  // así se puede armar un listado de "qué hay subido" sin bajar todos los archivos.
   async function _subirALaNube(codigo, tipo, blobOrFile) {
     try {
       if (blobOrFile.size > MAX_SUBIDA_BYTES) {
@@ -106,7 +110,10 @@ window.BiotromPDF = (() => {
       const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
       const res = await _fetch(path, {
         method: "PUT", keepalive: true,
-        body: JSON.stringify({ data: base64, mime: blobOrFile.type || "application/pdf", nombreArchivo: blobOrFile.name || "", guardado: new Date().toISOString() })
+        body: JSON.stringify({
+          data: base64,
+          meta: { mime: blobOrFile.type || "application/pdf", nombreArchivo: blobOrFile.name || "", guardado: new Date().toISOString(), tamanoBytes: blobOrFile.size }
+        })
       });
       return res.ok;
     } catch (e) { console.warn("BiotromPDF._subirALaNube:", e); return false; }
@@ -119,10 +126,37 @@ window.BiotromPDF = (() => {
       if (!res.ok) return null;
       const data = await res.json();
       if (!data || !data.data) return null;
-      const blob = _base64ToBlob(data.data, data.mime);
-      await _guardarLocal(codigo, tipo, blob, data.nombreArchivo || "");
+      const meta = data.meta || {};
+      const blob = _base64ToBlob(data.data, meta.mime);
+      await _guardarLocal(codigo, tipo, blob, meta.nombreArchivo || "");
       return blob;
     } catch (e) { console.warn("BiotromPDF._bajarDeLaNube:", e); return null; }
+  }
+
+  // Metadatos de un archivo puntual SIN bajar el contenido pesado.
+  async function metadatosNube(codigo, tipo) {
+    try {
+      const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}/meta.json`;
+      const res = await _fetch(path);
+      if (!res.ok) return null;
+      const meta = await res.json();
+      return meta ? { codigo: _clave(codigo), tipo: tipo || "plano", nombreArchivo: meta.nombreArchivo || "", guardado: meta.guardado || "", tamanoBytes: meta.tamanoBytes || 0 } : null;
+    } catch (e) { console.warn("BiotromPDF.metadatosNube:", e); return null; }
+  }
+
+  // Lista TODO lo que hay subido a la nube para un "tipo" (de cualquier PC,
+  // se haya bajado acá o no) sin descargar ningún archivo pesado -- primero
+  // pide solo las claves (shallow) y después el meta liviano de cada una.
+  async function listarNube(tipo) {
+    try {
+      const path = `${FB_BASE}/${tipo || "plano"}.json?shallow=true`;
+      const res = await _fetch(path);
+      if (!res.ok) return [];
+      const claves = await res.json();
+      if (!claves) return [];
+      const items = await Promise.all(Object.keys(claves).map(cod => metadatosNube(cod, tipo)));
+      return items.filter(Boolean);
+    } catch (e) { console.warn("BiotromPDF.listarNube:", e); return []; }
   }
 
   async function guardar(codigo, tipo, blobOrFile) {
@@ -212,5 +246,16 @@ window.BiotromPDF = (() => {
     return { subidos, saltados, total: items.length };
   }
 
-  return { guardar, obtener, existe, abrir, listar, eliminar, estadisticas, sincronizarTodo };
+  // Combina lo local con lo que hay en la nube (sin descargar los archivos
+  // pesados) -- para pantallas de "historial" que necesitan ver todo lo que
+  // se subió desde cualquier PC, no solo lo que ya se vio en esta.
+  async function listarTodo(tipo) {
+    const [locales, nube] = await Promise.all([listar(), listarNube(tipo)]);
+    const porClave = new Map();
+    nube.forEach(it => porClave.set(it.codigo + ":" + it.tipo, { ...it, enEstaPC: false }));
+    locales.filter(it => !tipo || it.tipo === tipo).forEach(it => porClave.set(it.codigo + ":" + it.tipo, { ...it, enEstaPC: true }));
+    return Array.from(porClave.values());
+  }
+
+  return { guardar, obtener, existe, abrir, listar, eliminar, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo };
 })();
