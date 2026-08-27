@@ -115,7 +115,10 @@
     <h2>📚 Todo lo que hay guardado</h2>
     <p class="sub">De cualquier PC, se haya bajado acá o no.</p>
     <div class="toolbar">
-      <input id="nb-buscar" placeholder="🔍 Buscar por código, tipo o nombre de archivo…" oninput="nbRenderTabla()">
+      <input id="nb-buscar" placeholder="🔍 Buscar por código o nombre de archivo…" oninput="nbRenderTabla()">
+      <select id="nb-filtro-tipo" onchange="nbRenderTabla()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);font-size:.75rem;background:var(--bg2);color:var(--text)">
+        <option value="">Todos los tipos</option>
+      </select>
       <button class="btn" onclick="nbCargarTodo()">↻ Actualizar</button>
       <button class="btn" onclick="nbResincronizar()" title="Vuelve a subir a la nube todo lo que esta computadora tiene guardado localmente — usar si algo que subiste no aparece en otras PCs">☁ Re-subir todo lo local</button>
     </div>
@@ -139,6 +142,13 @@ async function nbCargarTodo(){
   nbItems = await BiotromPDF.listarTodoGlobal();
   const tipos = Array.from(new Set(nbItems.map(i => i.tipo))).sort();
   document.getElementById('nb-tipos-list').innerHTML = tipos.map(t => `<option value="${nbEsc(t)}">`).join('');
+  const selectTipo = document.getElementById('nb-filtro-tipo');
+  const tipoElegido = selectTipo.value;
+  selectTipo.innerHTML = '<option value="">Todos los tipos</option>' + tipos.map(t => {
+    const cant = nbItems.filter(i => i.tipo === t).length;
+    return `<option value="${nbEsc(t)}">${nbEsc(t)} (${cant})</option>`;
+  }).join('');
+  if (tipos.includes(tipoElegido)) selectTipo.value = tipoElegido;
   nbRenderTabla();
 }
 
@@ -147,15 +157,19 @@ function nbClave(i){ return JSON.stringify([i.tipo, i.codigo]); }
 
 function nbRenderTabla(){
   const q = (document.getElementById('nb-buscar').value || '').toLowerCase().trim();
+  const tipoFiltro = document.getElementById('nb-filtro-tipo').value;
   const wrap = document.getElementById('nb-tabla-wrap');
   let items = nbItems.slice().sort((a,b) => (b.guardado||'').localeCompare(a.guardado||''));
+  if (tipoFiltro) items = items.filter(i => i.tipo === tipoFiltro);
   if (q) items = items.filter(i =>
     (i.codigo||'').toLowerCase().includes(q) ||
-    (i.tipo||'').toLowerCase().includes(q) ||
     (i.nombreArchivo||'').toLowerCase().includes(q)
   );
   nbVisibles = items;
-  if (!items.length){ wrap.innerHTML = '<div class="empty">No hay nada guardado todavía.</div>'; nbActualizarBarraSeleccion(); return; }
+  if (!items.length){
+    wrap.innerHTML = `<div class="empty">${nbItems.length ? 'Nada coincide con ese filtro/búsqueda.' : 'No hay nada guardado todavía.'}</div>`;
+    nbActualizarBarraSeleccion(); return;
+  }
   const todosMarcados = items.length && items.every(i => nbSeleccion.has(nbClave(i)));
   wrap.innerHTML = `<table><thead><tr>
       <th style="width:26px"><input type="checkbox" id="nb-check-todos" ${todosMarcados?'checked':''} onchange="nbToggleTodos(this)"></th>
