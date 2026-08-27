@@ -798,7 +798,7 @@ if(document.readyState==='loading'){
       orig.call(window._ppState);
     };
     window._ppState.filterAndRender=hooked;
-    STATE&&(STATE.filterAndRender=hooked);
+    try{STATE&&(STATE.filterAndRender=hooked);}catch(e){}
     window._ppFilter=hooked;
   }
 
