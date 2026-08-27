@@ -335,9 +335,12 @@ const codigoManual = (document.getElementById('nb-codigo').value || '').trim();
 }
 
 async function nbResincronizar(){
-  nbStatus('Re-subiendo a la nube todo lo guardado en esta computadora…');
-  const r = await BiotromPDF.sincronizarTodo();
-  nbStatus(r.total ? `✓ ${r.subidos}/${r.total} subido(s)` + (r.saltados ? ` — ${r.saltados} se saltearon (¿muy pesados?)` : '') : 'No hay nada guardado localmente en esta PC.');
+  nbStatus('Re-subiendo a la nube todo lo guardado en esta computadora… (0%)');
+  const r = await BiotromPDF.sincronizarTodo((p) => {
+    const pct = Math.round((p.hechos / p.total) * 100);
+    nbStatus(`Re-subiendo… ${p.hechos}/${p.total} (${pct}%) — ✓ ${p.subidos} subido(s), ${p.saltados} saltado(s)`);
+  });
+  nbStatus(r.total ? `✓ Listo: ${r.subidos}/${r.total} subido(s)` + (r.saltados ? ` — ${r.saltados} se saltearon (muy pesados o con error, ver consola)` : '') : 'No hay nada guardado localmente en esta PC.');
   nbCargarTodo();
 }
 

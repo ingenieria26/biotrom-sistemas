@@ -40,6 +40,31 @@ window.BiotromPDF = (() => {
     return (window.BiotromAuth ? BiotromAuth.fetch(url, opts) : fetch(url, opts));
   }
 
+  // Con archivos grandes o mala conexión, un pedido puede quedar "colgado"
+  // sin responder nunca -- eso frenaba sincronizarTodo() entero en el primer
+  // archivo problemático, sin ningún aviso. Con esto, a los 25s se corta solo
+  // y sigue con el próximo.
+  function _fetchConTimeout(url, opts, ms) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms || 25000);
+    return _fetch(url, Object.assign({}, opts, { signal: controller.signal }))
+      .finally(() => clearTimeout(timer));
+  }
+
+  // Corre "worker" sobre "items" con como máximo "limite" en simultáneo, en
+  // vez de esperar uno por uno -- con cientos de archivos, subirlos de a 4-6
+  // a la vez es mucho más rápido que uno por uno.
+  async function _pool(items, limite, worker) {
+    let i = 0;
+    async function trabajador() {
+      while (i < items.length) {
+        const idx = i++;
+        await worker(items[idx], idx);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limite, items.length) }, trabajador));
+  }
+
   function _abrirDB() {
     if (_dbPromise) return _dbPromise;
     _dbPromise = new Promise((resolve, reject) => {
@@ -111,7 +136,7 @@ window.BiotromPDF = (() => {
       // Sin keepalive: el navegador limita esos pedidos a 64 KB de cuerpo, y
       // un PDF en base64 los supera fácil -- con keepalive el pedido fallaba
       // en silencio para cualquier archivo que no fuera minúsculo.
-      const res = await _fetch(path, {
+      const res = await _fetchConTimeout(path, {
         method: "PUT",
         body: JSON.stringify({
           data: base64,
@@ -125,7 +150,7 @@ window.BiotromPDF = (() => {
   async function _bajarDeLaNube(codigo, tipo) {
     try {
       const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
-      const res = await _fetch(path);
+      const res = await _fetchConTimeout(path);
       if (!res.ok) return null;
       const data = await res.json();
       if (!data || !data.data) return null;
@@ -285,17 +310,24 @@ window.BiotromPDF = (() => {
   // Sube a la nube todo lo que ya está guardado en esta PC (útil para lo que
   // se guardó localmente antes de que existiera esta sincronización, o para
   // forzar una subida manual). No vuelve a bajar nada, solo empuja lo local.
-  async function sincronizarTodo() {
+  // Sube de a 4 en simultáneo (más rápido que uno por uno con cientos de
+  // archivos) y avisa el avance por "onProgress" para que la pantalla no
+  // parezca colgada durante los minutos que puede tardar con muchos archivos.
+  async function sincronizarTodo(onProgress) {
     const items = await listar();
-    let subidos = 0, saltados = 0;
-    for (const it of items) {
+    let subidos = 0, saltados = 0, hechos = 0;
+    await _pool(items, 4, async (it) => {
       try {
         const blob = await obtener(it.codigo, it.tipo);
-        if (!blob) { saltados++; continue; }
-        const ok = await _subirALaNube(it.codigo, it.tipo, blob);
-        if (ok) subidos++; else saltados++;
+        if (!blob) { saltados++; }
+        else {
+          const ok = await _subirALaNube(it.codigo, it.tipo, blob);
+          if (ok) subidos++; else saltados++;
+        }
       } catch (e) { saltados++; }
-    }
+      hechos++;
+      if (onProgress) { try { onProgress({ hechos, total: items.length, subidos, saltados }); } catch (e) {} }
+    });
     return { subidos, saltados, total: items.length };
   }
 
