@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<script src="../assets/biotrom-auth.js"></script>
+<script src="../assets/biotrom-pdf-db.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BIOTROM · Nube</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+  :root {
+    --bg:#f5f7fa; --bg2:#ffffff; --bg3:#eef1f5; --border:#dce3ec;
+    --cyan:#0077a8; --green:#1a9944; --red:#d42b2b; --yellow:#b07d00;
+    --text:#1a2535; --text-dim:#7a8fa3; --font:'IBM Plex Mono',monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;min-height:100vh}
+  header{background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header h1{font-size:1rem;font-weight:700;color:var(--cyan);letter-spacing:.05em}
+  header span{color:var(--text-dim);font-size:.7rem}
+  a.volver{margin-left:auto;font-size:.72rem;color:var(--cyan);text-decoration:none;border:1px solid var(--cyan);padding:5px 12px;border-radius:5px}
+  a.volver:hover{background:var(--bg3)}
+  .wrap{max-width:1080px;margin:0 auto;padding:24px 20px}
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:20px}
+  .card h2{font-size:.9rem;font-weight:700;color:var(--text);margin-bottom:6px;letter-spacing:.03em}
+  .card p.sub{font-size:.72rem;color:var(--text-dim);margin-bottom:16px;line-height:1.5}
+  .row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+  .field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px}
+  .field label{font-size:.65rem;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+  .field input,.field select{padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);font-size:.8rem;background:var(--bg2);color:var(--text)}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--cyan)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:2px}
+  .chip{font-size:.65rem;padding:3px 9px;border:1px solid var(--border);border-radius:12px;background:var(--bg3);color:var(--text-dim);cursor:pointer}
+  .chip:hover{border-color:var(--cyan);color:var(--cyan)}
+  .drop{border:2px dashed var(--border);border-radius:10px;padding:30px 20px;text-align:center;background:var(--bg3);cursor:pointer;transition:all .15s}
+  .drop.over{border-color:var(--cyan);background:#eaf5fb}
+  .drop .ico{font-size:2rem;margin-bottom:8px}
+  .drop strong{color:var(--text)}
+  .drop small{display:block;margin-top:6px;color:var(--text-dim);font-size:.7rem}
+  #status{margin-top:10px;font-size:.72rem;color:var(--text-dim);min-height:16px}
+  table{width:100%;border-collapse:collapse;font-size:.72rem}
+  th{text-align:left;padding:7px 10px;background:var(--bg3);color:var(--text-dim);font-weight:700;font-size:.64rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
+  td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+  tr:hover td{background:var(--bg3)}
+  .tag{display:inline-block;font-size:.62rem;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--bg3);color:var(--cyan);border:1px solid var(--border)}
+  .badge-local{color:var(--green);font-size:.62rem;font-weight:700}
+  .badge-nube{color:var(--text-dim);font-size:.62rem}
+  .btn{padding:5px 11px;border-radius:5px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-family:var(--font);font-size:.68rem;cursor:pointer}
+  .btn:hover{border-color:var(--cyan);color:var(--cyan)}
+  .btn.er:hover{border-color:var(--red);color:var(--red)}
+  .btn.primary{background:var(--cyan);color:#fff;border-color:var(--cyan);font-weight:600}
+  .btn.primary:hover{opacity:.88}
+  .btn.primary:disabled{opacity:.4;cursor:not-allowed}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .toolbar input{flex:1;min-width:180px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);font-size:.75rem}
+  .empty{padding:24px;text-align:center;color:var(--text-dim);font-size:.78rem}
+  .info{background:#eaf5fb;border:1px solid #bfe0f0;border-radius:8px;padding:12px 14px;font-size:.7rem;color:#0a5a78;line-height:1.6;margin-bottom:16px}
+  .info code{background:#dbeef7;padding:1px 5px;border-radius:3px}
+</style>
+</head>
+<body>
+<header>
+  <div class="ico" style="font-size:1.3rem">☁️</div>
+  <div>
+    <h1>BIOTROM · NUBE</h1>
+    <span>Base de datos compartida — funciona sin internet una vez guardado, y se sincroniza sola entre PCs</span>
+  </div>
+  <a class="volver" href="../BIOTROM_Inicio.html">← Inicio</a>
+</header>
+
+<div class="wrap">
+
+  <div class="info">
+    Todo lo que subís acá queda guardado en esta computadora (para verlo sin internet) y en la nube compartida de BIOTROM (para que lo vea cualquier otra PC). El <strong>Tipo</strong> y el <strong>Código</strong> son la dirección con la que cada herramienta busca un archivo — por eso algunos ya están conectados:
+    <br>· <code>plano</code> + código de producto → aparece en <strong>Cartas de Proceso / Planos</strong>
+    <br>· <code>carta</code> + código de carta → aparece en <strong>Cartas de Proceso / Planos</strong>
+    <br>· <code>cierre_diario</code> + lunes de la semana (AAAA-MM-DD) → aparece en <strong>Panel Ejecutivo</strong>
+    <br>Cualquier otro Tipo que inventes queda guardado y disponible acá y por código para quien lo necesite, aunque todavía ninguna otra pantalla lo muestre automáticamente.
+  </div>
+
+  <div class="card">
+    <h2>📤 Subir a la nube</h2>
+    <p class="sub">Arrastrá uno o varios archivos. Con más de uno, el Código de cada archivo se toma automático del nombre del archivo (sin la extensión) — el campo Código de acá abajo solo se usa cuando soltás un único archivo.</p>
+    <div class="row">
+      <div class="field">
+        <label>Tipo</label>
+        <input id="nb-tipo" list="nb-tipos-list" placeholder="plano, carta, cierre_diario, o el que quieras…" value="plano">
+        <datalist id="nb-tipos-list"></datalist>
+        <div class="chips">
+          <span class="chip" onclick="document.getElementById('nb-tipo').value='plano'">plano</span>
+          <span class="chip" onclick="document.getElementById('nb-tipo').value='carta'">carta</span>
+          <span class="chip" onclick="document.getElementById('nb-tipo').value='cierre_diario'">cierre_diario</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Código (solo si subís 1 archivo)</label>
+        <input id="nb-codigo" placeholder="ej: 1AX00003">
+      </div>
+    </div>
+    <div class="drop" id="nb-drop" ondragover="nbDragOver(event)" ondragleave="nbDragLeave(event)" ondrop="nbDrop(event)" onclick="document.getElementById('nb-input').click()">
+      <div class="ico">📂</div>
+      <strong>Arrastrá archivos acá, o hacé clic para elegirlos</strong>
+      <small>Cualquier tipo de archivo · máx. 5 MB por archivo para que suba a la nube (más grande queda solo en esta PC)</small>
+    </div>
+    <input type="file" id="nb-input" multiple style="display:none" onchange="nbUpload(this.files)">
+    <div id="status"></div>
+  </div>
+
+  <div class="card">
+    <h2>📚 Todo lo que hay guardado</h2>
+    <p class="sub">De cualquier PC, se haya bajado acá o no.</p>
+    <div class="toolbar">
+      <input id="nb-buscar" placeholder="🔍 Buscar por código, tipo o nombre de archivo…" oninput="nbRenderTabla()">
+      <button class="btn" onclick="nbCargarTodo()">↻ Actualizar</button>
+    </div>
+    <div id="nb-tabla-wrap"><div class="empty">Cargando…</div></div>
+  </div>
+
+</div>
+
+<script>
+let nbItems = [];
+
+async function nbCargarTodo(){
+  document.getElementById('nb-tabla-wrap').innerHTML = '<div class="empty">Cargando…</div>';
+  nbItems = await BiotromPDF.listarTodoGlobal();
+  const tipos = Array.from(new Set(nbItems.map(i => i.tipo))).sort();
+  document.getElementById('nb-tipos-list').innerHTML = tipos.map(t => `<option value="${nbEsc(t)}">`).join('');
+  nbRenderTabla();
+}
+
+function nbRenderTabla(){
+  const q = (document.getElementById('nb-buscar').value || '').toLowerCase().trim();
+  const wrap = document.getElementById('nb-tabla-wrap');
+  let items = nbItems.slice().sort((a,b) => (b.guardado||'').localeCompare(a.guardado||''));
+  if (q) items = items.filter(i =>
+    (i.codigo||'').toLowerCase().includes(q) ||
+    (i.tipo||'').toLowerCase().includes(q) ||
+    (i.nombreArchivo||'').toLowerCase().includes(q)
+  );
+  if (!items.length){ wrap.innerHTML = '<div class="empty">No hay nada guardado todavía.</div>'; return; }
+  wrap.innerHTML = `<table><thead><tr>
+      <th>Tipo</th><th>Código</th><th>Archivo</th><th>Tamaño</th><th>Guardado</th><th>Estado</th><th></th>
+    </tr></thead><tbody>${items.map(nbFila).join('')}</tbody></table>`;
+}
+
+function nbFila(i){
+  const kb = ((i.tamanoBytes||0)/1024).toFixed(0);
+  const fecha = i.guardado ? new Date(i.guardado).toLocaleString('es-AR') : '—';
+  const estado = i.enEstaPC
+    ? '<span class="badge-local">✔ en esta PC</span>'
+    : '<span class="badge-nube">☁ solo en la nube</span>';
+  return `<tr>
+    <td><span class="tag">${nbEsc(i.tipo)}</span></td>
+    <td><strong>${nbEsc(i.codigo)}</strong></td>
+    <td>${nbEsc(i.nombreArchivo||'—')}</td>
+    <td>${kb} KB</td>
+    <td>${fecha}</td>
+    <td>${estado}</td>
+    <td style="display:flex;gap:5px;justify-content:flex-end">
+      <button class="btn" onclick="nbVer('${nbAttr(i.codigo)}','${nbAttr(i.tipo)}')">👁 Ver</button>
+      <button class="btn er" onclick="nbEliminar('${nbAttr(i.codigo)}','${nbAttr(i.tipo)}')">✕</button>
+    </td>
+  </tr>`;
+}
+
+async function nbVer(codigo, tipo){
+  const ok = await BiotromPDF.abrir(codigo, tipo);
+  if (!ok) nbStatus('No se pudo abrir (¿se borró de la nube?)', true);
+}
+
+async function nbEliminar(codigo, tipo){
+  if (!confirm(`¿Eliminar "${codigo}" (${tipo})? Se borra de esta PC y de la nube, para todas las demás también. No se puede deshacer.`)) return;
+  await BiotromPDF.eliminar(codigo, tipo);
+  nbStatus('Eliminado.');
+  nbCargarTodo();
+}
+
+function nbDragOver(e){ e.preventDefault(); document.getElementById('nb-drop').classList.add('over'); }
+function nbDragLeave(){ document.getElementById('nb-drop').classList.remove('over'); }
+function nbDrop(e){
+  e.preventDefault();
+  document.getElementById('nb-drop').classList.remove('over');
+  nbUpload(e.dataTransfer.files);
+}
+
+async function nbUpload(files){
+  const arr = Array.from(files || []);
+  if (!arr.length) return;
+  const tipo = (document.getElementById('nb-tipo').value || '').trim();
+  if (!tipo){ nbStatus('Poné un Tipo antes de subir.', true); return; }
+  const codigoManual = (document.getElementById('nb-codigo').value || '').trim();
+  if (arr.length === 1 && !codigoManual){ nbStatus('Poné un Código para este archivo.', true); return; }
+
+  nbStatus(`Guardando ${arr.length} archivo(s)…`);
+  let ok = 0, error = 0;
+  for (const file of arr){
+    const codigo = arr.length === 1 ? codigoManual : file.name.replace(/\.[^.]+$/, '');
+    const guardado = await BiotromPDF.guardar(codigo, tipo, file);
+    if (guardado) ok++; else error++;
+  }
+  nbStatus(`✓ ${ok} guardado(s)` + (error ? ` — ${error} con error` : ''));
+  document.getElementById('nb-input').value = '';
+  document.getElementById('nb-codigo').value = '';
+  nbCargarTodo();
+}
+
+function nbStatus(msg, esError){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.style.color = esError ? 'var(--red)' : 'var(--text-dim)';
+}
+function nbEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function nbAttr(s){ return String(s==null?'':s).replace(/'/g, "\\'"); }
+
+nbCargarTodo();
+</script>
+</body>
+</html>

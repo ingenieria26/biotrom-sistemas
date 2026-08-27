@@ -165,6 +165,28 @@ window.BiotromPDF = (() => {
     } catch (e) { console.warn("BiotromPDF.listarNube:", e); return []; }
   }
 
+  // Qué "tipos" (categorías) hay cargados en la nube en este momento, de
+  // cualquier herramienta -- para armar un panel único que muestre todo.
+  async function listarTiposNube() {
+    try {
+      const res = await _fetch(`${FB_BASE}.json?shallow=true`);
+      if (!res.ok) return [];
+      const tipos = await res.json();
+      return tipos ? Object.keys(tipos) : [];
+    } catch (e) { console.warn("BiotromPDF.listarTiposNube:", e); return []; }
+  }
+
+  // Todo lo que hay guardado (nube + local) de TODOS los tipos a la vez.
+  // Combina los tipos que ya llegaron a la nube CON los que solo están en
+  // esta PC todavía (la subida a la nube es en 2do plano, así que un guardado
+  // recién hecho puede no estar en la nube todavía si se consulta al toque).
+  async function listarTodoGlobal() {
+    const [tiposNube, locales] = await Promise.all([listarTiposNube(), listar()]);
+    const tipos = Array.from(new Set([...tiposNube, ...locales.map(i => i.tipo)]));
+    const listas = await Promise.all(tipos.map(t => listarTodo(t)));
+    return listas.flat();
+  }
+
   async function guardar(codigo, tipo, blobOrFile) {
     if (!codigo || !blobOrFile) return false;
     try {
@@ -273,5 +295,5 @@ window.BiotromPDF = (() => {
     return Array.from(porClave.values());
   }
 
-  return { guardar, obtener, existe, abrir, listar, eliminar, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo };
+  return { guardar, obtener, existe, abrir, listar, eliminar, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo, listarTiposNube, listarTodoGlobal };
 })();
