@@ -127,7 +127,13 @@ window.BiotromPDF = (() => {
       const data = await res.json();
       if (!data || !data.data) return null;
       const meta = data.meta || {};
-      const blob = _base64ToBlob(data.data, meta.mime);
+      const bytes = _base64ToBlob(data.data, meta.mime);
+      // Se reconstruye como File (no Blob suelto) para que .name sobreviva el
+      // viaje por la nube -- así el código que lo usa (mostrar nombre, sacar
+      // extensión, etc.) funciona igual venga del disco local o de Firebase.
+      const blob = meta.nombreArchivo
+        ? new File([bytes], meta.nombreArchivo, { type: meta.mime || "application/octet-stream" })
+        : bytes;
       await _guardarLocal(codigo, tipo, blob, meta.nombreArchivo || "");
       return blob;
     } catch (e) { console.warn("BiotromPDF._bajarDeLaNube:", e); return null; }
@@ -211,16 +217,26 @@ window.BiotromPDF = (() => {
     } catch (e) { console.warn("BiotromPDF.listar:", e); return []; }
   }
 
+  // Borra local Y la copia en la nube -- si no, borrar en una PC no sacaría
+  // el archivo que otra PC ya bajó/subió, y volvería a aparecer solo.
   async function eliminar(codigo, tipo) {
+    let localOk = false;
     try {
       const db = await _abrirDB();
-      return await new Promise((resolve, reject) => {
+      localOk = await new Promise((resolve, reject) => {
         const tx = db.transaction(STORE, "readwrite");
         tx.objectStore(STORE).delete(_id(codigo, tipo));
         tx.oncomplete = () => resolve(true);
         tx.onerror = () => reject(tx.error);
       });
-    } catch (e) { console.warn("BiotromPDF.eliminar:", e); return false; }
+    } catch (e) { console.warn("BiotromPDF.eliminar (local):", e); }
+    let nubeOk = false;
+    try {
+      const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
+      const res = await _fetch(path, { method: "DELETE" });
+      nubeOk = res.ok;
+    } catch (e) { console.warn("BiotromPDF.eliminar (nube):", e); }
+    return localOk || nubeOk;
   }
 
   async function estadisticas() {
