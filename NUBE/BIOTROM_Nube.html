@@ -99,10 +99,15 @@
     </div>
     <div class="drop" id="nb-drop" ondragover="nbDragOver(event)" ondragleave="nbDragLeave(event)" ondrop="nbDrop(event)" onclick="document.getElementById('nb-input').click()">
       <div class="ico">📂</div>
-      <strong>Arrastrá archivos acá, o hacé clic para elegirlos</strong>
+      <strong>Arrastrá archivos o carpetas enteras acá</strong>
       <small>Cualquier tipo de archivo · máx. 5 MB por archivo para que suba a la nube (más grande queda solo en esta PC)</small>
+      <div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button type="button" class="btn" onclick="event.stopPropagation();document.getElementById('nb-input').click()">📄 Elegir archivos</button>
+        <button type="button" class="btn" onclick="event.stopPropagation();document.getElementById('nb-input-folder').click()">📁 Elegir carpeta</button>
+      </div>
     </div>
     <input type="file" id="nb-input" multiple style="display:none" onchange="nbUpload(this.files)">
+    <input type="file" id="nb-input-folder" webkitdirectory multiple style="display:none" onchange="nbUpload(this.files)">
     <div id="status"></div>
   </div>
 
@@ -178,10 +183,46 @@ async function nbEliminar(codigo, tipo){
 
 function nbDragOver(e){ e.preventDefault(); document.getElementById('nb-drop').classList.add('over'); }
 function nbDragLeave(){ document.getElementById('nb-drop').classList.remove('over'); }
-function nbDrop(e){
+async function nbDrop(e){
   e.preventDefault();
   document.getElementById('nb-drop').classList.remove('over');
-  nbUpload(e.dataTransfer.files);
+  const items = e.dataTransfer.items ? Array.from(e.dataTransfer.items) : [];
+  const entries = items.map(i => i.webkitGetAsEntry ? i.webkitGetAsEntry() : null).filter(Boolean);
+  if (!entries.length){ nbUpload(e.dataTransfer.files); return; }
+  nbStatus('Leyendo carpeta(s)…');
+  const files = await nbCollectEntries(entries);
+  if (!files.length){ nbStatus('No se encontraron archivos.', true); return; }
+  nbUpload(files);
+}
+
+// Recorre recursivamente carpetas soltadas (drag&drop) y junta todos los
+// archivos que haya adentro, en cualquier nivel de subcarpetas.
+async function nbCollectEntries(entries){
+  const files = [];
+  function conTimeout(promise, ms, etiqueta){
+    return Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout: '+etiqueta)), ms))]);
+  }
+  async function leerEntry(entry){
+    if (!entry) return;
+    if (entry.isFile){
+      try{
+        const f = await conTimeout(new Promise(res => entry.file(res)), 5000, entry.name);
+        files.push(f);
+        nbStatus('Leyendo carpeta… '+files.length+' archivo(s) encontrado(s)');
+      }catch(e){ console.warn('Saltando archivo:', entry.name, e.message); }
+    } else if (entry.isDirectory){
+      nbStatus('Leyendo carpeta: '+entry.name+'…');
+      const reader = entry.createReader();
+      let tanda;
+      do{
+        try{ tanda = await conTimeout(new Promise((res, rej) => reader.readEntries(res, rej)), 10000, entry.name); }
+        catch(e){ console.warn('Error leyendo directorio:', entry.name, e.message); break; }
+        for (const hijo of tanda) await leerEntry(hijo);
+      } while (tanda.length > 0);
+    }
+  }
+  for (const entry of entries) await leerEntry(entry);
+  return files;
 }
 
 async function nbUpload(files){
@@ -189,13 +230,13 @@ async function nbUpload(files){
   if (!arr.length) return;
   const tipo = (document.getElementById('nb-tipo').value || '').trim();
   if (!tipo){ nbStatus('Poné un Tipo antes de subir.', true); return; }
-  const codigoManual = (document.getElementById('nb-codigo').value || '').trim();
-  if (arr.length === 1 && !codigoManual){ nbStatus('Poné un Código para este archivo.', true); return; }
+const codigoManual = (document.getElementById('nb-codigo').value || '').trim();
+  const usarCodigoManual = arr.length === 1 && !!codigoManual;
 
   nbStatus(`Guardando ${arr.length} archivo(s)…`);
   let ok = 0, error = 0;
   for (const file of arr){
-    const codigo = arr.length === 1 ? codigoManual : file.name.replace(/\.[^.]+$/, '');
+    const codigo = usarCodigoManual ? codigoManual : file.name.replace(/\.[^.]+$/, '');
     const guardado = await BiotromPDF.guardar(codigo, tipo, file);
     if (guardado) ok++; else error++;
   }
