@@ -845,7 +845,20 @@ function applyBlock(start, end, existingBlock){
 
   if(existingBlock){
     const b = day.tBlocks.find(x=>x.id===existingBlock.id);
-    if(b) Object.assign(b, {start, end:finalEnd, tiempo, nOf, tPieza, desc, parada});
+    if(b){
+      // Si este bloque venía de una lectura automática (tiene _leido), cada
+      // campo que el operario cambió acá se guarda como ejemplo de corrección
+      // para que la próxima lectura de esta máquina aprenda de esto.
+      if(b._leido){
+        const nuevos = {tiempo,nOf,tPieza,desc,parada};
+        Object.keys(nuevos).forEach(f=>{
+          if(b._leido[f] !== undefined) guardarEjemploCorreccion(currentMachine, f, b._leido[f], nuevos[f]);
+        });
+      }
+      Object.assign(b, {start, end:finalEnd, tiempo, nOf, tPieza, desc, parada});
+      delete b._verif;
+      delete b._leido;
+    }
   } else {
     day.tBlocks.push({id:'b'+Date.now()+'_'+start, start, end:finalEnd, tiempo, nOf, tPieza, desc, parada});
   }
@@ -914,6 +927,292 @@ function initDragHandlers(){
     onHsClick(parseInt(td.dataset.hs, 10));
   });
 }
+
+// ── LECTOR DE CIERRE DIARIO (PDF escaneado -> carga automática) ────────
+// PDF fuente: BiotromPDF.obtener(codigoSemana, 'cierre_diario') — mismo
+// conector que ya usa BIOTROM_PanelEjecutivo.html para estos escaneos, así
+// que un PDF subido desde cualquiera de las dos herramientas sirve para la
+// otra sin duplicar nada.
+//
+// Lectura de la letra manuscrita: pega acá la URL de la Cloud Function una
+// vez desplegada (ver cloud-function-leer-cierre-diario/README.md, al lado
+// de este archivo). Mientras esté vacía, el botón sigue funcionando en
+// "modo de prueba": detecta la máquina de cada página igual que siempre,
+// pero no completa ningún dato solo (para no inventar valores de producción).
+const LEC_FN_URL = '';
+
+let _lecPdfWorkerReady = null;
+function lecEnsurePdfWorker(){
+  if(_lecPdfWorkerReady) return _lecPdfWorkerReady;
+  _lecPdfWorkerReady = fetch('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js')
+    .then(r=>r.text())
+    .then(txt=>{
+      const blobUrl = URL.createObjectURL(new Blob([txt],{type:'application/javascript'}));
+      pdfjsLib.GlobalWorkerOptions.workerSrc = blobUrl;
+    });
+  return _lecPdfWorkerReady;
+}
+function lecNormalizeTxt(s){
+  return (s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]/g,'');
+}
+// Recorta la franja donde está impreso "MÁQUINA: XXXX" (no es manuscrito,
+// así que el OCR de Tesseract es confiable acá) — mismas proporciones que
+// ya vienen probadas en BIOTROM_PanelEjecutivo.html.
+function lecCropHeaderMaquina(fullCanvas){
+  const w=fullCanvas.width, h=fullCanvas.height;
+  const sx=Math.round(w*0.28), sy=Math.round(h*0.015), sw=Math.round(w*0.72), sh=Math.round(h*0.11);
+  const c=document.createElement('canvas'); c.width=sw*2; c.height=sh*2;
+  const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height);
+  ctx.drawImage(fullCanvas, sx,sy,sw,sh, 0,0,c.width,c.height);
+  return c;
+}
+function lecGuessMachine(ocrText){
+  const norm = lecNormalizeTxt(ocrText);
+  if(!norm) return null;
+  const candidatos = MACHINES
+    .map(m=>({m, key: lecNormalizeTxt(m.label.split(' ')[0])}))
+    .filter(c=>c.key.length>=3)
+    .sort((a,b)=>b.key.length-a.key.length);
+  for(const c of candidatos) if(norm.includes(c.key)) return c.m.key;
+  return null;
+}
+
+// Guarda una corrección real (lo que leyó la IA vs. lo que confirmó el
+// operario) como ejemplo para la próxima lectura de esa máquina — así el
+// traspaso mejora con el tiempo en vez de repetir siempre los mismos errores.
+async function guardarEjemploCorreccion(maquina, campo, leido, corregido){
+  const a = (leido===undefined||leido===null) ? '' : String(leido).trim();
+  const b = (corregido===undefined||corregido===null) ? '' : String(corregido).trim();
+  if(a === b) return; // no cambió nada, no es una corrección real
+  try{
+    const path = `/controlprod_ejemplos/${maquina}`;
+    const actuales = await fbGet(path);
+    const lista = Array.isArray(actuales) ? actuales : [];
+    lista.push({campo, leido:a, corregido:b, fecha:new Date().toISOString()});
+    while(lista.length > 40) lista.shift(); // solo los últimos 40 por máquina alcanzan para orientar la lectura
+    await fbSet(path, lista);
+  }catch(e){ console.warn('No se pudo guardar el ejemplo de corrección', e); }
+}
+
+// Vuelca un "evento" leído (un corchete de la hoja) dentro de las filas del
+// día correspondiente: N°OF/Descripción/Tiempo/Parada quedan en un bloque
+// fusionado, y Cantidad se reparte por hora (nunca se fusiona — ver notas
+// junto a findBlock/fieldValueAt más arriba).
+function mergeEventoIntoDay(day, ev){
+  const cantPorHora = Array.isArray(ev.cantidadPorHora) ? ev.cantidadPorHora : [''];
+  const span = Math.max(1, cantPorHora.length);
+  const start = Math.max(0, Math.min(ROWS-1, ev.horaInicioIdx|0));
+  const end = Math.min(start+span-1, ROWS-1);
+  day.tBlocks = day.tBlocks || [];
+  const overlap = day.tBlocks.some(b => !(end < b.start || start > b.end));
+  if(overlap) return {ok:false, motivo:'superpuesto'};
+
+  const conf = ev.confianza || {};
+  const leido = {tiempo:ev.duracion||'', nOf:ev.nOf||'', tPieza:ev.tiempo1raPieza||'', desc:ev.descripcion||'', parada:ev.parada||''};
+  const block = {
+    id: 'b'+Date.now()+'_'+start+'_'+Math.random().toString(36).slice(2,6),
+    start, end,
+    tiempo: leido.tiempo, nOf: leido.nOf, tPieza: leido.tPieza, desc: leido.desc, parada: leido.parada,
+    _leido: leido,
+    _verif: {
+      tiempo: conf.duracion===false, nOf: conf.nOf===false, tPieza: conf.tiempo1raPieza===false,
+      desc: conf.descripcion===false, parada: conf.parada===false
+    }
+  };
+  day.tBlocks.push(block);
+  const cantConf = Array.isArray(conf.cantidadPorHora) ? conf.cantidadPorHora : [];
+  for(let k=0; k<span; k++){
+    const row = day.rows[start+k];
+    row.cant = cantPorHora[k]!==undefined ? String(cantPorHora[k]) : '';
+    row._cantLeido = row.cant;
+    row._cantVerif = cantConf[k] === false;
+  }
+  return {ok:true, block};
+}
+
+async function lecLlamarLector(payload){
+  if(!LEC_FN_URL){ return lecMockLector(payload); }
+  const r = await fetch(LEC_FN_URL, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+// MODO DE PRUEBA — se usa solo mientras LEC_FN_URL esté vacío. No inventa
+// ningún dato de producción; solo deja probar el resto del flujo (detección
+// de máquina por OCR, subida/lectura del PDF en la nube, fusión de datos,
+// insignias VERIFICAR) sin que la Cloud Function esté todavía desplegada.
+function lecMockLector(payload){
+  return new Promise(resolve=>{
+    setTimeout(()=>{
+      resolve({
+        dias: Array.from({length:6}, ()=>({eventos:[]})),
+        avisos: ['Modo de prueba: todavía no hay una Cloud Function en LEC_FN_URL — no se leyó ningún dato real de esta página.']
+      });
+    }, 250);
+  });
+}
+
+// ── Modal del lector ────────────────────────────────────────────────────
+let lecPdfBlob = null;
+let lecSemanaMonday = null;
+
+function lecLog(msg, cls){
+  const el = document.getElementById('lecLog');
+  const line = document.createElement('div');
+  if(cls) line.className = cls;
+  line.textContent = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+function lecResetUI(){
+  document.getElementById('lecUpload').style.display = 'none';
+  document.getElementById('lecProgreso').style.display = 'none';
+  document.getElementById('lecResumen').style.display = 'none';
+  document.getElementById('lecLog').innerHTML = '';
+  document.getElementById('lecFile').value = '';
+  lecPdfBlob = null;
+}
+async function lecCheckSemana(){
+  const estado = document.getElementById('lecEstado');
+  const upload = document.getElementById('lecUpload');
+  estado.textContent = 'Buscando el PDF de esta semana en la nube…';
+  upload.style.display = 'none';
+  lecPdfBlob = null;
+  if(!window.BiotromPDF){
+    estado.textContent = '⚠ No se pudo cargar el conector de PDFs compartidos (assets/biotrom-pdf-db.js) — revisá que la carpeta "assets" esté al lado de "CONTROL PRODUCCION".';
+    return;
+  }
+  const codigo = toISODate(lecSemanaMonday);
+  const blob = await BiotromPDF.obtener(codigo, 'cierre_diario');
+  if(blob){
+    lecPdfBlob = blob;
+    estado.textContent = `✓ Encontrado en la nube: ${blob.name || ('cierre_diario_'+codigo+'.pdf')}`;
+  } else {
+    estado.textContent = 'No hay un PDF de "cierre_diario" subido para esta semana todavía.';
+    upload.style.display = 'flex';
+  }
+}
+
+document.getElementById('btnLeerCierre').onclick = ()=>{
+  lecSemanaMonday = new Date(weekMonday);
+  document.getElementById('lecSemana').value = toISODate(lecSemanaMonday);
+  document.getElementById('lecOverlay').style.display = 'flex';
+  lecResetUI();
+  lecCheckSemana();
+};
+document.getElementById('lecClose').onclick = ()=>{ document.getElementById('lecOverlay').style.display='none'; };
+document.getElementById('lecCancelar').onclick = ()=>{ document.getElementById('lecOverlay').style.display='none'; };
+document.getElementById('lecSemana').onchange = (e)=>{ lecSemanaMonday = isoMonday(e.target.value); lecResetUI(); lecCheckSemana(); };
+document.getElementById('lecFile').onchange = (e)=>{ const f=e.target.files[0]; if(f) lecPdfBlob = f; };
+
+document.getElementById('lecProcesar').onclick = async ()=>{
+  if(!lecPdfBlob){ alert('Elegí o subí un PDF primero.'); return; }
+  const btn = document.getElementById('lecProcesar');
+  btn.disabled = true;
+  document.getElementById('lecProgreso').style.display = 'flex';
+  document.getElementById('lecResumen').style.display = 'none';
+  document.getElementById('lecLog').innerHTML = '';
+  const codigo = toISODate(lecSemanaMonday);
+
+  try{
+    if(lecPdfBlob instanceof File && window.BiotromPDF){
+      lecLog('Subiendo el PDF a la nube (cierre_diario) para que quede disponible para todas las herramientas…');
+      await BiotromPDF.guardar(codigo, 'cierre_diario', lecPdfBlob);
+    }
+
+    await lecEnsurePdfWorker();
+    const buf = await lecPdfBlob.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+    lecLog(`PDF con ${pdf.numPages} página(s).`);
+
+    let ocrWorker = null;
+    if(window.Tesseract){
+      try{ ocrWorker = await Tesseract.createWorker('eng'); }
+      catch(e){ lecLog('No se pudo iniciar el lector de encabezados — habría que asignar la máquina a mano.', 'warn'); }
+    }
+
+    let totalVerificar = 0, paginasOk = 0, paginasError = 0;
+
+    for(let p=1; p<=pdf.numPages; p++){
+      document.getElementById('lecProgresoTxt').textContent = `Página ${p} de ${pdf.numPages}…`;
+      document.getElementById('lecBarFill').style.width = Math.round((p-1)/pdf.numPages*100)+'%';
+
+      const page = await pdf.getPage(p);
+      const viewport = page.getViewport({scale:1.8});
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width; canvas.height = viewport.height;
+      await page.render({canvasContext:canvas.getContext('2d'), viewport}).promise;
+
+      let maquina = null;
+      if(ocrWorker){
+        try{
+          const crop = lecCropHeaderMaquina(canvas);
+          const {data} = await ocrWorker.recognize(crop);
+          maquina = lecGuessMachine(data.text);
+        }catch(e){}
+      }
+      if(!maquina){
+        lecLog(`Página ${p}: no se pudo identificar la máquina automáticamente — revisala a mano.`, 'warn');
+        continue;
+      }
+
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.82).split(',')[1];
+      lecLog(`Página ${p}: máquina detectada = ${machineOf(maquina).label}. Leyendo…`);
+
+      let resultado;
+      try{
+        const ejemplos = await fbGet(`/controlprod_ejemplos/${maquina}`).catch(()=>null);
+        resultado = await lecLlamarLector({
+          imageBase64, maquina, semanaISO: codigo,
+          ofsConocidas: ofsForMachine(maquina).map(o=>({of:o.of, desc:o.desc})),
+          paradaLabels: PARADA_LABELS,
+          ejemplos: Array.isArray(ejemplos) ? ejemplos : []
+        });
+      }catch(e){
+        lecLog(`Página ${p} (${machineOf(maquina).label}): error leyendo — ${e.message}`, 'err');
+        paginasError++;
+        continue;
+      }
+
+      const sheetExistente = await fetchSheetFor(lecSemanaMonday, maquina);
+      let aplicados = 0, saltados = 0;
+      (resultado.dias||[]).forEach((diaData, dIdx)=>{
+        const day = sheetExistente.days[dIdx];
+        if(!day) return;
+        (diaData.eventos||[]).forEach(ev=>{
+          const r = mergeEventoIntoDay(day, ev);
+          if(r.ok){
+            aplicados++;
+            if(r.block._verif && Object.values(r.block._verif).some(Boolean)) totalVerificar++;
+          } else saltados++;
+        });
+      });
+
+      if(aplicados > 0){
+        sheetExistente.ts = Date.now();
+        saveLocal(lecSemanaMonday, maquina, sheetExistente);
+        await fbSet(fbPath(lecSemanaMonday, maquina), sheetExistente);
+        if(maquina === currentMachine && toISODate(lecSemanaMonday) === toISODate(weekMonday)){
+          sheetData = sheetExistente;
+          renderGrid();
+        }
+      }
+      (resultado.avisos||[]).forEach(a => lecLog(`Página ${p}: ${a}`, 'warn'));
+      lecLog(`Página ${p} (${machineOf(maquina).label}): ${aplicados} bloque(s) aplicado(s)${saltados?`, ${saltados} salteado(s) por superponerse con datos ya cargados`:''}.`, 'ok');
+      paginasOk++;
+    }
+
+    if(ocrWorker) await ocrWorker.terminate();
+    document.getElementById('lecBarFill').style.width = '100%';
+    document.getElementById('lecProgresoTxt').textContent = 'Listo.';
+    const resumen = document.getElementById('lecResumen');
+    resumen.style.display = 'block';
+    resumen.innerHTML = `<b>${paginasOk}</b> página(s) leídas${paginasError?`, <b>${paginasError}</b> con error`:''}. Quedaron <b>${totalVerificar}</b> bloque(s) marcados <span style="color:var(--amber);font-weight:700">VERIFICAR</span> para revisar a mano.`;
+  }catch(e){
+    lecLog('Error general: '+e.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+};
 
 // ── WEEK NAV ──────────────────────────────────────────────────────────
 document.getElementById('btnPrevWeek').onclick = ()=>{ weekMonday = addDays(weekMonday,-7); loadSheet(); };
