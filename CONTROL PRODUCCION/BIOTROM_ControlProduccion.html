@@ -6,6 +6,10 @@
 <title>BIOTROM · Control de Producción</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="../assets/biotrom-auth.js"></script>
+<script src="../assets/biotrom-pdf-db.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <style>
 :root {
   --bg: #eef1f5;
@@ -135,6 +139,32 @@ col.c-hs{width:5%} col.c-tiempo{width:8%} col.c-of{width:9%} col.c-tpieza{width:
 .codes-footer{margin-top:12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);padding:9px 12px;border:1px dashed var(--border2);border-radius:8px;background:var(--surface);white-space:nowrap}
 .codes-footer b{color:var(--text)}
 
+/* LECTOR DE CIERRE DIARIO — modal */
+.lec-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.lec-modal{background:var(--surface);border-radius:14px;box-shadow:0 20px 60px rgba(15,23,42,.3);width:100%;max-width:560px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden}
+.lec-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 20px;border-bottom:1px solid var(--border)}
+.lec-title{font-size:15px;font-weight:700;color:var(--text)}
+.lec-sub{font-size:12px;color:var(--muted);margin-top:4px;max-width:440px}
+.lec-body{padding:18px 20px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.lec-estado{font-size:12.5px;color:var(--text);background:var(--surface2);border-radius:8px;padding:10px 12px;font-family:'DM Mono',monospace}
+.lec-upload{display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--text);background:var(--amber-dim);border:1px solid var(--amber);border-radius:8px;padding:10px 12px}
+.lec-progreso{display:flex;flex-direction:column;gap:6px}
+.lec-bar{height:8px;border-radius:4px;background:var(--surface2);overflow:hidden}
+.lec-bar-fill{height:100%;width:0;background:var(--accent);transition:width .2s}
+.lec-progreso-txt{font-family:'DM Mono',monospace;font-size:11.5px;color:var(--muted)}
+.lec-log{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:3px}
+.lec-log .ok{color:var(--green)}
+.lec-log .warn{color:var(--amber)}
+.lec-log .err{color:var(--red)}
+.lec-resumen{background:var(--accent-dim);border:1px solid var(--accent);border-radius:8px;padding:12px;font-size:12.5px;color:var(--text)}
+.lec-resumen b{font-family:'DM Mono',monospace}
+.lec-foot{display:flex;justify-content:flex-end;gap:10px;padding:14px 20px;border-top:1px solid var(--border)}
+
+/* Insignia "VERIFICAR" sobre celdas leídas con poca confianza */
+.verif-badge{position:absolute;top:2px;left:3px;background:var(--amber);color:#fff;font-size:8.5px;font-weight:700;letter-spacing:.03em;padding:1px 5px;border-radius:4px;cursor:help;z-index:2}
+td.cant-cell.verif{outline:2px solid var(--amber);outline-offset:-2px}
+td.cant-cell.verif input{background:var(--amber-dim)}
+
 /* RESPONSIVE — tablets y celulares: la tabla no se aplasta, se hace scroll
    horizontal dentro de .content; los inputs quedan a 16px para que Safari/
    Chrome mobile no hagan zoom automático al tocar un campo. */
@@ -195,6 +225,7 @@ col.c-hs{width:5%} col.c-tiempo{width:8%} col.c-of{width:9%} col.c-tpieza{width:
   </div>
   <div class="weeklabel" id="weekLabel"></div>
   <div class="spacer"></div>
+  <button class="btn btn-accent" id="btnLeerCierre">🤖<span class="lbl">Leer Cierre Diario</span></button>
   <button class="btn btn-ghost" id="btnPrint">🖨️<span class="lbl">Imprimir semana</span></button>
   <button class="btn btn-ghost" id="btnExportOne">📤<span class="lbl">Exportar máquina</span></button>
   <button class="btn btn-accent" id="btnExportAll">📦<span class="lbl">Exportar semana completa</span></button>
@@ -217,6 +248,39 @@ col.c-hs{width:5%} col.c-tiempo{width:8%} col.c-of{width:9%} col.c-tpieza{width:
 
 <datalist id="ofList"></datalist>
 <div id="printArea"></div>
+
+<div id="lecOverlay" class="lec-overlay no-print" style="display:none">
+  <div class="lec-modal">
+    <div class="lec-head">
+      <div>
+        <div class="lec-title">🤖 Leer Cierre Diario</div>
+        <div class="lec-sub">Lee el PDF escaneado de la semana y completa las planillas solo — lo que no está seguro queda marcado para revisar.</div>
+      </div>
+      <button class="iconbtn" id="lecClose" title="Cerrar">✕</button>
+    </div>
+    <div class="lec-body">
+      <div class="field">
+        <label>Semana a leer</label>
+        <input type="date" id="lecSemana">
+      </div>
+      <div id="lecEstado" class="lec-estado">—</div>
+      <div id="lecUpload" class="lec-upload" style="display:none">
+        <span>No hay un PDF subido para esa semana todavía:</span>
+        <input type="file" id="lecFile" accept="application/pdf">
+      </div>
+      <div id="lecProgreso" class="lec-progreso" style="display:none">
+        <div class="lec-bar"><div class="lec-bar-fill" id="lecBarFill"></div></div>
+        <div id="lecProgresoTxt" class="lec-progreso-txt"></div>
+      </div>
+      <div id="lecLog" class="lec-log"></div>
+      <div id="lecResumen" class="lec-resumen" style="display:none"></div>
+    </div>
+    <div class="lec-foot">
+      <button class="btn btn-ghost" id="lecCancelar">Cancelar</button>
+      <button class="btn btn-accent" id="lecProcesar">Procesar</button>
+    </div>
+  </div>
+</div>
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────
@@ -565,7 +629,9 @@ function renderGrid(){
     // La celda de Cantidad SIEMPRE es un input independiente por hora, esté o
     // no la fila dentro de un bloque (así se completa igual que en el papel).
     const cantTint = block ? `style="background:${paradaTint(block.parada)}" ` : '';
-    const cantCell = `<td class="cant-cell" ${cantTint}><input class="cant" data-f="cant" value="${esc(row.cant)}" inputmode="numeric" pattern="[0-9]*" placeholder=""></td>`;
+    const cantVerif = !!row._cantVerif;
+    const cantBadge = cantVerif ? `<span class="verif-badge" title="Lectura automática sin confirmar">?</span>` : '';
+    const cantCell = `<td class="cant-cell${cantVerif?' verif':''}" ${cantTint} style="position:relative">${cantBadge}<input class="cant" data-f="cant" value="${esc(row.cant)}" inputmode="numeric" pattern="[0-9]*" placeholder=""></td>`;
 
     let otherCells;
     if(block && block.start !== i){
@@ -578,8 +644,11 @@ function renderGrid(){
       const tint = paradaTint(block.parada);
       const solid = paradaSolid(block.parada);
       const paradaTxt = block.parada ? `${esc(block.parada)} · ${esc(PARADA_LABELS[block.parada]||'')}` : '—';
+      const v = block._verif || {};
+      const badge = (campo)=> v[campo] ? `<span class="verif-badge" title="Lectura automática sin confirmar — tocá ✎ para revisar">VERIFICAR</span>` : '';
       otherCells = `
         <td class="tblock" rowspan="${span}" style="background:${tint}">
+          ${badge('tiempo')}
           <span class="tblock-bar" style="background:${solid}"></span>
           <div class="tblock-actions">
             <button type="button" class="tblock-edit" data-block="${block.id}" title="Editar bloque">✎</button>
@@ -587,13 +656,13 @@ function renderGrid(){
           </div>
           <div class="tblock-val">${esc(computeTimeRange(block.start, block.tiempo))}</div>
         </td>
-        <td class="tblock" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${esc(block.nOf)}</div></td>
-        <td class="tblock" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${esc(block.tPieza)}</div></td>
-        <td class="tblock tblock-desc" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${esc(block.desc)}</div></td>
+        <td class="tblock" rowspan="${span}" style="background:${tint}">${badge('nOf')}<div class="tblock-val">${esc(block.nOf)}</div></td>
+        <td class="tblock" rowspan="${span}" style="background:${tint}">${badge('tPieza')}<div class="tblock-val">${esc(block.tPieza)}</div></td>
+        <td class="tblock tblock-desc" rowspan="${span}" style="background:${tint}">${badge('desc')}<div class="tblock-val">${esc(block.desc)}</div></td>
       `;
       // Cant. (cantTint/cantCell) va SIEMPRE después de Descripción y antes de Parada,
       // así que Parada del bloque se agrega recién acá.
-      otherCells += `${cantCell}<td class="tblock" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${paradaTxt}</div></td>`;
+      otherCells += `${cantCell}<td class="tblock" rowspan="${span}" style="background:${tint}">${badge('parada')}<div class="tblock-val">${paradaTxt}</div></td>`;
       html += renderRow(i, row, otherCells, true);
       continue;
     } else {
@@ -654,6 +723,16 @@ function onCellInput(e){
 
   row[field] = val;
   if(field==='parada'){ tr.classList.toggle('stopped', !!val); }
+
+  // Si este dato venía de una lectura automática marcada VERIFICAR y el
+  // operario recién lo tocó, se confirma como revisado y queda guardado
+  // como ejemplo para que la próxima lectura de esta máquina aprenda de esto.
+  if(field==='cant' && row._cantVerif && e.type==='change'){
+    guardarEjemploCorreccion(currentMachine, 'cant', row._cantLeido, val);
+    row._cantVerif = false;
+    const td = tr.querySelector('td.cant-cell');
+    if(td){ td.classList.remove('verif'); const b=td.querySelector('.verif-badge'); if(b) b.remove(); }
+  }
 
   if(field==='nOf'){
     const desc = ofDescripcion(currentMachine, val);
