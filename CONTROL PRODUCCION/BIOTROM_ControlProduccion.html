@@ -750,7 +750,11 @@ function onCellInput(e){
   // Si este dato venía de una lectura automática marcada VERIFICAR y el
   // operario recién lo tocó, se confirma como revisado y queda guardado
   // como ejemplo para que la próxima lectura de esta máquina aprenda de esto.
-  if(field==='cant' && row._cantVerif && e.type==='change'){
+  // Solo cuenta como "revisado" si de verdad quedó un valor puesto — apretar
+  // ENTER o salir del campo sin escribir nada no confirma que "no había
+  // cantidad", así que la marca VERIFICAR tiene que seguir ahí hasta que
+  // realmente se cargue el número.
+  if(field==='cant' && row._cantVerif && e.type==='change' && val !== ''){
     guardarEjemploCorreccion(currentMachine, 'cant', row._cantLeido, val);
     row._cantVerif = false;
     const td = tr.querySelector('td.cant-cell');
@@ -872,18 +876,29 @@ function applyBlock(start, end, existingBlock){
   if(existingBlock){
     const b = day.tBlocks.find(x=>x.id===existingBlock.id);
     if(b){
+      const nuevos = {tiempo,nOf,tPieza,desc,parada};
       // Si este bloque venía de una lectura automática (tiene _leido), cada
-      // campo que el operario cambió acá se guarda como ejemplo de corrección
-      // para que la próxima lectura de esta máquina aprenda de esto.
+      // campo que el operario cambió acá — y de verdad dejó con un valor, no
+      // vacío — se guarda como ejemplo de corrección para que la próxima
+      // lectura de esta máquina aprenda de esto.
       if(b._leido){
-        const nuevos = {tiempo,nOf,tPieza,desc,parada};
         Object.keys(nuevos).forEach(f=>{
-          if(b._leido[f] !== undefined) guardarEjemploCorreccion(currentMachine, f, b._leido[f], nuevos[f]);
+          if(b._leido[f] !== undefined && nuevos[f] !== '') guardarEjemploCorreccion(currentMachine, f, b._leido[f], nuevos[f]);
         });
       }
       Object.assign(b, {start, end:finalEnd, tiempo, nOf, tPieza, desc, parada});
-      delete b._verif;
-      delete b._leido;
+      // Un campo recién se da por revisado si quedó con contenido real —
+      // guardarlo vacío no confirma que "no había nada", así que sigue
+      // marcado VERIFICAR hasta que tenga un valor de verdad.
+      if(b._verif){
+        Object.keys(nuevos).forEach(f=>{
+          if(nuevos[f] !== '') b._verif[f] = false;
+        });
+        if(!Object.values(b._verif).some(Boolean)){
+          delete b._verif;
+          delete b._leido;
+        }
+      }
     }
   } else {
     day.tBlocks.push({id:'b'+Date.now()+'_'+start, start, end:finalEnd, tiempo, nOf, tPieza, desc, parada});
@@ -942,7 +957,13 @@ function initDragHandlers(){
     dragAnchorRow = i;
     dragMoved = false;
   });
-  tbody.addEventListener('pointermove', e=>{
+  // pointermove/pointerup/pointercancel van en document, no en tbody: con
+  // mouse (a diferencia del dedo, que el navegador sigue solo) el cursor
+  // puede salirse de la tabla en medio del arrastre, y si el "soltar" pasa
+  // afuera de tbody, el evento nunca le llegaría a un listener puesto ahí
+  // — quedaría la manija enganchada para siempre. Escuchando en document
+  // no importa hasta dónde se mueva el mouse.
+  document.addEventListener('pointermove', e=>{
     if(resizingBlockId !== null){
       // A propósito NO se toca el DOM ni se llama a renderGrid() acá en el
       // medio del arrastre: redibujar el <tbody> mientras el dedo/mouse sigue
@@ -974,7 +995,7 @@ function initDragHandlers(){
       renderGrid(); // pinta en vivo el rango desde-hasta mientras arrastra
     }
   });
-  tbody.addEventListener('pointerup', ()=>{
+  document.addEventListener('pointerup', ()=>{
     if(resizingBlockId !== null){
       const day = sheetData.days[currentDay];
       const block = (day.tBlocks||[]).find(b=>b.id===resizingBlockId);
@@ -998,7 +1019,7 @@ function initDragHandlers(){
     dragAnchorRow = null;
     dragMoved = false;
   });
-  tbody.addEventListener('pointercancel', ()=>{
+  document.addEventListener('pointercancel', ()=>{
     if(resizingBlockId !== null){
       // no se tocó block.end durante el arrastre, así que cancelar es gratis:
       // solo hay que limpiar el estado pendiente, no queda nada que deshacer.
