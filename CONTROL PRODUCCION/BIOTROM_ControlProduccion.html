@@ -113,6 +113,10 @@ table.grid td.tblock .tblock-actions{position:absolute;top:2px;right:3px;display
 table.grid td.tblock .tblock-actions button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;padding:2px;line-height:1}
 table.grid td.tblock .tblock-actions button:hover{color:var(--accent)}
 table.grid td.tblock .tblock-actions button.tblock-del:hover{color:var(--red)}
+table.grid td.tblock .tblock-resize{position:absolute;left:0;right:0;bottom:0;height:10px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;touch-action:none}
+table.grid td.tblock .tblock-resize span{width:22px;height:3px;border-radius:2px;background:var(--border2)}
+table.grid td.tblock .tblock-resize:hover span{background:var(--accent)}
+table.grid td.tblock.resizing{outline:2px dashed var(--accent);outline-offset:-2px}
 table.grid td.cant-cell{padding:0}
 
 .block-bar{margin-bottom:10px;padding:10px 12px;border-radius:8px;background:var(--accent-dim);border:1px solid var(--accent);display:flex;align-items:flex-end;gap:10px;font-size:12.5px;flex-wrap:wrap}
@@ -332,6 +336,8 @@ let selEnd = null;    // segunda fila tocada (tap o arrastre) — mientras no se
 let dragAnchorRow = null; // fila donde empezó un posible arrastre (pointerdown)
 let dragMoved = false;    // true si el puntero se movió a otra fila antes de soltar
 let suppressNextClick = false; // evita que el click nativo post-arrastre vuelva a disparar onHsClick
+let resizingBlockId = null;   // bloque cuya manija inferior se está arrastrando
+let resizingOriginalEnd = null; // por si hay que devolverlo (superposición con otro bloque)
 
 // ── HELPERS ───────────────────────────────────────────────────────────
 function isoMonday(d){
@@ -667,6 +673,7 @@ function renderGrid(){
             <button type="button" class="tblock-del" data-block="${block.id}" title="Quitar bloque">✕</button>
           </div>
           <div class="tblock-val">${esc(computeTimeRange(block.start, block.tiempo))}</div>
+          <div class="tblock-resize" data-block="${block.id}" title="Arrastrar para estirar/achicar"><span></span></div>
         </td>
         <td class="tblock" rowspan="${span}" style="background:${tint}">${badge('nOf')}<div class="tblock-val">${esc(block.nOf)}</div></td>
         <td class="tblock" rowspan="${span}" style="background:${tint}">${badge('tPieza')}<div class="tblock-val">${esc(block.tPieza)}</div></td>
@@ -911,6 +918,16 @@ function deleteBlock(blockId){
 function initDragHandlers(){
   const tbody = document.getElementById('gridBody');
   tbody.addEventListener('pointerdown', e=>{
+    const handle = e.target.closest('.tblock-resize');
+    if(handle){
+      const day = sheetData.days[currentDay];
+      const block = (day.tBlocks||[]).find(b=>b.id===handle.dataset.block);
+      if(!block) return;
+      resizingBlockId = block.id;
+      resizingOriginalEnd = block.end;
+      e.preventDefault();
+      return;
+    }
     const td = e.target.closest('td.hs');
     if(!td) return;
     if(selStart !== null) return; // ya hay un formulario abierto
@@ -920,6 +937,26 @@ function initDragHandlers(){
     dragMoved = false;
   });
   tbody.addEventListener('pointermove', e=>{
+    if(resizingBlockId !== null){
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const td = el && el.closest ? el.closest('td.hs') : null;
+      if(!td) return;
+      const i = parseInt(td.dataset.hs, 10);
+      const day = sheetData.days[currentDay];
+      const block = (day.tBlocks||[]).find(b=>b.id===resizingBlockId);
+      if(!block) return;
+      // no puede achicarse antes de su propio inicio, ni pisar el próximo bloque
+      const siguiente = day.tBlocks
+        .filter(b=>b.id!==block.id && b.start>block.start)
+        .sort((a,b)=>a.start-b.start)[0];
+      const tope = siguiente ? siguiente.start-1 : ROWS-1;
+      const nuevoEnd = Math.max(block.start, Math.min(i, tope));
+      if(nuevoEnd !== block.end){
+        block.end = nuevoEnd;
+        renderGrid(); // pinta en vivo mientras arrastra la manija
+      }
+      return;
+    }
     if(dragAnchorRow === null) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     const td = el && el.closest ? el.closest('td.hs') : null;
@@ -933,6 +970,19 @@ function initDragHandlers(){
     }
   });
   tbody.addEventListener('pointerup', ()=>{
+    if(resizingBlockId !== null){
+      const day = sheetData.days[currentDay];
+      const block = (day.tBlocks||[]).find(b=>b.id===resizingBlockId);
+      if(block){
+        // la duración queda igual al nuevo largo, para que el texto "desde-hasta" no quede desactualizado
+        block.tiempo = String((block.end - block.start + 1) * 60);
+        persist();
+        renderGrid();
+      }
+      resizingBlockId = null;
+      resizingOriginalEnd = null;
+      return;
+    }
     if(dragAnchorRow === null) return;
     if(dragMoved && selStart !== null && selEnd !== null){
       suppressNextClick = true;
@@ -942,11 +992,21 @@ function initDragHandlers(){
     dragMoved = false;
   });
   tbody.addEventListener('pointercancel', ()=>{
+    if(resizingBlockId !== null){
+      const day = sheetData.days[currentDay];
+      const block = (day.tBlocks||[]).find(b=>b.id===resizingBlockId);
+      if(block && resizingOriginalEnd !== null) block.end = resizingOriginalEnd;
+      resizingBlockId = null;
+      resizingOriginalEnd = null;
+      renderGrid();
+      return;
+    }
     dragAnchorRow = null;
     dragMoved = false;
   });
   tbody.addEventListener('click', e=>{
     if(suppressNextClick){ suppressNextClick = false; return; }
+    if(e.target.closest('.tblock-resize')) return;
     const td = e.target.closest('td.hs');
     if(!td) return;
     onHsClick(parseInt(td.dataset.hs, 10));

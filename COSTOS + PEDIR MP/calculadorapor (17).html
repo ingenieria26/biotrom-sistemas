@@ -292,13 +292,21 @@ function parseTextoOC(lineas, nombreArchivo) {
     // (el "ATENCION: ..." de al lado empuja "Nº ####" a la fila siguiente) - por
     // eso el numero se busca solo, sin exigir "ORDEN DE COMPRA" pegado antes.
     const numero = buscar(/N[\u00ba\u00b0o]\s*(\d{3,6})\b/i);
-    const fecha = buscar(/FECHA:\s*([\d\/]+)/i);
-    const proveedor = buscar(/PROVEEDOR:\s*(.+)/i);
+    // Algunas plantillas no dicen "FECHA:" y ponen la fecha pegada al encabezado
+    // (ej. "BIOTROM S.A. 16/09/2020") - si no hay etiqueta, se busca una fecha
+    // suelta en la primera linea como respaldo.
+    const fecha = buscar(/FECHA:\s*([\d\/]+)/i) || ((/(\d{1,2}\/\d{1,2}\/\d{2,4})/.exec(lineas[0] || "")) || [])[1] || "";
+    // PROVEEDOR y ATENCION a veces quedan pegados en el mismo renglon (ej. plantillas
+    // tipo "cotizacion") - se corta lo que venga despues de "ATENCION:" si aparece.
+    let proveedor = buscar(/PROVEEDOR:\s*(.+)/i);
+    proveedor = proveedor.split(/\s+ATENCI[O\u00d3]N:/i)[0].trim();
     const direccion = buscar(/Direcci[o\u00f3]n:\s*(.+)/i);
     const telefono = buscar(/Tel[e\u00e9]fono:\s*(.+)/i);
-    const subtotal = buscar(/Subtotal\s*\$?\s*([\d.,]+)/i);
-    const iva = buscar(/I\.?V\.?A\.?\s*\$?\s*([\d.,]+)/i);
-    const totalMatch = /(?:^|\n)Total\s*\$?\s*([\d.,]+)/i.exec(texto);
+    // El signo "$" y la palabra "USD"/"ARS" antes del numero son opcionales - algunas
+    // plantillas (ej. "cotizacion de materia prima") no ponen ningun simbolo.
+    const subtotal = buscar(/Subtotal\s*:?\s*(?:USD|ARS|U\$S|\$)?\s*([\d.,]+)/i);
+    const iva = buscar(/I\.?V\.?A\.?\s*:?\s*(?:USD|ARS|U\$S|\$)?\s*([\d.,]+)/i);
+    const totalMatch = /(?:^|\n)\s*Total\s*:?\s*(?:USD|ARS|U\$S|\$)?\s*([\d.,]+)/i.exec(texto);
     const total = totalMatch ? totalMatch[1].trim() : "";
     const condPago = buscar(/Cond\.?\s*de\s*pago:\s*(.+)/i);
     const formaEntrega = buscar(/Forma\s*de\s*entrega:\s*(.+)/i);
@@ -307,21 +315,37 @@ function parseTextoOC(lineas, nombreArchivo) {
 
     // Items: entre el encabezado de la tabla y "Subtotal". El encabezado a veces
     // dice "CANT. Mts" y a veces solo "CANT." (con la unidad "MTS"/"KG"/etc.
-    // pegada al numero en la fila del item, no en el encabezado) - por eso el
-    // detector de encabezado solo pide "CANT" + "DESCRIPCI" en la misma linea,
-    // y la fila de item separa un posible token de unidad antes de la descripcion.
+    // pegada al numero en la fila del item, o solo indicada como "[m]"/"[Kg]" en
+    // el encabezado, sin repetirse en cada fila) - por eso el detector de
+    // encabezado solo pide "CANT" + "DESCRIPCI" en la misma linea, y la fila de
+    // item separa un posible token de unidad antes de la descripcion, con
+    // fallback a la unidad indicada entre corchetes en el encabezado.
     const idxHeader = lineas.findIndex(l => /CANT\.?.*DESCRIPCI/i.test(l));
-    const idxSubtotal = lineas.findIndex(l => /^Subtotal/i.test(l));
+    const idxSubtotal = lineas.findIndex(l => /^\s*Subtotal/i.test(l));
     const items = [];
     if (idxHeader !== -1) {
         const fin = idxSubtotal !== -1 ? idxSubtotal : lineas.length;
+        const headerTxt = lineas[idxHeader] + " " + (lineas[idxHeader + 1] || "");
+        const unidadHeaderMatch = /\[\s*(kgs?|kilos?|mts?|metros?|m)\s*\]/i.exec(headerTxt);
+        const unidadDefault = unidadHeaderMatch ? (/k/i.test(unidadHeaderMatch[1]) ? "KG" : "MTS") : "";
+        // El signo "$" antes de cada precio es opcional (algunas plantillas no lo ponen).
+        const filaItemRegex = /^(\d+(?:[.,]\d+)?)\s*(MTS?|KGS?|UN|UNI?|PZAS?|LTS?)?\s+(.+?)\s+\$?\s*(\d+(?:[.,]\d+)?)\s+\$?\s*(\d+(?:[.,]\d+)?)\s*$/i;
         for (let i = idxHeader + 1; i < fin; i++) {
-            const m = /^(\d+(?:[.,]\d+)?)\s*(MTS?|KGS?|UN|UNI?|PZAS?|LTS?)?\s+(.+?)\s+\$\s*([\d.,]+)\s+\$\s*([\d.,]+)\s*$/i.exec(lineas[i]);
-            if (m) items.push({
-                cantidad: m[1], unidad: (m[2] || "").toUpperCase(),
-                descripcion: normalizarColorDescripcion(m[3].trim()),
-                precioUnitario: m[4], total: m[5],
-            });
+            const linea = lineas[i];
+            const m = filaItemRegex.exec(linea);
+            if (m) {
+                items.push({
+                    cantidad: m[1], unidad: (m[2] || unidadDefault).toUpperCase(),
+                    descripcion: normalizarColorDescripcion(m[3].trim()),
+                    precioUnitario: m[4], total: m[5],
+                });
+            } else if (items.length && linea.trim() && !/^\[/.test(linea.trim())) {
+                // Fila de continuacion de la descripcion del item anterior (ej. el
+                // diametro "REDONDO Ø 4" queda en un renglon aparte por como se
+                // corta el texto en el PDF).
+                const ultimo = items[items.length - 1];
+                ultimo.descripcion = normalizarColorDescripcion((ultimo.descripcion + " " + linea.trim()).trim());
+            }
         }
     }
 
@@ -331,7 +355,6 @@ function parseTextoOC(lineas, nombreArchivo) {
         items, archivo: nombreArchivo, guardadoEl: new Date().toISOString(),
     };
 }
-
 const MP_KEYWORDS_FORMA=["BARRA","CHAPA","CAÑO","CANO","PLANCHUELA","TUBO","HEXAGONAL","REDONDA","CUADRADA","RESORTE","ALAMBRE"];const MP_KEYWORDS_MATERIAL=["AISI","316","304","420","F138","F139","TI ALEADO","TITANIO","POM","PEEK","UHMWPE","CR-CO","CROMO COBALTO","NITINOL","ACERO","ALUMINIO","6061","6063"];function esItemMateriaPrima(descripcion){const d=(descripcion||"").toUpperCase();return MP_KEYWORDS_FORMA.some(k=>d.includes(k))||MP_KEYWORDS_MATERIAL.some(k=>d.includes(k))}let _ocFiltroTipo="todas";function ocCambiarFiltroTipo(valor){_ocFiltroTipo=valor;["ocFiltroTodas","ocFiltroMp","ocFiltroHerramienta"].forEach(id=>{const b=document.getElementById(id);if(!b)return;const activo=(id==="ocFiltroTodas"&&valor==="todas")||(id==="ocFiltroMp"&&valor==="mp")||(id==="ocFiltroHerramienta"&&valor==="herramienta");b.style.background=activo?"#1a73e8":"#fff";b.style.color=activo?"#fff":"#444"});renderOrdenesCompra()}function _parsearFechaOC(f){if(!f)return null;const m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(f);if(!m)return null;let[,d,mo,y]=m;if(y.length===2)y=(parseInt(y)<50?"20":"19")+y;const dt=new Date(+y,+mo-1,+d);return isNaN(dt.getTime())?null:dt}function _esOcMasReciente(candidatoOc,actualOc){if(!actualOc)return true;const fc=_parsearFechaOC(candidatoOc.fecha),fa=_parsearFechaOC(actualOc.fecha);if(fc&&fa)return fc.getTime()>fa.getTime();if(fc&&!fa)return true;if(!fc&&fa)return false;return(parseInt(candidatoOc.numero)||0)>(parseInt(actualOc.numero)||0)}function renderOrdenesCompra() {
     const tbody = document.getElementById("oc_tbody");
     if (!tbody) return;
