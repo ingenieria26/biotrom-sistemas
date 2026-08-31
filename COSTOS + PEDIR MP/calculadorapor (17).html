@@ -136,7 +136,7 @@ function _construirIndiceMP(){
     const indice={};
     Object.values(todas).forEach(oc=>{
         (oc.items||[]).forEach(it=>{
-            if(!esItemMateriaPrima(it.descripcion))return;
+            if(clasificarItemOC(oc,it)!=="mp")return;
             const key=_normalizarDescMP(it.descripcion);
             if(!key)return;
             if(!indice[key]||_esOcMasReciente(oc,indice[key].oc)){
@@ -320,9 +320,9 @@ function parseTextoOC(lineas, nombreArchivo) {
     const telefono = buscar(/Tel[e\u00e9]fono:\s*(.+)/i);
     // El signo "$" y la palabra "USD"/"ARS" antes del numero son opcionales - algunas
     // plantillas (ej. "cotizacion de materia prima") no ponen ningun simbolo.
-    const subtotal = buscar(/Subtotal\s*:?\s*(?:USD|ARS|U\$S|\$)?\s*([\d.,]+)/i);
-    const iva = buscar(/I\.?V\.?A\.?\s*:?\s*(?:USD|ARS|U\$S|\$)?\s*([\d.,]+)/i);
-    const totalMatch = /(?:^|\n)\s*Total\s*:?\s*(?:USD|ARS|U\$S|\$)?\s*([\d.,]+)/i.exec(texto);
+    const subtotal = buscar(/Subtotal\s*:?\s*(?:USD|ARS|U\$S)?\s*\$?\s*([\d.,]+)/i);
+    const iva = buscar(/I\.?V\.?A\.?\s*:?\s*(?:USD|ARS|U\$S)?\s*\$?\s*([\d.,]+)/i);
+    const totalMatch = /(?:^|\n)\s*Total\s*:?\s*(?:USD|ARS|U\$S)?\s*\$?\s*([\d.,]+)/i.exec(texto);
     const total = totalMatch ? totalMatch[1].trim() : "";
     const condPago = buscar(/Cond\.?\s*de\s*pago:\s*(.+)/i);
     const formaEntrega = buscar(/Forma\s*de\s*entrega:\s*(.+)/i);
@@ -345,7 +345,7 @@ function parseTextoOC(lineas, nombreArchivo) {
         const unidadHeaderMatch = /\[\s*(kgs?|kilos?|mts?|metros?|m)\s*\]/i.exec(headerTxt);
         const unidadDefault = unidadHeaderMatch ? (/k/i.test(unidadHeaderMatch[1]) ? "KG" : "MTS") : "";
         // El signo "$" antes de cada precio es opcional (algunas plantillas no lo ponen).
-        const filaItemRegex = /^(\d+(?:[.,]\d+)?)\s*(MTS?|KGS?|UN|UNI?|PZAS?|LTS?)?\s+(.+?)\s+\$?\s*(\d+(?:[.,]\d+)?)\s+\$?\s*(\d+(?:[.,]\d+)?)\s*$/i;
+        const filaItemRegex = /^(\d+(?:[.,]\d+)?)\s*(MTS?|KGS?|UN|UNI?|PZAS?|LTS?)?\s+(.+?)\s+(?:USD|ARS|U\$S)?\s*\$?\s*(\d+(?:[.,]\d+)?)\s+(?:USD|ARS|U\$S)?\s*\$?\s*(\d+(?:[.,]\d+)?)\s*$/i;
         for (let i = idxHeader + 1; i < fin; i++) {
             const linea = lineas[i];
             const m = filaItemRegex.exec(linea);
@@ -371,7 +371,7 @@ function parseTextoOC(lineas, nombreArchivo) {
         items, archivo: nombreArchivo, guardadoEl: new Date().toISOString(),
     };
 }
-const MP_KEYWORDS_FORMA=["BARRA","CHAPA","CAÑO","CANO","PLANCHUELA","TUBO","HEXAGONAL","REDONDA","CUADRADA","RESORTE","ALAMBRE"];const MP_KEYWORDS_MATERIAL=["AISI","316","304","420","F138","F139","TI ALEADO","TITANIO","POM","PEEK","UHMWPE","CR-CO","CROMO COBALTO","NITINOL","ACERO","ALUMINIO","6061","6063"];function esItemMateriaPrima(descripcion){const d=(descripcion||"").toUpperCase();return MP_KEYWORDS_FORMA.some(k=>d.includes(k))||MP_KEYWORDS_MATERIAL.some(k=>d.includes(k))}let _ocFiltroTipo="todas";function ocCambiarFiltroTipo(valor){_ocFiltroTipo=valor;["ocFiltroTodas","ocFiltroMp","ocFiltroHerramienta"].forEach(id=>{const b=document.getElementById(id);if(!b)return;const activo=(id==="ocFiltroTodas"&&valor==="todas")||(id==="ocFiltroMp"&&valor==="mp")||(id==="ocFiltroHerramienta"&&valor==="herramienta");b.style.background=activo?"#1a73e8":"#fff";b.style.color=activo?"#fff":"#444"});renderOrdenesCompra()}function _parsearFechaOC(f){if(!f)return null;const m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(f);if(!m)return null;let[,d,mo,y]=m;if(y.length===2)y=(parseInt(y)<50?"20":"19")+y;const dt=new Date(+y,+mo-1,+d);return isNaN(dt.getTime())?null:dt}function _esOcMasReciente(candidatoOc,actualOc){if(!actualOc)return true;const fc=_parsearFechaOC(candidatoOc.fecha),fa=_parsearFechaOC(actualOc.fecha);if(fc&&fa)return fc.getTime()>fa.getTime();if(fc&&!fa)return true;if(!fc&&fa)return false;return(parseInt(candidatoOc.numero)||0)>(parseInt(actualOc.numero)||0)}function renderOrdenesCompra() {
+const MP_KEYWORDS_FORMA=["BARRA","CHAPA","CAÑO","CANO","PLANCHUELA","TUBO","HEXAGONAL","REDONDA","CUADRADA","RESORTE","ALAMBRE"];const MP_KEYWORDS_MATERIAL=["AISI","316","304","420","F138","F139","TI ALEADO","TITANIO","POM","PEEK","UHMWPE","CR-CO","CROMO COBALTO","NITINOL","ACERO","ALUMINIO","6061","6063"];function esItemMateriaPrima(descripcion){const d=(descripcion||"").toUpperCase();return MP_KEYWORDS_FORMA.some(k=>d.includes(k))||MP_KEYWORDS_MATERIAL.some(k=>d.includes(k))}function esProveedorFarmacia(proveedor){const p=(proveedor||"").toUpperCase();return p.includes("FARMACIA")||p.includes("FARMACITY")}function clasificarItemOC(oc,it){if(esProveedorFarmacia(oc.proveedor))return"farmacia";return esItemMateriaPrima(it.descripcion)?"mp":"herramienta"}let _ocFiltroTipo="todas";function ocCambiarFiltroTipo(valor){_ocFiltroTipo=valor;["ocFiltroTodas","ocFiltroMp","ocFiltroHerramienta"].forEach(id=>{const b=document.getElementById(id);if(!b)return;const activo=(id==="ocFiltroTodas"&&valor==="todas")||(id==="ocFiltroMp"&&valor==="mp")||(id==="ocFiltroHerramienta"&&valor==="herramienta");b.style.background=activo?"#1a73e8":"#fff";b.style.color=activo?"#fff":"#444"});renderOrdenesCompra()}function _parsearFechaOC(f){if(!f)return null;const m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(f);if(!m)return null;let[,d,mo,y]=m;if(y.length===2)y=(parseInt(y)<50?"20":"19")+y;const dt=new Date(+y,+mo-1,+d);return isNaN(dt.getTime())?null:dt}function _esOcMasReciente(candidatoOc,actualOc){if(!actualOc)return true;const fc=_parsearFechaOC(candidatoOc.fecha),fa=_parsearFechaOC(actualOc.fecha);if(fc&&fa)return fc.getTime()>fa.getTime();if(fc&&!fa)return true;if(!fc&&fa)return false;return(parseInt(candidatoOc.numero)||0)>(parseInt(actualOc.numero)||0)}function renderOrdenesCompra() {
     const tbody = document.getElementById("oc_tbody");
     if (!tbody) return;
     const todas = _cargarOrdenesCompra();
@@ -380,8 +380,9 @@ const MP_KEYWORDS_FORMA=["BARRA","CHAPA","CAÑO","CANO","PLANCHUELA","TUBO","HEX
 
     const lista = Object.values(todas).map(oc => {
         const itemsFiltrados = (oc.items || []).filter(it => {
-            if (filtroTipo === "mp") return esItemMateriaPrima(it.descripcion);
-            if (filtroTipo === "herramienta") return !esItemMateriaPrima(it.descripcion);
+            const clase = clasificarItemOC(oc, it);
+            if (filtroTipo === "mp") return clase === "mp";
+            if (filtroTipo === "herramienta") return clase === "herramienta";
             return true;
         });
         return Object.assign({}, oc, { _itemsFiltrados: itemsFiltrados });
@@ -401,9 +402,11 @@ const MP_KEYWORDS_FORMA=["BARRA","CHAPA","CAÑO","CANO","PLANCHUELA","TUBO","HEX
     tbody.innerHTML = lista.map(oc => {
         const itemsMostrar = filtroTipo === "todas" ? (oc.items || []) : oc._itemsFiltrados;
         const itemsTxt = itemsMostrar.map(it => {
-            const esMp = esItemMateriaPrima(it.descripcion);
-            const tag = esMp
+            const clase = clasificarItemOC(oc, it);
+            const tag = clase === "mp"
                 ? '<span style="background:#e8f0fe;color:#1a73e8;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;margin-right:4px">MP</span>'
+                : clase === "farmacia"
+                ? '<span style="background:#f3e5f5;color:#7b1fa2;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;margin-right:4px">FARM</span>'
                 : '<span style="background:#fff3e0;color:#e65100;font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;margin-right:4px">HTA</span>';
             return tag + it.cantidad + (it.unidad ? " " + it.unidad : "") + " x " + it.descripcion + " - USD $" + it.precioUnitario;
         }).join("<br>");
