@@ -209,7 +209,7 @@ col.c-hs{width:5%} col.c-tiempo{width:8%} col.c-of{width:9%} col.c-tpieza{width:
   <div id="blockBar" class="block-bar" style="display:none"></div>
   <table class="grid" id="gridTable">
     <colgroup><col class="c-hs"><col class="c-tiempo"><col class="c-of"><col class="c-tpieza"><col class="c-desc"><col class="c-cant"><col class="c-parada"></colgroup>
-    <thead><tr><th>HS.</th><th>Duración (min)</th><th>N° OF</th><th>Tiempo 1º Pza</th><th>Descripción</th><th>Cant.</th><th>Parada</th></tr></thead>
+    <thead><tr><th>HS.</th><th>Duración</th><th>N° OF</th><th>Tiempo 1º Pza</th><th>Descripción</th><th>Cant.</th><th>Parada</th></tr></thead>
     <tbody id="gridBody"></tbody>
   </table>
   <div class="codes-footer">Códigos de parada: <b>[1]</b> Set Up &nbsp;|&nbsp; <b>[2]</b> Dif. en Plano &nbsp;|&nbsp; <b>[3]</b> Rotura Herramienta &nbsp;|&nbsp; <b>[4]</b> Falta Personal &nbsp;|&nbsp; <b>[5]</b> Mantenimiento &nbsp;|&nbsp; <b>[6]</b> No se trabajó</div>
@@ -286,10 +286,41 @@ function toISODate(d){
 function fmtDDMM(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); }
 function fmtDDMMYY(d){ return fmtDDMM(d)+'/'+String(d.getFullYear()).slice(2); }
 function fmtHour(i){ return String((8+i)%24).padStart(2,'0')+':00'; }
-// A partir de la hora de inicio de fila + duración en minutos, calcula el
-// horario real "desde-hasta" (ej: 30 min desde las 15:00 -> "15:00 a 15:30").
+// Interpreta la Duración tal como se escribe en la planilla de papel:
+// "45", "45'" o "45min" -> 45 minutos · "1h", "1h30", "1h 30'" -> 90 minutos
+// "90s"/"90\"" -> segundos (se redondean al minuto) · combinables entre sí.
+// Un número suelto sin ninguna unidad se sigue interpretando como minutos.
+function parseDuracionMinutes(raw){
+  const text = String(raw||'').trim().toLowerCase().replace(',','.');
+  if(!text) return 0;
+  if(/^\d+(\.\d+)?$/.test(text)) return Math.round(parseFloat(text));
+
+  let totalMin = 0, any = false;
+  const hMatch = text.match(/(\d+(?:\.\d+)?)\s*h/);
+  if(hMatch){ totalMin += parseFloat(hMatch[1]) * 60; any = true; }
+
+  let mMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:'|min)/);
+  if(!mMatch && hMatch){
+    // ej: "1h30" — el número pegado después de la "h" sin unidad propia son minutos
+    const after = text.slice(hMatch.index + hMatch[0].length);
+    const bare = after.match(/^\s*(\d{1,2})(?!\d)/);
+    if(bare) mMatch = bare;
+  }
+  if(mMatch){ totalMin += parseFloat(mMatch[1]); any = true; }
+
+  const sMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:"|s\b|seg)/);
+  if(sMatch){ totalMin += parseFloat(sMatch[1]) / 60; any = true; }
+
+  if(!any){
+    const num = text.match(/(\d+(?:\.\d+)?)/);
+    if(num) totalMin = parseFloat(num[1]);
+  }
+  return Math.round(totalMin);
+}
+// A partir de la hora de inicio de fila + duración, calcula el horario real
+// "desde-hasta" (ej: 30 min desde las 15:00 -> "15:00 a 15:30").
 function computeTimeRange(startRow, minutes){
-  const mins = parseInt(minutes, 10);
+  const mins = parseDuracionMinutes(minutes);
   if(!mins || mins<=0) return fmtHour(startRow);
   const startTotal = ((8+startRow)%24) * 60;
   const endTotal = startTotal + mins;
@@ -305,7 +336,7 @@ function exportTiempoAt(day, rowIdx){
 // Cuántas filas de una hora ocupa realmente una duración: la duración manda
 // siempre, sin importar cuántas filas se hayan tocado/arrastrado al crearlo.
 function computeSpanEnd(start, minutes){
-  const mins = parseInt(minutes, 10) || 0;
+  const mins = parseDuracionMinutes(minutes) || 0;
   const spanRows = mins > 0 ? Math.max(1, Math.ceil(mins/60)) : 1;
   return Math.min(start + spanRows - 1, ROWS-1);
 }
@@ -570,7 +601,7 @@ function renderGrid(){
         .concat(Object.entries(PARADA_LABELS).map(([v,l])=>
           `<option value="${v}" ${String(row.parada)===v?'selected':''}>${v} · ${l}</option>`));
       otherCells = `
-        <td><input data-f="tiempo" value="${esc(row.tiempo)}" inputmode="numeric" pattern="[0-9]*" placeholder="min"></td>
+        <td><input data-f="tiempo" value="${esc(row.tiempo)}" placeholder="ej: 45 o 1h30"></td>
         <td><input data-f="nOf" list="ofList" value="${esc(row.nOf)}" placeholder=""></td>
         <td><input data-f="tPieza" value="${esc(row.tPieza)}" placeholder="ej: 1h 10'"></td>
         <td><input data-f="desc" value="${esc(row.desc)}" placeholder=""></td>
@@ -616,7 +647,7 @@ function onCellInput(e){
   const row = day.rows[i];
   let val = e.target.value;
 
-  if(field==='cant' || field==='tiempo'){
+  if(field==='cant'){
     val = val.replace(/\D/g,'');
     e.target.value = val;
   }
@@ -681,7 +712,7 @@ function showBlockBar(mode, a, b, existingBlock){
       `<option value="${v}" ${String(ex.parada)===v?'selected':''}>${v} · ${l}</option>`));
   bar.innerHTML = `
     <span class="hint">Desde <b>${fmtHour(a)}</b></span>
-    <div class="bf"><label>Duración (min)</label><input type="text" id="bkTiempo" inputmode="numeric" pattern="[0-9]*" placeholder="ej: 30" value="${esc(ex.tiempo)}"></div>
+    <div class="bf"><label>Duración</label><input type="text" id="bkTiempo" placeholder="ej: 30 o 1h30" value="${esc(ex.tiempo)}"></div>
     <span class="hint" id="bkRangePreview">${esc(computeTimeRange(a, ex.tiempo))}</span>
     <div class="bf"><label>N° OF</label><input type="text" id="bkNOf" list="ofList" value="${esc(ex.nOf)}"></div>
     <div class="bf"><label>Tiempo 1º Pza</label><input type="text" id="bkTPieza" placeholder="ej: 1h 10'" value="${esc(ex.tPieza)}"></div>
@@ -696,7 +727,6 @@ function showBlockBar(mode, a, b, existingBlock){
     if(d !== null) document.getElementById('bkDesc').value = d;
   });
   document.getElementById('bkTiempo').addEventListener('input', e=>{
-    e.target.value = e.target.value.replace(/\D/g,'');
     document.getElementById('bkRangePreview').textContent = computeTimeRange(a, e.target.value);
   });
   document.getElementById('blockApplyBtn').onclick = ()=>applyBlock(a,b,existingBlock);
