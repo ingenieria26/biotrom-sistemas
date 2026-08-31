@@ -1,1 +1,929 @@
-<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BIOTROM · Control de Producción</title><link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet"><script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script><style>:root{--bg:#eef1f5;--surface:#ffffff;--surface2:#f3f5f8;--border:rgba(15,23,42,0.08);--border2:rgba(15,23,42,0.14);--text:#1c2128;--muted:#667085;--accent:#2f5fe0;--accent-dim:rgba(47,95,224,0.09);--red:#dc2626;--red-dim:rgba(220,38,38,0.08);--amber:#b45309;--amber-dim:rgba(217,119,6,0.12);--blue:#2f5fe0;--green:#15803d;--hyundai:#2f5fe0;--dmg:#15803d;--fanuc:#b45309;--haas:#7e22ce;--tsugami:#be185d;--miyano:#0e7490;--cortehilo:#52525b;--canulado:#c2410c;--shadow:0 1px 2px rgba(15,23,42,0.04),0 6px 16px rgba(15,23,42,0.06)}*{box-sizing:border-box;margin:0;padding:0}body,html{height:100%}body{background:var(--bg);color:var(--text);font-family:Syne,sans-serif;min-height:100vh;display:flex;flex-direction:column;overflow:hidden}::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:0 0}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}button,input,select{font-family:inherit}.header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;box-shadow:var(--shadow)}.logo{display:flex;align-items:center;gap:10px}.logo-mark{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:15px;flex-shrink:0}.logo-text{font-size:14.5px;font-weight:700;letter-spacing:-.02em;color:var(--text)}.logo-sub{font-size:10.5px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:1px}#sync-indicator{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);padding:5px 10px;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;gap:6px;background:var(--surface2)}#sync-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .2s}.toolbar{display:flex;align-items:center;gap:10px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap;flex-shrink:0}.field{display:flex;flex-direction:column;gap:3px}.field label{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}.toolbar input[type=date],.toolbar select{background:var(--surface);border:1px solid var(--border2);color:var(--text);font-size:13px;border-radius:8px;height:32px;padding:0 10px;outline:0;cursor:pointer}.toolbar input:focus,.toolbar select:focus{border-color:var(--accent)}.weeknav{display:flex;align-items:center;gap:4px}.iconbtn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}.iconbtn:hover{background:var(--surface2)}.weeklabel{font-family:'DM Mono',monospace;font-size:12px;color:var(--text);padding:0 6px;white-space:nowrap;font-weight:600}.spacer{flex:1}.btn{height:32px;padding:0 14px;font-size:12.5px;font-weight:600;border-radius:8px;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;transition:all .15s}.btn-accent{background:var(--accent);color:#fff}.btn-accent:hover{background:#2650bf;transform:translateY(-1px)}.btn-ghost{background:var(--surface);color:var(--muted);border:1px solid var(--border2)}.btn-ghost:hover{background:var(--surface2);color:var(--text)}.machines{display:flex;gap:6px;padding:10px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap;flex-shrink:0}.mchip{padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:var(--surface);color:var(--muted);display:flex;align-items:center;gap:6px;transition:all .15s}.mchip .dot{width:7px;height:7px;border-radius:50%}.mchip:hover{color:var(--text);border-color:var(--border2)}.mchip.active{color:var(--text);border-color:var(--mcolor);background:color-mix(in srgb,var(--mcolor) 12%,var(--surface));font-weight:700}.tabs{display:flex;gap:2px;padding:8px 24px 0;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto;flex-shrink:0}.tab{padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;border:none;background:0 0;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;border-radius:6px 6px 0 0;white-space:nowrap}.tab:hover{color:var(--text);background:var(--surface2)}.tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--accent-dim)}.tab .n{display:block;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:1px}.content{flex:1;overflow:auto;padding:16px 24px 40px}.sheet-title{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);margin-bottom:10px;white-space:nowrap}.sheet-title b{color:var(--text)}table.grid{table-layout:fixed;border-collapse:separate;border-spacing:0;width:100%;min-width:760px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;box-shadow:var(--shadow)}table.grid th{background:var(--surface2);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding:10px 8px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:left;position:sticky;top:0;z-index:20}table.grid th:first-child{border-top-left-radius:9px}table.grid th:last-child{border-top-right-radius:9px;border-right:none}table.grid td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:0;vertical-align:middle}table.grid td:last-child{border-right:none}table.grid tbody tr:nth-child(2n){background:var(--surface2)}table.grid tbody tr:hover{background:var(--accent-dim)}table.grid td.hs{font-family:'DM Mono',monospace;font-size:9.5px;color:var(--muted);font-weight:600;background:var(--surface2);padding:0;white-space:nowrap;cursor:grab;user-select:none;touch-action:none}table.grid td.hs>span{display:flex;align-items:center;justify-content:center;height:36px;width:100%}table.grid td.hs:hover{background:var(--accent-dim);color:var(--accent)}table.grid td.hs.selecting{background:var(--accent);color:#fff;cursor:grabbing}table.grid tr.stopped td.hs{color:var(--amber)}table.grid tr.stopped{background:var(--amber-dim)!important}table.grid td.tblock{text-align:center;vertical-align:middle;position:relative;padding:4px 10px;font-size:12px;color:var(--text)}table.grid td.tblock.tblock-desc{text-align:left}table.grid td.tblock .tblock-val{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}table.grid td.tblock .tblock-bar{position:absolute;left:3px;top:8px;bottom:8px;width:3px;border-radius:2px}table.grid td.tblock .tblock-actions{position:absolute;top:2px;right:3px;display:flex;gap:3px}table.grid td.tblock .tblock-actions button{background:0 0;border:none;color:var(--muted);cursor:pointer;font-size:10px;padding:2px;line-height:1}table.grid td.tblock .tblock-actions button:hover{color:var(--accent)}table.grid td.tblock .tblock-actions button.tblock-del:hover{color:var(--red)}.block-bar{margin-bottom:10px;padding:10px 12px;border-radius:8px;background:var(--accent-dim);border:1px solid var(--accent);display:flex;align-items:flex-end;gap:10px;font-size:12.5px;flex-wrap:wrap}.block-bar .hint{color:var(--text);align-self:center}.block-bar #bkRangePreview{font-family:'DM Mono',monospace;font-weight:600;color:var(--accent)}.block-bar .spacer2{flex:1;min-width:0}.block-bar .bf{display:flex;flex-direction:column;gap:3px}.block-bar .bf label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.block-bar .bf input,.block-bar .bf select{height:30px;border-radius:6px;border:1px solid var(--border2);padding:0 8px;font-size:12.5px;background:var(--surface);color:var(--text);outline:0}.block-bar .bf input:focus,.block-bar .bf select:focus{border-color:var(--accent)}.block-bar #bkTiempo{width:100px}.block-bar #bkNOf{width:100px}.block-bar #bkTPieza{width:80px}.block-bar #bkCant{width:70px}.block-bar #bkParada{width:150px}.block-bar .bf-wide{flex:1;min-width:160px}.block-bar .bf-wide input{width:100%}table.grid input,table.grid select{width:100%;height:36px;background:0 0;border:none;color:var(--text);font-size:12.5px;padding:0 8px;outline:0}table.grid input:focus,table.grid select:focus{background:var(--accent-dim);box-shadow:inset 0 0 0 1.5px var(--accent)}table.grid input.cant{text-align:center}table.grid select{cursor:pointer;color:var(--text)}table.grid select option{background:var(--surface);color:var(--text)}col.c-hs{width:5%}col.c-tiempo{width:8%}col.c-of{width:9%}col.c-tpieza{width:10%}col.c-desc{width:40%}col.c-cant{width:8%}col.c-parada{width:20%}.codes-footer{margin-top:12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);padding:9px 12px;border:1px dashed var(--border2);border-radius:8px;background:var(--surface);white-space:nowrap}.codes-footer b{color:var(--text)}@media (max-width:900px){.header{padding:12px 14px}.toolbar{padding:10px 14px}.machines{padding:8px 14px}.tabs{padding:6px 14px 0}.content{padding:12px 14px 32px}.logo-text{font-size:13px}.weeklabel{display:none}table.grid input,table.grid select{font-size:16px}.block-bar .bf input,.block-bar .bf select{font-size:16px}}@media (max-width:560px){.toolbar{gap:8px}.btn{padding:0 10px;font-size:11.5px}.btn span.lbl{display:none}.mchip{padding:5px 9px;font-size:11px}.tab{padding:8px 11px;font-size:11.5px}}#printArea{display:none}@media print{.no-print{display:none!important}body{background:#fff;color:#000}#printArea{display:block}#printArea table{border-collapse:collapse;width:100%;font-size:8px}#printArea td,#printArea th{border:1px solid #999;padding:2px 3px}#printArea th{background:#ddd}#printArea h2{font-size:13px;margin-bottom:4px}}</style></head><body><div class="header no-print"><div class="logo"><div class="logo-mark">B</div><div><div class="logo-text">BIOTROM · Control de Producción</div><div class="logo-sub">carga diaria por máquina</div></div></div><div id="sync-indicator"><span id="sync-dot"></span><span id="sync-text">Conectando…</span></div></div><div class="toolbar no-print"><div class="field"><label>Semana</label><div class="weeknav"><button class="iconbtn" id="btnPrevWeek" title="Semana anterior">◀</button> <input type="date" id="weekPicker"> <button class="iconbtn" id="btnNextWeek" title="Semana siguiente">▶</button></div></div><div class="weeklabel" id="weekLabel"></div><div class="spacer"></div><button class="btn btn-ghost" id="btnPrint">🖨️<span class="lbl">Imprimir semana</span></button> <button class="btn btn-ghost" id="btnExportOne">📤<span class="lbl">Exportar máquina</span></button> <button class="btn btn-accent" id="btnExportAll">📦<span class="lbl">Exportar semana completa</span></button></div><div class="machines no-print" id="machineChips"></div><div class="tabs no-print" id="dayTabs"></div><div class="content no-print"><div class="sheet-title">SEMANA: <b id="sheetWeek"></b> &nbsp;·&nbsp; MÁQUINA: <b id="sheetMachine"></b> &nbsp;·&nbsp; DÍA: <b id="sheetDay"></b></div><div id="blockBar" class="block-bar" style="display:none"></div><table class="grid" id="gridTable"><colgroup><col class="c-hs"><col class="c-tiempo"><col class="c-of"><col class="c-tpieza"><col class="c-desc"><col class="c-cant"><col class="c-parada"></colgroup><thead><tr><th>HS.</th><th>Duración (min)</th><th>N° OF</th><th>Tiempo 1º Pza</th><th>Descripción</th><th>Cant.</th><th>Parada</th></tr></thead><tbody id="gridBody"></tbody></table><div class="codes-footer">Códigos de parada: <b>[1]</b> Set Up &nbsp;|&nbsp; <b>[2]</b> Dif. en Plano &nbsp;|&nbsp; <b>[3]</b> Rotura Herramienta &nbsp;|&nbsp; <b>[4]</b> Falta Personal &nbsp;|&nbsp; <b>[5]</b> Mantenimiento &nbsp;|&nbsp; <b>[6]</b> No se trabajó</div></div><datalist id="ofList"></datalist><div id="printArea"></div><script>const FB_URL="https://biotrom-carga-maquina-default-rtdb.firebaseio.com";const FB_BASE="/controlprod";const CARGA_PATH="/carga/ofs";const ORDEN_PATH="/carga/orden";const CARGA_KEY={TSUGAMI:"5TSUGAMI",HYUNDAI:"1HYUNDAI",DMG:"2DMG",FANUC:"3FANUC",HAAS:"4HAAS",MIYANO:"6MIYANO"};const MACHINES=[{key:"TSUGAMI",label:"Tsugami",color:"var(--tsugami)"},{key:"HYUNDAI",label:"Hyundai",color:"var(--hyundai)"},{key:"DMG",label:"DMG",color:"var(--dmg)"},{key:"FANUC",label:"Fanuc / Robodrill",color:"var(--fanuc)"},{key:"HAAS",label:"Haas",color:"var(--haas)"},{key:"MIYANO",label:"Miyano TSV-25",color:"var(--miyano)"},{key:"CANULADO",label:"Canulado",color:"var(--canulado)"},{key:"CORTE_HILO",label:"Corte por Hilo",color:"var(--cortehilo)"}];const PARADA_LABELS={1:"Set Up",2:"Dif. en Plano",3:"Rotura Herramienta",4:"Falta Personal",5:"Mantenimiento",6:"No se trabajó"};const PARADA_COLORS={1:{bg:"#2563eb",dim:"rgba(37,99,235,.13)"},2:{bg:"#7c3aed",dim:"rgba(124,58,237,.13)"},3:{bg:"#dc2626",dim:"rgba(220,38,38,.13)"},4:{bg:"#64748b",dim:"rgba(100,116,139,.15)"},5:{bg:"#b45309",dim:"rgba(180,83,9,.15)"},6:{bg:"#0f172a",dim:"rgba(15,23,42,.10)"}};function paradaTint(code){return PARADA_COLORS[code]&&PARADA_COLORS[code].dim||"var(--surface2)"}function paradaSolid(code){return PARADA_COLORS[code]&&PARADA_COLORS[code].bg||"var(--border2)"}const DAY_NAMES=["LUNES","MARTES","MIÉRCOLES","JUEVES","VIERNES","SÁBADO"];const ROWS=24;let weekMonday=isoMonday(new Date);let currentMachine=MACHINES[0].key;let currentDay=clampToday();let sheetData=null;let pollTimer=null;let selStart=null;let selEnd=null;let dragAnchorRow=null;let dragMoved=false;let suppressNextClick=false;function isoMonday(d){const date=new Date(d);const day=date.getDay();const diff=day===0?-6:1-day;date.setDate(date.getDate()+diff);date.setHours(0,0,0,0);return date}function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}function toISODate(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return`${y}-${m}-${day}`}function fmtDDMM(d){return String(d.getDate()).padStart(2,"0")+"/"+String(d.getMonth()+1).padStart(2,"0")}function fmtDDMMYY(d){return fmtDDMM(d)+"/"+String(d.getFullYear()).slice(2)}function fmtHour(i){return String((8+i)%24).padStart(2,"0")+":00"}function computeTimeRange(startRow,minutes){const mins=parseInt(minutes,10);if(!mins||mins<=0)return fmtHour(startRow);const startTotal=(8+startRow)%24*60;const endTotal=startTotal+mins;const endHour=Math.floor(endTotal/60)%24;const endMin=endTotal%60;return`${fmtHour(startRow)} a ${String(endHour).padStart(2,"0")}:${String(endMin).padStart(2,"0")}`}function exportTiempoAt(day,rowIdx){const b=findBlock(day,rowIdx);if(b)return computeTimeRange(b.start,b.tiempo);return day.rows[rowIdx].tiempo||""}function computeSpanEnd(start,minutes){const mins=parseInt(minutes,10)||0;const spanRows=mins>0?Math.max(1,Math.ceil(mins/60)):1;return Math.min(start+spanRows-1,ROWS-1)}function clampToday(){const day=(new Date).getDay();const idx=day===0?5:day-1;return Math.min(Math.max(idx,0),5)}function emptyRow(){return{tiempo:"",nOf:"",tPieza:"",desc:"",cant:"",parada:"",descAuto:false}}function emptyDay(){return{rows:Array.from({length:ROWS},emptyRow),tBlocks:[]}}function emptySheet(){return{days:Array.from({length:6},emptyDay),ts:0}}function findBlock(day,rowIdx){return(day.tBlocks||[]).find(b=>rowIdx>=b.start&&rowIdx<=b.end)||null}function fieldValueAt(day,rowIdx,field){const b=findBlock(day,rowIdx);if(b)return b[field]||"";return day.rows[rowIdx][field]||""}function machineOf(key){return MACHINES.find(m=>m.key===key)}function lsKey(monday,machine){return`cp_v1_${toISODate(monday)}_${machine}`}function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}async function fbGet(path){const r=await fetch(FB_URL+path+".json");if(!r.ok)throw new Error("fbGet "+r.status);return r.json()}async function fbSet(path,data){const r=await fetch(FB_URL+path+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});if(!r.ok)throw new Error("fbSet "+r.status);return r.json()}function fbPath(monday,machine){return`${FB_BASE}/${toISODate(monday)}/${machine}`}function setSync(state){const dot=document.getElementById("sync-dot"),txt=document.getElementById("sync-text");const s={saving:{c:"var(--amber)",t:"Guardando…"},saved:{c:"var(--green)",t:"Guardado ✓"},live:{c:"var(--green)",t:"En vivo"},local:{c:"var(--amber)",t:"Sin conexión"},error:{c:"var(--red)",t:"Error de conexión"}}[state]||{c:"var(--muted)",t:"Conectando…"};dot.style.background=s.c;txt.textContent=s.t}function normalizeDay(day){if(Array.isArray(day))return{rows:day,tBlocks:[]};if(!day||!Array.isArray(day.rows))return emptyDay();return{rows:day.rows,tBlocks:Array.isArray(day.tBlocks)?day.tBlocks:[]}}function normalizeSheet(sheet){if(!sheet||!Array.isArray(sheet.days))return emptySheet();return{days:sheet.days.map(normalizeDay),ts:sheet.ts||0}}function loadLocal(monday,machine){const raw=lsGet(lsKey(monday,machine));return raw?normalizeSheet(JSON.parse(raw)):emptySheet()}function saveLocal(monday,machine,data){lsSet(lsKey(monday,machine),JSON.stringify(data))}function loadSheet(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}sheetData=loadLocal(weekMonday,currentMachine);render();setSync("local");fbGet(fbPath(weekMonday,currentMachine)).then(remote=>{if(remote&&Array.isArray(remote.days)&&(remote.ts||0)>=(sheetData.ts||0)){sheetData=normalizeSheet(remote);saveLocal(weekMonday,currentMachine,sheetData);render()}else if(sheetData.ts>0){fbSet(fbPath(weekMonday,currentMachine),sheetData).catch(()=>{})}setSync("live");startPolling()}).catch(()=>setSync("error"))}let saveDebounce=null;function persist(){sheetData.ts=Date.now();saveLocal(weekMonday,currentMachine,sheetData);setSync("saving");clearTimeout(saveDebounce);saveDebounce=setTimeout(()=>{fbSet(fbPath(weekMonday,currentMachine),sheetData).then(()=>setSync("saved")).catch(()=>setSync("error"))},500)}function startPolling(){pollTimer=setInterval(()=>{const active=document.activeElement;if(active&&(active.tagName==="INPUT"||active.tagName==="SELECT"))return;fbGet(fbPath(weekMonday,currentMachine)).then(remote=>{if(remote&&Array.isArray(remote.days)&&(remote.ts||0)>(sheetData.ts||0)){sheetData=normalizeSheet(remote);saveLocal(weekMonday,currentMachine,sheetData);render()}}).catch(()=>{})},8e3)}let cargaOfs=[];let cargaOrden={};async function loadCargaOfs(){try{const data=await fbGet(CARGA_PATH);if(data&&Array.isArray(data.ofs))cargaOfs=data.ofs}catch(e){}try{const orden=await fbGet(ORDEN_PATH);if(orden&&typeof orden==="object"){const{_ts:_ts,...clean}=orden;cargaOrden=clean}}catch(e){}refreshOfDatalist()}function ofsForMachine(machineKey){const cargaKey=CARGA_KEY[machineKey];if(!cargaKey)return[];const activos=cargaOfs.filter(o=>o.maq===cargaKey&&o.status!=="terminada"&&o.of);const order=cargaOrden[cargaKey];if(order&&order.length){const mapped=activos.map(o=>({o:o,pos:order.indexOf(o.id)}));mapped.sort((a,b)=>(a.pos===-1?9999:a.pos)-(b.pos===-1?9999:b.pos));return mapped.map(x=>x.o)}const u={A:0,B:1,C:2,"":3};return[...activos].sort((a,b)=>(u[a.urg]??3)-(u[b.urg]??3))}function refreshOfDatalist(){const dl=document.getElementById("ofList");if(!dl)return;const list=ofsForMachine(currentMachine);dl.innerHTML=list.map(o=>{const extra=[o.desc,o.cant?`${o.cant} u.`:""].filter(Boolean).join(" · ");return`<option value="${esc(o.of)}">${esc(extra)}</option>`}).join("")}function ofDescripcion(machineKey,nOf){if(!nOf)return null;const match=ofsForMachine(machineKey).find(o=>String(o.of).trim()===String(nOf).trim());return match?match.desc||"":null}function renderMachineChips(){const wrap=document.getElementById("machineChips");wrap.innerHTML=MACHINES.map(m=>`\n    <div class="mchip ${m.key===currentMachine?"active":""}" style="--mcolor:${m.color}" data-key="${m.key}">\n      <span class="dot" style="background:${m.color}"></span>${m.label}\n    </div>`).join("");wrap.querySelectorAll(".mchip").forEach(el=>{el.onclick=()=>{currentMachine=el.dataset.key;loadSheet();renderMachineChips()}})}function renderDayTabs(){const wrap=document.getElementById("dayTabs");wrap.innerHTML=DAY_NAMES.map((name,i)=>{const d=addDays(weekMonday,i);return`<div class="tab ${i===currentDay?"active":""}" data-i="${i}">${name}<span class="n">${fmtDDMM(d)}</span></div>`}).join("");wrap.querySelectorAll(".tab").forEach(el=>{el.onclick=()=>{currentDay=parseInt(el.dataset.i,10);render()}})}function render(){document.getElementById("weekPicker").value=toISODate(weekMonday);const sat=addDays(weekMonday,5);document.getElementById("weekLabel").textContent=`${fmtDDMM(weekMonday)} – ${fmtDDMMYY(sat)}`;document.getElementById("sheetWeek").textContent=fmtDDMMYY(weekMonday);document.getElementById("sheetMachine").textContent=machineOf(currentMachine).label;document.getElementById("sheetDay").textContent=`${DAY_NAMES[currentDay]} ${fmtDDMMYY(addDays(weekMonday,currentDay))}`;renderDayTabs();refreshOfDatalist();cancelSelection();renderGrid()}function renderGrid(){const tbody=document.getElementById("gridBody");const day=sheetData.days[currentDay];let html="";for(let i=0;i<ROWS;i++){const row=day.rows[i];const block=findBlock(day,i);let cells;if(block&&block.start!==i){cells=""}else if(block){const span=block.end-block.start+1;const tint=paradaTint(block.parada);const solid=paradaSolid(block.parada);const paradaTxt=block.parada?`${esc(block.parada)} · ${esc(PARADA_LABELS[block.parada]||"")}`:"—";cells=`\n        <td class="tblock" rowspan="${span}" style="background:${tint}">\n          <span class="tblock-bar" style="background:${solid}"></span>\n          <div class="tblock-actions">\n            <button type="button" class="tblock-edit" data-block="${block.id}" title="Editar bloque">✎</button>\n            <button type="button" class="tblock-del" data-block="${block.id}" title="Quitar bloque">✕</button>\n          </div>\n          <div class="tblock-val">${esc(computeTimeRange(block.start,block.tiempo))}</div>\n        </td>\n        <td class="tblock" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${esc(block.nOf)}</div></td>\n        <td class="tblock" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${esc(block.tPieza)}</div></td>\n        <td class="tblock tblock-desc" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${esc(block.desc)}</div></td>\n        <td class="tblock" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${esc(block.cant)}</div></td>\n        <td class="tblock" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${paradaTxt}</div></td>\n      `}else{const options=['<option value="">—</option>'].concat(Object.entries(PARADA_LABELS).map(([v,l])=>`<option value="${v}" ${String(row.parada)===v?"selected":""}>${v} · ${l}</option>`));cells=`\n        <td><input data-f="tiempo" value="${esc(row.tiempo)}" inputmode="numeric" pattern="[0-9]*" placeholder="min"></td>\n        <td><input data-f="nOf" list="ofList" value="${esc(row.nOf)}" placeholder=""></td>\n        <td><input data-f="tPieza" value="${esc(row.tPieza)}" inputmode="numeric" pattern="[0-9]*" maxlength="5" placeholder="mm:ss"></td>\n        <td><input data-f="desc" value="${esc(row.desc)}" placeholder=""></td>\n        <td><input class="cant" data-f="cant" value="${esc(row.cant)}" inputmode="numeric" pattern="[0-9]*" placeholder=""></td>\n        <td><select data-f="parada">${options.join("")}</select></td>\n      `}const stoppedRow=!block&&row.parada?"stopped":"";html+=`<tr class="${stoppedRow}" data-i="${i}">\n      <td class="hs ${isInPendingSelection(i)?"selecting":""}" data-hs="${i}"><span>${fmtHour(i)}</span></td>\n      ${cells}\n    </tr>`}tbody.innerHTML=html;tbody.querySelectorAll("input,select").forEach(el=>{el.addEventListener("input",onCellInput);el.addEventListener("change",onCellInput)});tbody.querySelectorAll(".tblock-del").forEach(el=>{el.addEventListener("click",e=>{e.stopPropagation();deleteBlock(el.dataset.block)})});tbody.querySelectorAll(".tblock-edit").forEach(el=>{el.addEventListener("click",e=>{e.stopPropagation();editBlock(el.dataset.block)})})}function esc(v){return v===undefined||v===null?"":String(v).replace(/"/g,"&quot;")}function formatMMSS(raw){const digits=(raw||"").replace(/\D/g,"").slice(0,4);if(digits.length<=2)return digits;return digits.slice(0,2)+":"+digits.slice(2)}function onCellInput(e){const tr=e.target.closest("tr");const i=parseInt(tr.dataset.i,10);const field=e.target.dataset.f;const day=sheetData.days[currentDay];const row=day.rows[i];let val=e.target.value;if(field==="cant"||field==="tiempo"){val=val.replace(/\D/g,"");e.target.value=val}else if(field==="tPieza"){val=formatMMSS(val);e.target.value=val}row[field]=val;if(field==="parada"){tr.classList.toggle("stopped",!!val)}if(field==="nOf"){const desc=ofDescripcion(currentMachine,val);const descInput=tr.querySelector('input[data-f="desc"]');if(desc!==null){row.desc=desc;row.descAuto=true;if(descInput)descInput.value=desc}else if(row.descAuto){row.desc="";row.descAuto=false;if(descInput)descInput.value=""}}persist()}function isInPendingSelection(i){if(selStart===null)return false;if(selEnd===null)return i===selStart;const lo=Math.min(selStart,selEnd),hi=Math.max(selStart,selEnd);return i>=lo&&i<=hi}function onHsClick(i){const day=sheetData.days[currentDay];if(findBlock(day,i))return;selStart=i;selEnd=i;renderGrid();openRangeBar(i,i)}function openRangeBar(start,end,existingBlock){showBlockBar("enter-value",start,end,existingBlock)}function showBlockBar(mode,a,b,existingBlock){const bar=document.getElementById("blockBar");bar.style.display="flex";const ex=existingBlock?{...existingBlock}:{tiempo:"",nOf:"",tPieza:"",desc:"",cant:"",parada:""};if(!existingBlock&&b>a&&!ex.tiempo){ex.tiempo=String((b-a+1)*60)}const paradaOpts=['<option value="">—</option>'].concat(Object.entries(PARADA_LABELS).map(([v,l])=>`<option value="${v}" ${String(ex.parada)===v?"selected":""}>${v} · ${l}</option>`));bar.innerHTML=`\n    <span class="hint">Desde <b>${fmtHour(a)}</b></span>\n    <div class="bf"><label>Duración (min)</label><input type="text" id="bkTiempo" inputmode="numeric" pattern="[0-9]*" placeholder="ej: 30" value="${esc(ex.tiempo)}"></div>\n    <span class="hint" id="bkRangePreview">${esc(computeTimeRange(a,ex.tiempo))}</span>\n    <div class="bf"><label>N° OF</label><input type="text" id="bkNOf" list="ofList" value="${esc(ex.nOf)}"></div>\n    <div class="bf"><label>Tiempo 1º Pza</label><input type="text" id="bkTPieza" inputmode="numeric" pattern="[0-9]*" maxlength="5" placeholder="mm:ss" value="${esc(ex.tPieza)}"></div>\n    <div class="bf bf-wide"><label>Descripción</label><input type="text" id="bkDesc" value="${esc(ex.desc)}"></div>\n    <div class="bf"><label>Cant.</label><input type="text" id="bkCant" inputmode="numeric" pattern="[0-9]*" value="${esc(ex.cant)}"></div>\n    <div class="bf"><label>Parada</label><select id="bkParada">${paradaOpts.join("")}</select></div>\n    <span class="spacer2"></span>\n    <button class="btn btn-accent" id="blockApplyBtn">${existingBlock?"Guardar":"Aplicar"}</button>\n    <button class="btn btn-ghost" id="blockCancelBtn">Cancelar</button>\n  `;document.getElementById("bkNOf").addEventListener("input",e=>{const d=ofDescripcion(currentMachine,e.target.value);if(d!==null)document.getElementById("bkDesc").value=d});document.getElementById("bkTPieza").addEventListener("input",e=>{e.target.value=formatMMSS(e.target.value)});document.getElementById("bkCant").addEventListener("input",e=>{e.target.value=e.target.value.replace(/\D/g,"")});document.getElementById("bkTiempo").addEventListener("input",e=>{e.target.value=e.target.value.replace(/\D/g,"");document.getElementById("bkRangePreview").textContent=computeTimeRange(a,e.target.value)});document.getElementById("blockApplyBtn").onclick=()=>applyBlock(a,b,existingBlock);document.getElementById("blockCancelBtn").onclick=()=>{cancelSelection();renderGrid()};setTimeout(()=>document.getElementById("bkTiempo")?.focus(),30)}function hideBlockBar(){const bar=document.getElementById("blockBar");if(!bar)return;bar.style.display="none";bar.innerHTML=""}function cancelSelection(){selStart=null;selEnd=null;hideBlockBar()}function applyBlock(start,end,existingBlock){const tiempo=document.getElementById("bkTiempo").value.trim();const nOf=document.getElementById("bkNOf").value.trim();const tPieza=document.getElementById("bkTPieza").value.trim();const desc=document.getElementById("bkDesc").value.trim();const cant=document.getElementById("bkCant").value.trim();const parada=document.getElementById("bkParada").value;if(!tiempo&&!nOf&&!desc&&!cant&&!parada)return;const finalEnd=computeSpanEnd(start,tiempo);const day=sheetData.days[currentDay];day.tBlocks=day.tBlocks||[];const overlap=day.tBlocks.some(b=>(!existingBlock||b.id!==existingBlock.id)&&!(finalEnd<b.start||start>b.end));if(overlap){alert("Esa duración se mete en un bloque que ya existe. Achicá la duración o quitá (✕) el otro bloque primero.");return}if(existingBlock){const b=day.tBlocks.find(x=>x.id===existingBlock.id);if(b)Object.assign(b,{start:start,end:finalEnd,tiempo:tiempo,nOf:nOf,tPieza:tPieza,desc:desc,cant:cant,parada:parada})}else{day.tBlocks.push({id:"b"+Date.now()+"_"+start,start:start,end:finalEnd,tiempo:tiempo,nOf:nOf,tPieza:tPieza,desc:desc,cant:cant,parada:parada})}cancelSelection();persist();renderGrid()}function editBlock(blockId){const day=sheetData.days[currentDay];const block=(day.tBlocks||[]).find(b=>b.id===blockId);if(!block)return;cancelSelection();openRangeBar(block.start,block.end,block)}function deleteBlock(blockId){const day=sheetData.days[currentDay];day.tBlocks=(day.tBlocks||[]).filter(b=>b.id!==blockId);persist();renderGrid()}function initDragHandlers(){const tbody=document.getElementById("gridBody");tbody.addEventListener("pointerdown",e=>{const td=e.target.closest("td.hs");if(!td)return;if(selStart!==null)return;const i=parseInt(td.dataset.hs,10);if(findBlock(sheetData.days[currentDay],i))return;dragAnchorRow=i;dragMoved=false});tbody.addEventListener("pointermove",e=>{if(dragAnchorRow===null)return;const el=document.elementFromPoint(e.clientX,e.clientY);const td=el&&el.closest?el.closest("td.hs"):null;if(!td)return;const i=parseInt(td.dataset.hs,10);if(selStart===null)selStart=dragAnchorRow;if(i!==selEnd){dragMoved=true;selEnd=i;renderGrid()}});tbody.addEventListener("pointerup",()=>{if(dragAnchorRow===null)return;if(dragMoved&&selStart!==null&&selEnd!==null){suppressNextClick=true;openRangeBar(Math.min(selStart,selEnd),Math.max(selStart,selEnd))}dragAnchorRow=null;dragMoved=false});tbody.addEventListener("pointercancel",()=>{dragAnchorRow=null;dragMoved=false});tbody.addEventListener("click",e=>{if(suppressNextClick){suppressNextClick=false;return}const td=e.target.closest("td.hs");if(!td)return;onHsClick(parseInt(td.dataset.hs,10))})}document.getElementById("btnPrevWeek").onclick=()=>{weekMonday=addDays(weekMonday,-7);loadSheet()};document.getElementById("btnNextWeek").onclick=()=>{weekMonday=addDays(weekMonday,7);loadSheet()};document.getElementById("weekPicker").onchange=e=>{weekMonday=isoMonday(e.target.value);loadSheet()};function sheetAOA(machineLabel,monday,sheet){const aoa=[];aoa.push(["BIOTROM S.A. · CONTROL DE PRODUCCIÓN"]);aoa.push([fmtDDMMYY(monday),"","","","","","","",`MÁQUINA: ${machineLabel}`]);const hdrRow1=["HS."];const hdrRow2=[""];for(let d=0;d<6;d++){const date=addDays(monday,d);hdrRow1.push(`${DAY_NAMES[d]}   ${fmtDDMMYY(date)}`,"","","","","");hdrRow2.push("DURACIÓN / HORARIO","N° OF","TIEMPO 1º PZA","DESCRIPCION","CANT.","PARADA")}aoa.push(hdrRow1);aoa.push(hdrRow2);for(let r=0;r<ROWS;r++){const line=[fmtHour(r)];for(let d=0;d<6;d++){const day=sheet.days[d];line.push(exportTiempoAt(day,r),fieldValueAt(day,r,"nOf"),fieldValueAt(day,r,"tPieza"),fieldValueAt(day,r,"desc"),fieldValueAt(day,r,"cant"),fieldValueAt(day,r,"parada"))}aoa.push(line)}aoa.push(["CÓDIGOS DE PARADAS:  [1] SET UP  |  [2] DIF. EN PLANO  |  [3] ROTURA HERRAMIENTA  |  [4] FALTA PERSONAL  |  [5] MANTENIMIENTO  |  [6] NO SE TRABAJÓ"]);return aoa}function buildWorksheet(machineLabel,monday,sheet){const aoa=sheetAOA(machineLabel,monday,sheet);const ws=XLSX.utils.aoa_to_sheet(aoa);const totalCols=1+6*6;ws["!merges"]=[{s:{r:0,c:0},e:{r:0,c:totalCols-1}},{s:{r:1,c:0},e:{r:1,c:7}},{s:{r:1,c:8},e:{r:1,c:totalCols-1}},{s:{r:ROWS+4,c:0},e:{r:ROWS+4,c:totalCols-1}}];for(let d=0;d<6;d++){const c0=1+d*6;ws["!merges"].push({s:{r:2,c:c0},e:{r:2,c:c0+5}})}ws["!cols"]=[{wch:8}].concat(Array(6).fill([{wch:8},{wch:8},{wch:12},{wch:26},{wch:6},{wch:16}]).flat());return ws}async function fetchSheetFor(monday,machine){const local=loadLocal(monday,machine);try{const remote=await fbGet(fbPath(monday,machine));if(remote&&Array.isArray(remote.days)&&(remote.ts||0)>=(local.ts||0))return normalizeSheet(remote)}catch(e){}return local}document.getElementById("btnExportOne").onclick=async()=>{const m=machineOf(currentMachine);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,buildWorksheet(m.label,weekMonday,sheetData),m.key.slice(0,31));XLSX.writeFile(wb,`CONTROL_PRODUCCION_${m.key}_${toISODate(weekMonday)}.xlsx`)};document.getElementById("btnExportAll").onclick=async()=>{const btn=document.getElementById("btnExportAll");const original=btn.textContent;btn.textContent="⏳ Exportando…";const wb=XLSX.utils.book_new();for(const m of MACHINES){const sheet=await fetchSheetFor(weekMonday,m.key);XLSX.utils.book_append_sheet(wb,buildWorksheet(m.label,weekMonday,sheet),m.key.slice(0,31))}XLSX.writeFile(wb,`CONTROL_PRODUCCION_semana_${toISODate(weekMonday)}.xlsx`);btn.textContent=original};document.getElementById("btnPrint").onclick=async()=>{const area=document.getElementById("printArea");area.innerHTML="";for(const m of MACHINES){const sheet=m.key===currentMachine?sheetData:await fetchSheetFor(weekMonday,m.key);const div=document.createElement("div");div.style.pageBreakAfter="always";div.innerHTML=`<h2>BIOTROM S.A. · CONTROL DE PRODUCCIÓN — SEMANA ${fmtDDMMYY(weekMonday)} — MÁQUINA: ${m.label}</h2>`+printTableHTML(m,weekMonday,sheet);area.appendChild(div)}window.print()};function printTableHTML(m,monday,sheet){let html="<table><thead><tr><th>HS.</th>";for(let d=0;d<6;d++){html+=`<th colspan="6">${DAY_NAMES[d]} ${fmtDDMMYY(addDays(monday,d))}</th>`}html+="</tr><tr><th></th>";for(let d=0;d<6;d++)html+="<th>Duración / Horario</th><th>N° OF</th><th>Tiempo 1º Pza</th><th>Descripción</th><th>Cant.</th><th>Parada</th>";html+="</tr></thead><tbody>";for(let r=0;r<ROWS;r++){html+=`<tr><td>${fmtHour(r)}</td>`;for(let d=0;d<6;d++){const day=sheet.days[d];html+=`<td>${esc(exportTiempoAt(day,r))}</td><td>${esc(fieldValueAt(day,r,"nOf"))}</td><td>${esc(fieldValueAt(day,r,"tPieza"))}</td><td>${esc(fieldValueAt(day,r,"desc"))}</td><td>${esc(fieldValueAt(day,r,"cant"))}</td><td>${esc(fieldValueAt(day,r,"parada"))}</td>`}html+="</tr>"}html+="</tbody></table>";return html}renderMachineChips();loadSheet();initDragHandlers();loadCargaOfs();setInterval(loadCargaOfs,6e4)</script></body></html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIOTROM · Control de Producción</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface2: #f3f5f8;
+  --border: rgba(15,23,42,0.08);
+  --border2: rgba(15,23,42,0.14);
+  --text: #1c2128;
+  --muted: #667085;
+  --accent: #2f5fe0;
+  --accent-dim: rgba(47,95,224,0.09);
+  --red: #dc2626;
+  --red-dim: rgba(220,38,38,0.08);
+  --amber: #b45309;
+  --amber-dim: rgba(217,119,6,0.12);
+  --blue: #2f5fe0;
+  --green: #15803d;
+  --hyundai: #2f5fe0;
+  --dmg: #15803d;
+  --fanuc: #b45309;
+  --haas: #7e22ce;
+  --tsugami: #be185d;
+  --miyano: #0e7490;
+  --cortehilo: #52525b;
+  --canulado: #c2410c;
+  --shadow: 0 1px 2px rgba(15,23,42,0.04), 0 6px 16px rgba(15,23,42,0.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100vh;display:flex;flex-direction:column;overflow:hidden}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+input,select,button{font-family:inherit}
+
+/* HEADER */
+.header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;box-shadow:var(--shadow)}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-mark{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:15px;flex-shrink:0}
+.logo-text{font-size:14.5px;font-weight:700;letter-spacing:-0.02em;color:var(--text)}
+.logo-sub{font-size:10.5px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:1px}
+#sync-indicator{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);padding:5px 10px;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;gap:6px;background:var(--surface2)}
+#sync-dot{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background .2s}
+
+/* TOOLBAR */
+.toolbar{display:flex;align-items:center;gap:10px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap;flex-shrink:0}
+.field{display:flex;flex-direction:column;gap:3px}
+.field label{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.toolbar select,.toolbar input[type=date]{background:var(--surface);border:1px solid var(--border2);color:var(--text);font-size:13px;border-radius:8px;height:32px;padding:0 10px;outline:none;cursor:pointer}
+.toolbar select:focus,.toolbar input:focus{border-color:var(--accent)}
+.weeknav{display:flex;align-items:center;gap:4px}
+.iconbtn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}
+.iconbtn:hover{background:var(--surface2)}
+.weeklabel{font-family:'DM Mono',monospace;font-size:12px;color:var(--text);padding:0 6px;white-space:nowrap;font-weight:600}
+.spacer{flex:1}
+.btn{height:32px;padding:0 14px;font-size:12.5px;font-weight:600;border-radius:8px;border:none;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;transition:all .15s}
+.btn-accent{background:var(--accent);color:#fff}
+.btn-accent:hover{background:#2650bf;transform:translateY(-1px)}
+.btn-ghost{background:var(--surface);color:var(--muted);border:1px solid var(--border2)}
+.btn-ghost:hover{background:var(--surface2);color:var(--text)}
+
+/* MACHINE CHIPS */
+.machines{display:flex;gap:6px;padding:10px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap;flex-shrink:0}
+.mchip{padding:6px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid var(--border2);background:var(--surface);color:var(--muted);display:flex;align-items:center;gap:6px;transition:all .15s}
+.mchip .dot{width:7px;height:7px;border-radius:50%}
+.mchip:hover{color:var(--text);border-color:var(--border2)}
+.mchip.active{color:var(--text);border-color:var(--mcolor);background:color-mix(in srgb, var(--mcolor) 12%, var(--surface));font-weight:700}
+
+/* DAY TABS */
+.tabs{display:flex;gap:2px;padding:8px 24px 0;border-bottom:1px solid var(--border);background:var(--surface);overflow-x:auto;flex-shrink:0}
+.tab{padding:9px 16px;font-size:12.5px;font-weight:600;cursor:pointer;border:none;background:none;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;border-radius:6px 6px 0 0;white-space:nowrap}
+.tab:hover{color:var(--text);background:var(--surface2)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--accent-dim)}
+.tab .n{display:block;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:1px}
+
+/* CONTENT — único contenedor que scrollea (vertical Y horizontal); el thead
+   se pega a su tope aunque haya scroll horizontal, porque es el mismo contenedor */
+.content{flex:1;overflow:auto;padding:16px 24px 40px}
+.sheet-title{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);margin-bottom:10px;white-space:nowrap}
+.sheet-title b{color:var(--text)}
+
+table.grid{table-layout:fixed;border-collapse:separate;border-spacing:0;width:100%;min-width:760px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;box-shadow:var(--shadow)}
+table.grid th{background:var(--surface2);color:var(--muted);font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;padding:10px 8px;border-bottom:1px solid var(--border2);border-right:1px solid var(--border);text-align:left;position:sticky;top:0;z-index:20}
+table.grid th:first-child{border-top-left-radius:9px}
+table.grid th:last-child{border-top-right-radius:9px;border-right:none}
+table.grid td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:0;vertical-align:middle}
+table.grid td:last-child{border-right:none}
+table.grid tbody tr:nth-child(even){background:var(--surface2)}
+table.grid tbody tr:hover{background:var(--accent-dim)}
+table.grid td.hs{font-family:'DM Mono',monospace;font-size:9.5px;color:var(--muted);font-weight:600;background:var(--surface2);padding:0;white-space:nowrap;cursor:grab;user-select:none;touch-action:none}
+table.grid td.hs>span{display:flex;align-items:center;justify-content:center;height:36px;width:100%}
+table.grid td.hs:hover{background:var(--accent-dim);color:var(--accent)}
+table.grid td.hs.selecting{background:var(--accent);color:#fff;cursor:grabbing}
+table.grid tr.stopped td.hs{color:var(--amber)}
+table.grid tr.stopped{background:var(--amber-dim)!important}
+table.grid td.tblock{text-align:center;vertical-align:middle;position:relative;padding:4px 10px;font-size:12px;color:var(--text)}
+table.grid td.tblock.tblock-desc{text-align:left}
+table.grid td.tblock .tblock-val{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+table.grid td.tblock .tblock-bar{position:absolute;left:3px;top:8px;bottom:8px;width:3px;border-radius:2px}
+table.grid td.tblock .tblock-actions{position:absolute;top:2px;right:3px;display:flex;gap:3px}
+table.grid td.tblock .tblock-actions button{background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;padding:2px;line-height:1}
+table.grid td.tblock .tblock-actions button:hover{color:var(--accent)}
+table.grid td.tblock .tblock-actions button.tblock-del:hover{color:var(--red)}
+table.grid td.cant-cell{padding:0}
+
+.block-bar{margin-bottom:10px;padding:10px 12px;border-radius:8px;background:var(--accent-dim);border:1px solid var(--accent);display:flex;align-items:flex-end;gap:10px;font-size:12.5px;flex-wrap:wrap}
+.block-bar .hint{color:var(--text);align-self:center}
+.block-bar #bkRangePreview{font-family:'DM Mono',monospace;font-weight:600;color:var(--accent)}
+.block-bar .spacer2{flex:1;min-width:0}
+.block-bar .bf{display:flex;flex-direction:column;gap:3px}
+.block-bar .bf label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.block-bar .bf input,.block-bar .bf select{height:30px;border-radius:6px;border:1px solid var(--border2);padding:0 8px;font-size:12.5px;background:var(--surface);color:var(--text);outline:none}
+.block-bar .bf input:focus,.block-bar .bf select:focus{border-color:var(--accent)}
+.block-bar #bkTiempo{width:100px}
+.block-bar #bkNOf{width:100px}
+.block-bar #bkTPieza{width:110px}
+.block-bar #bkParada{width:150px}
+.block-bar .bf-wide{flex:1;min-width:160px}
+.block-bar .bf-wide input{width:100%}
+table.grid input,table.grid select{width:100%;height:36px;background:transparent;border:none;color:var(--text);font-size:12.5px;padding:0 8px;outline:none}
+table.grid input:focus,table.grid select:focus{background:var(--accent-dim);box-shadow:inset 0 0 0 1.5px var(--accent)}
+table.grid input.cant{text-align:center}
+table.grid select{cursor:pointer;color:var(--text)}
+table.grid select option{background:var(--surface);color:var(--text)}
+col.c-hs{width:5%} col.c-tiempo{width:8%} col.c-of{width:9%} col.c-tpieza{width:10%} col.c-desc{width:38%} col.c-cant{width:8%} col.c-parada{width:22%}
+
+.codes-footer{margin-top:12px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);padding:9px 12px;border:1px dashed var(--border2);border-radius:8px;background:var(--surface);white-space:nowrap}
+.codes-footer b{color:var(--text)}
+
+/* RESPONSIVE — tablets y celulares: la tabla no se aplasta, se hace scroll
+   horizontal dentro de .content; los inputs quedan a 16px para que Safari/
+   Chrome mobile no hagan zoom automático al tocar un campo. */
+@media (max-width: 900px){
+  .header{padding:12px 14px}
+  .toolbar{padding:10px 14px}
+  .machines{padding:8px 14px}
+  .tabs{padding:6px 14px 0}
+  .content{padding:12px 14px 32px}
+  .logo-text{font-size:13px}
+  .weeklabel{display:none}
+  table.grid input,table.grid select{font-size:16px}
+  .block-bar .bf input,.block-bar .bf select{font-size:16px}
+}
+@media (max-width: 560px){
+  .toolbar{gap:8px}
+  .btn{padding:0 10px;font-size:11.5px}
+  .btn span.lbl{display:none}
+  .mchip{padding:5px 9px;font-size:11px}
+  .tab{padding:8px 11px;font-size:11.5px}
+}
+
+/* full week print table (hidden on screen) */
+#printArea{display:none}
+
+@media print{
+  .no-print{display:none!important}
+  body{background:#fff;color:#000}
+  #printArea{display:block}
+  #printArea table{border-collapse:collapse;width:100%;font-size:8px}
+  #printArea th,#printArea td{border:1px solid #999;padding:2px 3px}
+  #printArea th{background:#ddd}
+  #printArea h2{font-size:13px;margin-bottom:4px}
+}
+</style>
+</head>
+<body>
+
+<div class="header no-print">
+  <div class="logo">
+    <div class="logo-mark">B</div>
+    <div>
+      <div class="logo-text">BIOTROM · Control de Producción</div>
+      <div class="logo-sub">carga diaria por máquina</div>
+    </div>
+  </div>
+  <div id="sync-indicator"><span id="sync-dot"></span><span id="sync-text">Conectando…</span></div>
+</div>
+
+<div class="toolbar no-print">
+  <div class="field">
+    <label>Semana</label>
+    <div class="weeknav">
+      <button class="iconbtn" id="btnPrevWeek" title="Semana anterior">◀</button>
+      <input type="date" id="weekPicker">
+      <button class="iconbtn" id="btnNextWeek" title="Semana siguiente">▶</button>
+    </div>
+  </div>
+  <div class="weeklabel" id="weekLabel"></div>
+  <div class="spacer"></div>
+  <button class="btn btn-ghost" id="btnPrint">🖨️<span class="lbl">Imprimir semana</span></button>
+  <button class="btn btn-ghost" id="btnExportOne">📤<span class="lbl">Exportar máquina</span></button>
+  <button class="btn btn-accent" id="btnExportAll">📦<span class="lbl">Exportar semana completa</span></button>
+</div>
+
+<div class="machines no-print" id="machineChips"></div>
+
+<div class="tabs no-print" id="dayTabs"></div>
+
+<div class="content no-print">
+  <div class="sheet-title">SEMANA: <b id="sheetWeek"></b> &nbsp;·&nbsp; MÁQUINA: <b id="sheetMachine"></b> &nbsp;·&nbsp; DÍA: <b id="sheetDay"></b></div>
+  <div id="blockBar" class="block-bar" style="display:none"></div>
+  <table class="grid" id="gridTable">
+    <colgroup><col class="c-hs"><col class="c-tiempo"><col class="c-of"><col class="c-tpieza"><col class="c-desc"><col class="c-cant"><col class="c-parada"></colgroup>
+    <thead><tr><th>HS.</th><th>Duración (min)</th><th>N° OF</th><th>Tiempo 1º Pza</th><th>Descripción</th><th>Cant.</th><th>Parada</th></tr></thead>
+    <tbody id="gridBody"></tbody>
+  </table>
+  <div class="codes-footer">Códigos de parada: <b>[1]</b> Set Up &nbsp;|&nbsp; <b>[2]</b> Dif. en Plano &nbsp;|&nbsp; <b>[3]</b> Rotura Herramienta &nbsp;|&nbsp; <b>[4]</b> Falta Personal &nbsp;|&nbsp; <b>[5]</b> Mantenimiento &nbsp;|&nbsp; <b>[6]</b> No se trabajó</div>
+</div>
+
+<datalist id="ofList"></datalist>
+<div id="printArea"></div>
+
+<script>
+// ── CONFIG ────────────────────────────────────────────────────────────
+const FB_URL = 'https://biotrom-carga-maquina-default-rtdb.firebaseio.com';
+const FB_BASE = '/controlprod';
+const CARGA_PATH  = '/carga/ofs';  // mismas OFs que ve "Carga de Máquina"
+const ORDEN_PATH  = '/carga/orden'; // orden manual (drag&drop) de esa misma cola
+
+// mapeo: clave de este sistema -> clave de máquina usada en Carga de Máquina
+const CARGA_KEY = {
+  TSUGAMI:'5TSUGAMI', HYUNDAI:'1HYUNDAI', DMG:'2DMG', FANUC:'3FANUC',
+  HAAS:'4HAAS', MIYANO:'6MIYANO'
+  // CANULADO y CORTE_HILO no tienen columna propia en Carga de Máquina
+};
+
+const MACHINES = [
+  {key:'TSUGAMI',    label:'Tsugami',            color:'var(--tsugami)'},
+  {key:'HYUNDAI',     label:'Hyundai',            color:'var(--hyundai)'},
+  {key:'DMG',         label:'DMG',                color:'var(--dmg)'},
+  {key:'FANUC',       label:'Fanuc / Robodrill',  color:'var(--fanuc)'},
+  {key:'HAAS',        label:'Haas',               color:'var(--haas)'},
+  {key:'MIYANO',      label:'Miyano TSV-25',      color:'var(--miyano)'},
+  {key:'CANULADO',    label:'Canulado',           color:'var(--canulado)'},
+  {key:'CORTE_HILO',  label:'Corte por Hilo',     color:'var(--cortehilo)'}
+];
+const PARADA_LABELS = {1:'Set Up',2:'Dif. en Plano',3:'Rotura Herramienta',4:'Falta Personal',5:'Mantenimiento',6:'No se trabajó'};
+// color por código de parada — se usa para pintar el bloque de horas agrupadas
+const PARADA_COLORS = {
+  1:{bg:'#2563eb', dim:'rgba(37,99,235,.13)'},
+  2:{bg:'#7c3aed', dim:'rgba(124,58,237,.13)'},
+  3:{bg:'#dc2626', dim:'rgba(220,38,38,.13)'},
+  4:{bg:'#64748b', dim:'rgba(100,116,139,.15)'},
+  5:{bg:'#b45309', dim:'rgba(180,83,9,.15)'},
+  6:{bg:'#0f172a', dim:'rgba(15,23,42,.10)'}
+};
+function paradaTint(code){ return (PARADA_COLORS[code] && PARADA_COLORS[code].dim) || 'var(--surface2)'; }
+function paradaSolid(code){ return (PARADA_COLORS[code] && PARADA_COLORS[code].bg) || 'var(--border2)'; }
+const DAY_NAMES = ['LUNES','MARTES','MIÉRCOLES','JUEVES','VIERNES','SÁBADO'];
+const ROWS = 24; // 08:00 .. 07:00 del día siguiente
+
+// ── STATE ─────────────────────────────────────────────────────────────
+let weekMonday = isoMonday(new Date());
+let currentMachine = MACHINES[0].key;
+let currentDay = clampToday();
+let sheetData = null; // {days:[{rows:[row x24], tBlocks:[]} x6], ts:number}
+let pollTimer = null;
+let selStart = null; // fila ancla al armar un bloque de tiempo multi-hora
+let selEnd = null;    // segunda fila tocada (tap o arrastre) — mientras no se aplica, solo previsualiza el rango
+let dragAnchorRow = null; // fila donde empezó un posible arrastre (pointerdown)
+let dragMoved = false;    // true si el puntero se movió a otra fila antes de soltar
+let suppressNextClick = false; // evita que el click nativo post-arrastre vuelva a disparar onHsClick
+
+// ── HELPERS ───────────────────────────────────────────────────────────
+function isoMonday(d){
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = (day===0? -6 : 1-day);
+  date.setDate(date.getDate()+diff);
+  date.setHours(0,0,0,0);
+  return date;
+}
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function toISODate(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function fmtDDMM(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); }
+function fmtDDMMYY(d){ return fmtDDMM(d)+'/'+String(d.getFullYear()).slice(2); }
+function fmtHour(i){ return String((8+i)%24).padStart(2,'0')+':00'; }
+// A partir de la hora de inicio de fila + duración en minutos, calcula el
+// horario real "desde-hasta" (ej: 30 min desde las 15:00 -> "15:00 a 15:30").
+function computeTimeRange(startRow, minutes){
+  const mins = parseInt(minutes, 10);
+  if(!mins || mins<=0) return fmtHour(startRow);
+  const startTotal = ((8+startRow)%24) * 60;
+  const endTotal = startTotal + mins;
+  const endHour = Math.floor(endTotal/60) % 24;
+  const endMin = endTotal % 60;
+  return `${fmtHour(startRow)} a ${String(endHour).padStart(2,'0')}:${String(endMin).padStart(2,'0')}`;
+}
+function exportTiempoAt(day, rowIdx){
+  const b = findBlock(day, rowIdx);
+  if(b) return computeTimeRange(b.start, b.tiempo);
+  return day.rows[rowIdx].tiempo || '';
+}
+// Cuántas filas de una hora ocupa realmente una duración: la duración manda
+// siempre, sin importar cuántas filas se hayan tocado/arrastrado al crearlo.
+function computeSpanEnd(start, minutes){
+  const mins = parseInt(minutes, 10) || 0;
+  const spanRows = mins > 0 ? Math.max(1, Math.ceil(mins/60)) : 1;
+  return Math.min(start + spanRows - 1, ROWS-1);
+}
+function clampToday(){
+  const day = new Date().getDay(); // 0 dom .. 6 sab
+  const idx = day===0? 5 : day-1; // dom -> muestra sabado; lun=0..sab=5
+  return Math.min(Math.max(idx,0),5);
+}
+function emptyRow(){ return {tiempo:'',nOf:'',tPieza:'',desc:'',cant:'',parada:'',descAuto:false}; }
+function emptyDay(){ return {rows:Array.from({length:ROWS},emptyRow), tBlocks:[]}; }
+function emptySheet(){ return {days:Array.from({length:6},emptyDay), ts:0}; }
+
+// Bloque: {id, start, end, tiempo, nOf, tPieza, desc, parada} — cubre las
+// filas [start..end] de un día con UN solo juego de datos (equivalente al
+// corchete de la planilla de papel, cuando una tarea/parada ocupó varias
+// horas seguidas: se escribe una sola vez la OF, descripción, etc.).
+// OJO: Cantidad queda afuera del bloque a propósito — en la planilla real
+// la cantidad SIEMPRE se anota hora por hora (aunque la OF/descripción se
+// mantenga igual durante todo el bloque), así que cada fila conserva su
+// propio campo de Cant. aunque esté "adentro" de un bloque.
+function findBlock(day, rowIdx){
+  return (day.tBlocks||[]).find(b => rowIdx>=b.start && rowIdx<=b.end) || null;
+}
+function fieldValueAt(day, rowIdx, field){
+  if(field === 'cant') return day.rows[rowIdx].cant || ''; // siempre por hora, nunca del bloque
+  const b = findBlock(day, rowIdx);
+  if(b) return b[field] || '';
+  return day.rows[rowIdx][field] || '';
+}
+function machineOf(key){ return MACHINES.find(m=>m.key===key); }
+
+function lsKey(monday, machine){ return `cp_v1_${toISODate(monday)}_${machine}`; }
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+
+async function fbGet(path){
+  const r = await fetch(FB_URL+path+'.json');
+  if(!r.ok) throw new Error('fbGet '+r.status);
+  return r.json();
+}
+async function fbSet(path,data){
+  const r = await fetch(FB_URL+path+'.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  if(!r.ok) throw new Error('fbSet '+r.status);
+  return r.json();
+}
+function fbPath(monday, machine){ return `${FB_BASE}/${toISODate(monday)}/${machine}`; }
+
+function setSync(state){
+  const dot=document.getElementById('sync-dot'), txt=document.getElementById('sync-text');
+  const s = {
+    saving:{c:'var(--amber)',t:'Guardando…'},
+    saved: {c:'var(--green)',t:'Guardado ✓'},
+    live:  {c:'var(--green)',t:'En vivo'},
+    local: {c:'var(--amber)',t:'Sin conexión'},
+    error: {c:'var(--red)',t:'Error de conexión'}
+  }[state] || {c:'var(--muted)',t:'Conectando…'};
+  dot.style.background = s.c;
+  txt.textContent = s.t;
+}
+
+// ── LOAD / SAVE SHEET ─────────────────────────────────────────────────
+// Migra datos guardados con el formato viejo (día = array plano de filas,
+// sin bloques de tiempo) al formato actual {rows:[...], tBlocks:[]}, para
+// que planillas ya guardadas antes de agregar los bloques no rompan nada.
+function normalizeDay(day){
+  if(Array.isArray(day)) return {rows: day, tBlocks: []};
+  if(!day || !Array.isArray(day.rows)) return emptyDay();
+  return {rows: day.rows, tBlocks: Array.isArray(day.tBlocks) ? day.tBlocks : []};
+}
+function normalizeSheet(sheet){
+  if(!sheet || !Array.isArray(sheet.days)) return emptySheet();
+  return {days: sheet.days.map(normalizeDay), ts: sheet.ts || 0};
+}
+
+function loadLocal(monday, machine){
+  const raw = lsGet(lsKey(monday,machine));
+  return raw ? normalizeSheet(JSON.parse(raw)) : emptySheet();
+}
+function saveLocal(monday, machine, data){
+  lsSet(lsKey(monday,machine), JSON.stringify(data));
+}
+
+function loadSheet(){
+  if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
+  sheetData = loadLocal(weekMonday, currentMachine);
+  render();
+  setSync('local');
+  fbGet(fbPath(weekMonday,currentMachine)).then(remote=>{
+    if(remote && Array.isArray(remote.days) && (remote.ts||0) >= (sheetData.ts||0)){
+      sheetData = normalizeSheet(remote);
+      saveLocal(weekMonday, currentMachine, sheetData);
+      render();
+    } else if(sheetData.ts > 0){
+      fbSet(fbPath(weekMonday,currentMachine), sheetData).catch(()=>{});
+    }
+    setSync('live');
+    startPolling();
+  }).catch(()=>setSync('error'));
+}
+
+let saveDebounce = null;
+function persist(){
+  sheetData.ts = Date.now();
+  saveLocal(weekMonday, currentMachine, sheetData);
+  setSync('saving');
+  clearTimeout(saveDebounce);
+  saveDebounce = setTimeout(()=>{
+    fbSet(fbPath(weekMonday,currentMachine), sheetData)
+      .then(()=>setSync('saved'))
+      .catch(()=>setSync('error'));
+  }, 500);
+}
+
+function startPolling(){
+  pollTimer = setInterval(()=>{
+    const active = document.activeElement;
+    if(active && (active.tagName==='INPUT' || active.tagName==='SELECT')) return;
+    fbGet(fbPath(weekMonday,currentMachine)).then(remote=>{
+      if(remote && Array.isArray(remote.days) && (remote.ts||0) > (sheetData.ts||0)){
+        sheetData = normalizeSheet(remote);
+        saveLocal(weekMonday, currentMachine, sheetData);
+        render();
+      }
+    }).catch(()=>{});
+  }, 8000);
+}
+
+// ── OFs desde "Carga de Máquina" (mismo Firebase, /carga/ofs) ─────────
+// Trae las OFs que ya están cargadas en el tablero de Carga de Máquina para
+// sugerir el N° OF de cada máquina sin tener que tipearlo a mano.
+let cargaOfs = [];
+let cargaOrden = {}; // {maqKey: [id, id, ...]} — mismo orden manual (drag&drop) del tablero
+
+async function loadCargaOfs(){
+  try{
+    const data = await fbGet(CARGA_PATH);
+    if(data && Array.isArray(data.ofs)) cargaOfs = data.ofs;
+  }catch(e){ /* si no hay conexión, se sigue completando a mano */ }
+  try{
+    const orden = await fbGet(ORDEN_PATH);
+    if(orden && typeof orden === 'object'){ const {_ts, ...clean} = orden; cargaOrden = clean; }
+  }catch(e){}
+  refreshOfDatalist();
+}
+
+// Misma lógica que "Carga de Máquina": si hay orden manual, respetarlo；
+// si no, ordenar por urgencia (A, B, C, sin urgencia) — así el primer
+// resultado siempre es el primero de la cola real de esa máquina.
+function ofsForMachine(machineKey){
+  const cargaKey = CARGA_KEY[machineKey];
+  if(!cargaKey) return [];
+  const activos = cargaOfs.filter(o => o.maq === cargaKey && o.status !== 'terminada' && o.of);
+  const order = cargaOrden[cargaKey];
+  if(order && order.length){
+    const mapped = activos.map(o => ({o, pos: order.indexOf(o.id)}));
+    mapped.sort((a,b) => (a.pos===-1?9999:a.pos) - (b.pos===-1?9999:b.pos));
+    return mapped.map(x => x.o);
+  }
+  const u = {A:0,B:1,C:2,'':3};
+  return [...activos].sort((a,b) => (u[a.urg]??3) - (u[b.urg]??3));
+}
+
+function refreshOfDatalist(){
+  const dl = document.getElementById('ofList');
+  if(!dl) return;
+  const list = ofsForMachine(currentMachine);
+  dl.innerHTML = list.map(o=>{
+    const extra = [o.desc, o.cant?`${o.cant} u.`:''].filter(Boolean).join(' · ');
+    return `<option value="${esc(o.of)}">${esc(extra)}</option>`;
+  }).join('');
+}
+
+// Al completar N° OF con un valor que coincide con una OF conocida de la
+// cola de esa máquina, autocompleta Descripción con la descripción real
+// del producto (así no hay que volver a tipearla).
+function ofDescripcion(machineKey, nOf){
+  if(!nOf) return null;
+  const match = ofsForMachine(machineKey).find(o => String(o.of).trim() === String(nOf).trim());
+  return match ? (match.desc || '') : null;
+}
+
+// ── RENDER ────────────────────────────────────────────────────────────
+function renderMachineChips(){
+  const wrap = document.getElementById('machineChips');
+  wrap.innerHTML = MACHINES.map(m=>`
+    <div class="mchip ${m.key===currentMachine?'active':''}" style="--mcolor:${m.color}" data-key="${m.key}">
+      <span class="dot" style="background:${m.color}"></span>${m.label}
+    </div>`).join('');
+  wrap.querySelectorAll('.mchip').forEach(el=>{
+    el.onclick = ()=>{ currentMachine = el.dataset.key; loadSheet(); renderMachineChips(); };
+  });
+}
+
+function renderDayTabs(){
+  const wrap = document.getElementById('dayTabs');
+  wrap.innerHTML = DAY_NAMES.map((name,i)=>{
+    const d = addDays(weekMonday,i);
+    return `<div class="tab ${i===currentDay?'active':''}" data-i="${i}">${name}<span class="n">${fmtDDMM(d)}</span></div>`;
+  }).join('');
+  wrap.querySelectorAll('.tab').forEach(el=>{
+    el.onclick = ()=>{ currentDay = parseInt(el.dataset.i,10); render(); };
+  });
+}
+
+function render(){
+  document.getElementById('weekPicker').value = toISODate(weekMonday);
+  const sat = addDays(weekMonday,5);
+  document.getElementById('weekLabel').textContent = `${fmtDDMM(weekMonday)} – ${fmtDDMMYY(sat)}`;
+  document.getElementById('sheetWeek').textContent = fmtDDMMYY(weekMonday);
+  document.getElementById('sheetMachine').textContent = machineOf(currentMachine).label;
+  document.getElementById('sheetDay').textContent = `${DAY_NAMES[currentDay]} ${fmtDDMMYY(addDays(weekMonday,currentDay))}`;
+  renderDayTabs();
+  refreshOfDatalist();
+  cancelSelection();
+  renderGrid();
+}
+
+function renderGrid(){
+  const tbody = document.getElementById('gridBody');
+  const day = sheetData.days[currentDay];
+  let html = '';
+  for(let i=0; i<ROWS; i++){
+    const row = day.rows[i];
+    const block = findBlock(day, i);
+
+    // La celda de Cantidad SIEMPRE es un input independiente por hora, esté o
+    // no la fila dentro de un bloque (así se completa igual que en el papel).
+    const cantTint = block ? `style="background:${paradaTint(block.parada)}" ` : '';
+    const cantCell = `<td class="cant-cell" ${cantTint}><input class="cant" data-f="cant" value="${esc(row.cant)}" inputmode="numeric" pattern="[0-9]*" placeholder=""></td>`;
+
+    let otherCells;
+    if(block && block.start !== i){
+      // Tiempo/N°OF/T.1ªPza/Descripción/Parada están cubiertas por el rowspan
+      // de la fila donde empieza el bloque — pero Cant. nunca se fusiona, así
+      // que esta fila igual necesita su propia celda de Cant.
+      otherCells = cantCell;
+    } else if(block){
+      const span = block.end - block.start + 1;
+      const tint = paradaTint(block.parada);
+      const solid = paradaSolid(block.parada);
+      const paradaTxt = block.parada ? `${esc(block.parada)} · ${esc(PARADA_LABELS[block.parada]||'')}` : '—';
+      otherCells = `
+        <td class="tblock" rowspan="${span}" style="background:${tint}">
+          <span class="tblock-bar" style="background:${solid}"></span>
+          <div class="tblock-actions">
+            <button type="button" class="tblock-edit" data-block="${block.id}" title="Editar bloque">✎</button>
+            <button type="button" class="tblock-del" data-block="${block.id}" title="Quitar bloque">✕</button>
+          </div>
+          <div class="tblock-val">${esc(computeTimeRange(block.start, block.tiempo))}</div>
+        </td>
+        <td class="tblock" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${esc(block.nOf)}</div></td>
+        <td class="tblock" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${esc(block.tPieza)}</div></td>
+        <td class="tblock tblock-desc" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${esc(block.desc)}</div></td>
+      `;
+      // Cant. (cantTint/cantCell) va SIEMPRE después de Descripción y antes de Parada,
+      // así que Parada del bloque se agrega recién acá.
+      otherCells += `${cantCell}<td class="tblock" rowspan="${span}" style="background:${tint}"><div class="tblock-val">${paradaTxt}</div></td>`;
+      html += renderRow(i, row, otherCells, true);
+      continue;
+    } else {
+      const options = ['<option value="">—</option>']
+        .concat(Object.entries(PARADA_LABELS).map(([v,l])=>
+          `<option value="${v}" ${String(row.parada)===v?'selected':''}>${v} · ${l}</option>`));
+      otherCells = `
+        <td><input data-f="tiempo" value="${esc(row.tiempo)}" inputmode="numeric" pattern="[0-9]*" placeholder="min"></td>
+        <td><input data-f="nOf" list="ofList" value="${esc(row.nOf)}" placeholder=""></td>
+        <td><input data-f="tPieza" value="${esc(row.tPieza)}" placeholder="ej: 1h 10'"></td>
+        <td><input data-f="desc" value="${esc(row.desc)}" placeholder=""></td>
+      `;
+      otherCells += `${cantCell}<td><select data-f="parada">${options.join('')}</select></td>`;
+    }
+
+    html += renderRow(i, row, otherCells, !!block);
+  }
+  tbody.innerHTML = html;
+
+  tbody.querySelectorAll('input,select').forEach(el=>{
+    el.addEventListener('input', onCellInput);
+    el.addEventListener('change', onCellInput);
+  });
+  tbody.querySelectorAll('.tblock-del').forEach(el=>{
+    el.addEventListener('click', (e)=>{ e.stopPropagation(); deleteBlock(el.dataset.block); });
+  });
+  tbody.querySelectorAll('.tblock-edit').forEach(el=>{
+    el.addEventListener('click', (e)=>{ e.stopPropagation(); editBlock(el.dataset.block); });
+  });
+}
+function renderRow(i, row, cellsHtml, inBlock){
+  if(!cellsHtml) {
+    // fila cubierta por el rowspan de un bloque más arriba: solo la hora
+    return `<tr class="" data-i="${i}">
+      <td class="hs ${isInPendingSelection(i)?'selecting':''}" data-hs="${i}"><span>${fmtHour(i)}</span></td>
+    </tr>`;
+  }
+  const stoppedRow = (!inBlock && row.parada) ? 'stopped' : '';
+  return `<tr class="${stoppedRow}" data-i="${i}">
+      <td class="hs ${isInPendingSelection(i)?'selecting':''}" data-hs="${i}"><span>${fmtHour(i)}</span></td>
+      ${cellsHtml}
+    </tr>`;
+}
+function esc(v){ return (v===undefined||v===null)?'':String(v).replace(/"/g,'&quot;'); }
+
+function onCellInput(e){
+  const tr = e.target.closest('tr');
+  const i = parseInt(tr.dataset.i,10);
+  const field = e.target.dataset.f;
+  const day = sheetData.days[currentDay];
+  const row = day.rows[i];
+  let val = e.target.value;
+
+  if(field==='cant' || field==='tiempo'){
+    val = val.replace(/\D/g,'');
+    e.target.value = val;
+  }
+
+  row[field] = val;
+  if(field==='parada'){ tr.classList.toggle('stopped', !!val); }
+
+  if(field==='nOf'){
+    const desc = ofDescripcion(currentMachine, val);
+    const descInput = tr.querySelector('input[data-f="desc"]');
+    if(desc !== null){
+      // Coincide con una OF de la cola: autocompleta la descripción real.
+      row.desc = desc;
+      row.descAuto = true;
+      if(descInput) descInput.value = desc;
+    } else if(row.descAuto){
+      // La OF se borró/cambió y la descripción actual venía de esa autocompleción:
+      // se limpia sola en vez de dejar una descripción que ya no corresponde.
+      row.desc = '';
+      row.descAuto = false;
+      if(descInput) descInput.value = '';
+    }
+  }
+  persist();
+}
+
+// ── BLOQUES DE TIEMPO MULTI-HORA (seleccionar varias filas · un solo Tiempo) ─
+function isInPendingSelection(i){
+  if(selStart === null) return false;
+  if(selEnd === null) return i === selStart;
+  const lo = Math.min(selStart, selEnd), hi = Math.max(selStart, selEnd);
+  return i >= lo && i <= hi;
+}
+// Un solo toque en una hora libre abre directamente el formulario (no hace
+// falta marcar un final): la Duración que se tipee ahí es la que decide
+// cuántas filas ocupa realmente el bloque. Arrastrar de una hora a otra
+// sigue funcionando como acceso rápido — solo precarga una duración sugerida,
+// que se puede corregir en el formulario si no coincide con lo real.
+function onHsClick(i){
+  const day = sheetData.days[currentDay];
+  if(findBlock(day, i)) return; // ya es parte de un bloque: se edita con ✎, no con un toque
+  selStart = i;
+  selEnd = i;
+  renderGrid();
+  openRangeBar(i, i);
+}
+function openRangeBar(start, end, existingBlock){
+  showBlockBar('enter-value', start, end, existingBlock);
+}
+
+function showBlockBar(mode, a, b, existingBlock){
+  const bar = document.getElementById('blockBar');
+  bar.style.display = 'flex';
+  const ex = existingBlock ? {...existingBlock} : {tiempo:'',nOf:'',tPieza:'',desc:'',parada:''};
+  if(!existingBlock && b > a && !ex.tiempo){
+    // venía de un arrastre de varias horas: precarga una duración sugerida
+    // (se puede corregir; la que quede al Aplicar es la que manda).
+    ex.tiempo = String((b - a + 1) * 60);
+  }
+  const paradaOpts = ['<option value="">—</option>']
+    .concat(Object.entries(PARADA_LABELS).map(([v,l])=>
+      `<option value="${v}" ${String(ex.parada)===v?'selected':''}>${v} · ${l}</option>`));
+  bar.innerHTML = `
+    <span class="hint">Desde <b>${fmtHour(a)}</b></span>
+    <div class="bf"><label>Duración (min)</label><input type="text" id="bkTiempo" inputmode="numeric" pattern="[0-9]*" placeholder="ej: 30" value="${esc(ex.tiempo)}"></div>
+    <span class="hint" id="bkRangePreview">${esc(computeTimeRange(a, ex.tiempo))}</span>
+    <div class="bf"><label>N° OF</label><input type="text" id="bkNOf" list="ofList" value="${esc(ex.nOf)}"></div>
+    <div class="bf"><label>Tiempo 1º Pza</label><input type="text" id="bkTPieza" placeholder="ej: 1h 10'" value="${esc(ex.tPieza)}"></div>
+    <div class="bf bf-wide"><label>Descripción</label><input type="text" id="bkDesc" value="${esc(ex.desc)}"></div>
+    <div class="bf"><label>Parada</label><select id="bkParada">${paradaOpts.join('')}</select></div>
+    <span class="spacer2"></span>
+    <button class="btn btn-accent" id="blockApplyBtn">${existingBlock?'Guardar':'Aplicar'}</button>
+    <button class="btn btn-ghost" id="blockCancelBtn">Cancelar</button>
+  `;
+  document.getElementById('bkNOf').addEventListener('input', e=>{
+    const d = ofDescripcion(currentMachine, e.target.value);
+    if(d !== null) document.getElementById('bkDesc').value = d;
+  });
+  document.getElementById('bkTiempo').addEventListener('input', e=>{
+    e.target.value = e.target.value.replace(/\D/g,'');
+    document.getElementById('bkRangePreview').textContent = computeTimeRange(a, e.target.value);
+  });
+  document.getElementById('blockApplyBtn').onclick = ()=>applyBlock(a,b,existingBlock);
+  document.getElementById('blockCancelBtn').onclick = ()=>{ cancelSelection(); renderGrid(); };
+  setTimeout(()=>document.getElementById('bkTiempo')?.focus(), 30);
+}
+function hideBlockBar(){
+  const bar = document.getElementById('blockBar');
+  if(!bar) return;
+  bar.style.display = 'none';
+  bar.innerHTML = '';
+}
+function cancelSelection(){
+  selStart = null;
+  selEnd = null;
+  hideBlockBar();
+}
+function applyBlock(start, end, existingBlock){
+  const tiempo = document.getElementById('bkTiempo').value.trim();
+  const nOf = document.getElementById('bkNOf').value.trim();
+  const tPieza = document.getElementById('bkTPieza').value.trim();
+  const desc = document.getElementById('bkDesc').value.trim();
+  const parada = document.getElementById('bkParada').value;
+  if(!tiempo && !nOf && !desc && !parada) return;
+
+  // La duración manda: recalcula cuántas filas ocupa de verdad (30 min desde
+  // las 15:00 ocupa solo esa fila; a las 09:00 le sigue libre como siempre).
+  const finalEnd = computeSpanEnd(start, tiempo);
+  const day = sheetData.days[currentDay];
+  day.tBlocks = day.tBlocks || [];
+  const overlap = day.tBlocks.some(b =>
+    (!existingBlock || b.id !== existingBlock.id) && !(finalEnd < b.start || start > b.end));
+  if(overlap){
+    alert('Esa duración se mete en un bloque que ya existe. Achicá la duración o quitá (✕) el otro bloque primero.');
+    return;
+  }
+
+  if(existingBlock){
+    const b = day.tBlocks.find(x=>x.id===existingBlock.id);
+    if(b) Object.assign(b, {start, end:finalEnd, tiempo, nOf, tPieza, desc, parada});
+  } else {
+    day.tBlocks.push({id:'b'+Date.now()+'_'+start, start, end:finalEnd, tiempo, nOf, tPieza, desc, parada});
+  }
+  cancelSelection();
+  persist();
+  renderGrid();
+}
+function editBlock(blockId){
+  const day = sheetData.days[currentDay];
+  const block = (day.tBlocks||[]).find(b=>b.id===blockId);
+  if(!block) return;
+  cancelSelection();
+  openRangeBar(block.start, block.end, block);
+}
+function deleteBlock(blockId){
+  const day = sheetData.days[currentDay];
+  day.tBlocks = (day.tBlocks||[]).filter(b=>b.id!==blockId);
+  persist();
+  renderGrid();
+}
+
+// Mantener presionado y arrastrar de una hora a otra selecciona todo el
+// rango de una sola vez. Un toque simple en una hora libre abre el
+// formulario directo (onHsClick).
+function initDragHandlers(){
+  const tbody = document.getElementById('gridBody');
+  tbody.addEventListener('pointerdown', e=>{
+    const td = e.target.closest('td.hs');
+    if(!td) return;
+    if(selStart !== null) return; // ya hay un formulario abierto
+    const i = parseInt(td.dataset.hs, 10);
+    if(findBlock(sheetData.days[currentDay], i)) return; // ya es parte de un bloque
+    dragAnchorRow = i;
+    dragMoved = false;
+  });
+  tbody.addEventListener('pointermove', e=>{
+    if(dragAnchorRow === null) return;
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const td = el && el.closest ? el.closest('td.hs') : null;
+    if(!td) return;
+    const i = parseInt(td.dataset.hs, 10);
+    if(selStart === null) selStart = dragAnchorRow;
+    if(i !== selEnd){
+      dragMoved = true;
+      selEnd = i;
+      renderGrid(); // pinta en vivo el rango desde-hasta mientras arrastra
+    }
+  });
+  tbody.addEventListener('pointerup', ()=>{
+    if(dragAnchorRow === null) return;
+    if(dragMoved && selStart !== null && selEnd !== null){
+      suppressNextClick = true;
+      openRangeBar(Math.min(selStart,selEnd), Math.max(selStart,selEnd));
+    }
+    dragAnchorRow = null;
+    dragMoved = false;
+  });
+  tbody.addEventListener('pointercancel', ()=>{
+    dragAnchorRow = null;
+    dragMoved = false;
+  });
+  tbody.addEventListener('click', e=>{
+    if(suppressNextClick){ suppressNextClick = false; return; }
+    const td = e.target.closest('td.hs');
+    if(!td) return;
+    onHsClick(parseInt(td.dataset.hs, 10));
+  });
+}
+
+// ── WEEK NAV ──────────────────────────────────────────────────────────
+document.getElementById('btnPrevWeek').onclick = ()=>{ weekMonday = addDays(weekMonday,-7); loadSheet(); };
+document.getElementById('btnNextWeek').onclick = ()=>{ weekMonday = addDays(weekMonday,7); loadSheet(); };
+document.getElementById('weekPicker').onchange = (e)=>{ weekMonday = isoMonday(e.target.value); loadSheet(); };
+
+// ── EXPORT XLSX (una máquina, semana actual) ─────────────────────────
+function sheetAOA(machineLabel, monday, sheet){
+  const aoa = [];
+  aoa.push(['BIOTROM S.A. · CONTROL DE PRODUCCIÓN']);
+  aoa.push([fmtDDMMYY(monday), '', '', '', '', '', '', '', `MÁQUINA: ${machineLabel}`]);
+  const hdrRow1 = ['HS.'];
+  const hdrRow2 = [''];
+  for(let d=0; d<6; d++){
+    const date = addDays(monday,d);
+    hdrRow1.push(`${DAY_NAMES[d]}   ${fmtDDMMYY(date)}`,'','','','','');
+    hdrRow2.push('DURACIÓN / HORARIO','N° OF','TIEMPO 1º PZA','DESCRIPCION','CANT.','PARADA');
+  }
+  aoa.push(hdrRow1);
+  aoa.push(hdrRow2);
+  for(let r=0; r<ROWS; r++){
+    const line = [fmtHour(r)];
+    for(let d=0; d<6; d++){
+      const day = sheet.days[d];
+      line.push(exportTiempoAt(day,r), fieldValueAt(day,r,'nOf'), fieldValueAt(day,r,'tPieza'), fieldValueAt(day,r,'desc'), fieldValueAt(day,r,'cant'), fieldValueAt(day,r,'parada'));
+    }
+    aoa.push(line);
+  }
+  aoa.push(['CÓDIGOS DE PARADAS:  [1] SET UP  |  [2] DIF. EN PLANO  |  [3] ROTURA HERRAMIENTA  |  [4] FALTA PERSONAL  |  [5] MANTENIMIENTO  |  [6] NO SE TRABAJÓ']);
+  return aoa;
+}
+
+function buildWorksheet(machineLabel, monday, sheet){
+  const aoa = sheetAOA(machineLabel, monday, sheet);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const totalCols = 1 + 6*6;
+  ws['!merges'] = [
+    {s:{r:0,c:0}, e:{r:0,c:totalCols-1}},
+    {s:{r:1,c:0}, e:{r:1,c:7}},
+    {s:{r:1,c:8}, e:{r:1,c:totalCols-1}},
+    {s:{r:ROWS+4,c:0}, e:{r:ROWS+4,c:totalCols-1}}
+  ];
+  for(let d=0; d<6; d++){
+    const c0 = 1+d*6;
+    ws['!merges'].push({s:{r:2,c:c0}, e:{r:2,c:c0+5}});
+  }
+  ws['!cols'] = [{wch:8}].concat(Array(6).fill([{wch:8},{wch:8},{wch:12},{wch:26},{wch:6},{wch:16}]).flat());
+  return ws;
+}
+
+async function fetchSheetFor(monday, machine){
+  const local = loadLocal(monday, machine);
+  try{
+    const remote = await fbGet(fbPath(monday,machine));
+    if(remote && Array.isArray(remote.days) && (remote.ts||0) >= (local.ts||0)) return normalizeSheet(remote);
+  }catch(e){}
+  return local;
+}
+
+document.getElementById('btnExportOne').onclick = async ()=>{
+  const m = machineOf(currentMachine);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, buildWorksheet(m.label, weekMonday, sheetData), m.key.slice(0,31));
+  XLSX.writeFile(wb, `CONTROL_PRODUCCION_${m.key}_${toISODate(weekMonday)}.xlsx`);
+};
+
+document.getElementById('btnExportAll').onclick = async ()=>{
+  const btn = document.getElementById('btnExportAll');
+  const original = btn.textContent;
+  btn.textContent = '⏳ Exportando…';
+  const wb = XLSX.utils.book_new();
+  for(const m of MACHINES){
+    const sheet = await fetchSheetFor(weekMonday, m.key);
+    XLSX.utils.book_append_sheet(wb, buildWorksheet(m.label, weekMonday, sheet), m.key.slice(0,31));
+  }
+  XLSX.writeFile(wb, `CONTROL_PRODUCCION_semana_${toISODate(weekMonday)}.xlsx`);
+  btn.textContent = original;
+};
+
+// ── PRINT (vista semana completa, todas las máquinas ya cargadas) ────
+document.getElementById('btnPrint').onclick = async ()=>{
+  const area = document.getElementById('printArea');
+  area.innerHTML = '';
+  for(const m of MACHINES){
+    const sheet = m.key===currentMachine ? sheetData : await fetchSheetFor(weekMonday, m.key);
+    const div = document.createElement('div');
+    div.style.pageBreakAfter = 'always';
+    div.innerHTML = `<h2>BIOTROM S.A. · CONTROL DE PRODUCCIÓN — SEMANA ${fmtDDMMYY(weekMonday)} — MÁQUINA: ${m.label}</h2>` + printTableHTML(m, weekMonday, sheet);
+    area.appendChild(div);
+  }
+  window.print();
+};
+
+function printTableHTML(m, monday, sheet){
+  let html = '<table><thead><tr><th>HS.</th>';
+  for(let d=0; d<6; d++){
+    html += `<th colspan="6">${DAY_NAMES[d]} ${fmtDDMMYY(addDays(monday,d))}</th>`;
+  }
+  html += '</tr><tr><th></th>';
+  for(let d=0; d<6; d++) html += '<th>Duración / Horario</th><th>N° OF</th><th>Tiempo 1º Pza</th><th>Descripción</th><th>Cant.</th><th>Parada</th>';
+  html += '</tr></thead><tbody>';
+  for(let r=0; r<ROWS; r++){
+    html += `<tr><td>${fmtHour(r)}</td>`;
+    for(let d=0; d<6; d++){
+      const day = sheet.days[d];
+      html += `<td>${esc(exportTiempoAt(day,r))}</td><td>${esc(fieldValueAt(day,r,'nOf'))}</td><td>${esc(fieldValueAt(day,r,'tPieza'))}</td><td>${esc(fieldValueAt(day,r,'desc'))}</td><td>${esc(fieldValueAt(day,r,'cant'))}</td><td>${esc(fieldValueAt(day,r,'parada'))}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  return html;
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────
+renderMachineChips();
+loadSheet();
+initDragHandlers();
+loadCargaOfs();
+setInterval(loadCargaOfs, 60000); // refresca la lista de OFs de Carga de Máquina
+</script>
+</body>
+</html>
