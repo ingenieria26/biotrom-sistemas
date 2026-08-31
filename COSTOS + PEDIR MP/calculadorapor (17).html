@@ -6,7 +6,7 @@
         Subi uno o varios PDF de Orden de Compra (se leen en el momento, en este navegador &mdash; no se suben a ningun lado).
         Quedan guardados por N&deg; de OC para poder buscarlos despues por numero, proveedor o material comprado.
     </p>
-    <input type="file" id="oc_file_input" accept="application/pdf" multiple onchange="procesarArchivosOC(this.files)">
+    <input type="file" id="oc_file_input" accept="application/pdf" multiple onchange="procesarArchivosOC(this.files)" style="display:none"><button type="button" onclick="document.getElementById('oc_file_input').click()" style="padding:7px 14px;border:1px solid #dadce0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#1a3a6b">Elegir archivos</button> <input type="file" id="oc_folder_input" webkitdirectory directory multiple onchange="procesarArchivosOC(this.files)" style="display:none"><button type="button" onclick="document.getElementById('oc_folder_input').click()" style="padding:7px 14px;border:1px solid #dadce0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#1a3a6b;margin-left:8px">📁 Elegir carpeta</button>
     <div id="oc_estado" style="font-size:12px; margin-top:8px; color:var(--color-text-secondary);"></div>
 </div>
 <div style="margin-top:14px; position:relative;">
@@ -146,8 +146,10 @@ function _guardarOrdenesCompra(datos) {
 
 async function procesarArchivosOC(fileList) {
     const estado = document.getElementById("oc_estado");
-    const archivos = Array.from(fileList || []);
-    if (!archivos.length) return;
+    const todos = Array.from(fileList || []);
+    const archivos = todos.filter(f => /\.pdf$/i.test(f.name));
+    const ignorados = todos.length - archivos.length;
+    if (!archivos.length) { if (estado) estado.innerText = ignorados ? "No se encontraron PDF en lo seleccionado (" + ignorados + " archivo" + (ignorados===1?"":"s") + " no-PDF ignorado" + (ignorados===1?"":"s") + ")." : "No se seleccionaron archivos."; return; }
     if (typeof pdfjsLib === "undefined") {
         if (estado) estado.innerText = "No se pudo cargar la libreria de lectura de PDF (pdf.js). Revisar assets/pdfjs.min.js.";
         return;
@@ -173,10 +175,12 @@ async function procesarArchivosOC(fileList) {
     }
     if (estado) {
         estado.innerText = ok + (ok === 1 ? " orden de compra guardada" : " ordenes de compra guardadas")
-            + (fail ? " - " + fail + " con error (revisar consola)" : "");
+            + (fail ? " - " + fail + " con error (revisar consola)" : "")
+            + (ignorados ? " - " + ignorados + " archivo" + (ignorados===1?"":"s") + " no-PDF ignorado" + (ignorados===1?"":"s") : "");
     }
     renderOrdenesCompra();
     document.getElementById("oc_file_input").value = "";
+    document.getElementById("oc_folder_input").value = "";
 }
 
 async function leerPdfOC(file) {
