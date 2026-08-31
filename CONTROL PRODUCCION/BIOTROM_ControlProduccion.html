@@ -335,7 +335,19 @@ let suppressNextClick = false; // evita que el click nativo post-arrastre vuelva
 
 // ── HELPERS ───────────────────────────────────────────────────────────
 function isoMonday(d){
-  const date = new Date(d);
+  // OJO: "new Date('YYYY-MM-DD')" lo interpreta el navegador como medianoche
+  // UTC, no como medianoche local — en Argentina (UTC-3) eso cae en el día
+  // anterior según getDay()/getDate(), y toda la semana calculada queda
+  // corrida un día para atrás. Por eso una fecha tipeada en el selector de
+  // semana (que llega como string) se arma a mano con los componentes
+  // locales en vez de dejar que el navegador la parsee como UTC.
+  let date;
+  if(typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)){
+    const [y,m,day_] = d.split('-').map(Number);
+    date = new Date(y, m-1, day_);
+  } else {
+    date = new Date(d);
+  }
   const day = date.getDay();
   const diff = (day===0? -6 : 1-day);
   date.setDate(date.getDate()+diff);
