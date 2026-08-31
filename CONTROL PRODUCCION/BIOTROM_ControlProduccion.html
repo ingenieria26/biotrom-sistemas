@@ -794,9 +794,12 @@ function showBlockBar(mode, a, b, existingBlock){
   bar.style.display = 'flex';
   const ex = existingBlock ? {...existingBlock} : {tiempo:'',nOf:'',tPieza:'',desc:'',parada:''};
   if(!existingBlock && b > a && !ex.tiempo){
-    // venía de un arrastre de varias horas: precarga una duración sugerida
-    // (se puede corregir; la que quede al Aplicar es la que manda).
-    ex.tiempo = String((b - a + 1) * 60);
+    // venía de un arrastre de varias horas: precarga una duración sugerida.
+    // La hora donde se suelta el arrastre es el LÍMITE final (igual que un
+    // calendario: arrastrar de 08:00 a 11:00 son 3 horas, terminan a las
+    // 11:00 — esa fila no se cuenta como una hora más adentro del bloque).
+    // Se puede corregir el número igual; la que quede al Aplicar es la que manda.
+    ex.tiempo = String((b - a) * 60);
   }
   const paradaOpts = ['<option value="">—</option>']
     .concat(Object.entries(PARADA_LABELS).map(([v,l])=>
@@ -887,7 +890,17 @@ function editBlock(blockId){
 }
 function deleteBlock(blockId){
   const day = sheetData.days[currentDay];
+  const block = (day.tBlocks||[]).find(b=>b.id===blockId);
   day.tBlocks = (day.tBlocks||[]).filter(b=>b.id!==blockId);
+  // Si esas filas habían quedado marcadas VERIFICAR en Cantidad (por una
+  // lectura automática), esa marca queda huérfana si no se limpia acá —
+  // sin bloque ya no hay nada que "verificar" en esas filas.
+  if(block){
+    for(let i=block.start; i<=block.end; i++){
+      const row = day.rows[i];
+      if(row){ delete row._cantVerif; delete row._cantLeido; }
+    }
+  }
   persist();
   renderGrid();
 }
