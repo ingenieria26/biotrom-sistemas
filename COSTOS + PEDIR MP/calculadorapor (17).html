@@ -337,12 +337,12 @@ function parseTextoOC(lineas, nombreArchivo) {
     proveedor = proveedor.split(/\s+ATENCI[O\u00d3]N:/i)[0].trim();
     const direccion = buscar(/Direcci[o\u00f3]n:\s*(.+)/i);
     const telefono = buscar(/Tel[e\u00e9]fono:\s*(.+)/i);
-    // El signo "$" y la palabra "USD"/"ARS" antes del numero son opcionales - algunas
-    // plantillas (ej. "cotizacion de materia prima") no ponen ningun simbolo.
-    const subtotal = buscar(/Subtotal\s*:?\s*(?:USD|ARS|U\$S)?\s*\$?\s*([\d.,]+)/i);
-    const iva = buscar(/I\.?V\.?A\.?\s*:?\s*(?:USD|ARS|U\$S)?\s*\$?\s*([\d.,]+)/i);
-    const totalMatch = /(?:^|\n)\s*Total\s*:?\s*(?:USD|ARS|U\$S)?\s*\$?\s*([\d.,]+)/i.exec(texto);
-    const total = totalMatch ? totalMatch[1].trim() : "";
+    // El signo "$" y la palabra "USD"/"ARS"/"U$S"/"U$D" antes del numero son
+    // opcionales - algunas plantillas no ponen ningun simbolo.
+    const subtotal = buscar(/Subtotal\s*:?\s*(?:USD|ARS|U\$S|U\$D)?\s*\$?\s*(\d[\d.,]*)/i);
+    const iva = buscar(/I\.?V\.?A\.?\s*:?\s*(?:USD|ARS|U\$S|U\$D)?\s*\$?\s*(\d[\d.,]*)/i);
+    const totalMatch = /(?:^|\n)\s*Total\s*:?\s*(?:USD|ARS|U\$S|U\$D)?\s*\$?\s*(\d[\d.,]*)/i.exec(texto);
+    let total = totalMatch ? totalMatch[1].trim() : "";
     const condPago = buscar(/Cond\.?\s*de\s*pago:\s*(.+)/i);
     const formaEntrega = buscar(/Forma\s*de\s*entrega:\s*(.+)/i);
     // "Plazo de entrega" en la mayoria, pero algunos proveedores (insumos/herramientas) dicen "Plazo de fabricacion"
@@ -363,18 +363,46 @@ function parseTextoOC(lineas, nombreArchivo) {
         const headerTxt = lineas[idxHeader] + " " + (lineas[idxHeader + 1] || "");
         const unidadHeaderMatch = /\[\s*(kgs?|kilos?|mts?|metros?|m)\s*\]/i.exec(headerTxt);
         const unidadDefault = unidadHeaderMatch ? (/k/i.test(unidadHeaderMatch[1]) ? "KG" : "MTS") : "";
-        // El signo "$" antes de cada precio es opcional (algunas plantillas no lo ponen).
-        const filaItemRegex = /^(\d+(?:[.,]\d+)?)\s*(MTS?|KGS?|UN|UNI?|PZAS?|LTS?)?\s+(.+?)\s+(?:USD|ARS|U\$S)?\s*\$?\s*(\d+(?:[.,]\d+)?)\s+(?:USD|ARS|U\$S)?\s*\$?\s*(\d+(?:[.,]\d+)?)\s*$/i;
+        const UNIDADES = "MTS?|METROS?|KGS?|UN|UNI?|U\\.?|PZAS?|LTS?";
+        const MONEDA = "(?:USD|ARS|U\\$S|U\\$D)?\\s*\\$?\\s*";
+        const IVA_SUFIJO = "(?:\\+\\s*IVA(?:\\s*X\\s*U\\.?)?)?";
+        // Fila con Precio Unitario Y Total (2 numeros) - a veces con "+ IVA X U."
+        // pegado entre los dos numeros (ej. "U$s 0,033 + IVA X U. U$s 19,96").
+        const filaItemRegex2 = new RegExp(
+            "^(\\d+(?:[.,]\\d+)?)\\s*(" + UNIDADES + ")?\\s+(.+?)\\s+" + MONEDA +
+            "(\\d+(?:[.,]\\d+)?)\\s*" + IVA_SUFIJO + "\\s+" + MONEDA +
+            "(\\d+(?:[.,]\\d+)?)\\s*" + IVA_SUFIJO + "\\s*$", "i");
+        // Fila con un solo numero (sin Precio Unitario separado, solo el total de
+        // la linea con "+ IVA" al final) - plantillas viejas de "Orden de Compra"
+        // (ej. "45 METROS AISI 316L BARRA REDONDA U$D 124,75 + IVA"). El precio
+        // unitario se calcula dividiendo el total por la cantidad.
+        const filaItemRegex1 = new RegExp(
+            "^(\\d+(?:[.,]\\d+)?)\\s*(" + UNIDADES + ")?\\s+(.+?)\\s+" + MONEDA +
+            "(\\d+(?:[.,]\\d+)?)\\s*" + IVA_SUFIJO + "\\s*$", "i");
         for (let i = idxHeader + 1; i < fin; i++) {
             const linea = lineas[i];
-            const m = filaItemRegex.exec(linea);
-            if (m) {
+            const m2 = filaItemRegex2.exec(linea);
+            if (m2) {
                 items.push({
-                    cantidad: m[1], unidad: (m[2] || unidadDefault).toUpperCase(),
-                    descripcion: normalizarColorDescripcion(m[3].trim()),
-                    precioUnitario: m[4], total: m[5],
+                    cantidad: m2[1], unidad: (m2[2] || unidadDefault).toUpperCase(),
+                    descripcion: normalizarColorDescripcion(m2[3].trim()),
+                    precioUnitario: m2[4], total: m2[5],
                 });
-            } else if (items.length && linea.trim() && !/^\[/.test(linea.trim())) {
+                continue;
+            }
+            const m1 = filaItemRegex1.exec(linea);
+            if (m1) {
+                const cant = parseFloat(m1[1].replace(",", ".")) || 0;
+                const tot = parseFloat(m1[4].replace(/\./g, "").replace(",", ".")) || 0;
+                const pu = cant > 0 ? (tot / cant) : tot;
+                items.push({
+                    cantidad: m1[1], unidad: (m1[2] || unidadDefault).toUpperCase(),
+                    descripcion: normalizarColorDescripcion(m1[3].trim()),
+                    precioUnitario: pu.toFixed(4), total: m1[4],
+                });
+                continue;
+            }
+            if (items.length && linea.trim() && !/^\[/.test(linea.trim()) && !/:/.test(linea)) {
                 // Fila de continuacion de la descripcion del item anterior (ej. el
                 // diametro "REDONDO Ø 4" queda en un renglon aparte por como se
                 // corta el texto en el PDF).
@@ -382,6 +410,20 @@ function parseTextoOC(lineas, nombreArchivo) {
                 ultimo.descripcion = normalizarColorDescripcion((ultimo.descripcion + " " + linea.trim()).trim());
             }
         }
+    }
+
+    // Algunas plantillas viejas dejan Subtotal/I.V.A./Total en blanco (cada
+    // renglon de item ya trae su propio total "+ IVA" incluido) - si no hay
+    // Total general, se calcula sumando el total de cada item.
+    if (!total && items.length) {
+        const suma = items.reduce((acc, it) => {
+            const s = String(it.total || "").trim();
+            let n = 0;
+            if (s.includes(",")) n = parseFloat(s.replace(/\./g, "").replace(",", ".")) || 0;
+            else n = parseFloat(s) || 0;
+            return acc + n;
+        }, 0);
+        if (suma > 0) total = suma.toFixed(2);
     }
 
     return {
