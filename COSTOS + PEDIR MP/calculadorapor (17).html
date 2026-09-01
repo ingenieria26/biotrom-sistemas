@@ -384,20 +384,34 @@ function parseTextoOC(lineas, nombreArchivo) {
         // la linea con "+ IVA" al final) - plantillas viejas de "Orden de Compra"
         // (ej. "45 METROS AISI 316L BARRA REDONDA U$D 124,75 + IVA"). El precio
         // unitario se calcula dividiendo el total por la cantidad. Al final se
-        // tolera "/Kg", "X Kg", "/Metro" (precio por unidad de peso/largo) y
-        // "FINAL"/"APROX" sueltos (frecuentes en OC viejas) - esto SOLO se hace
-        // para esta fila de un-unico-numero: al no haber un segundo numero que
-        // desambiguar, no hay riesgo de que se elija por error un numero de la
-        // descripcion como si fuera el precio (si el resto de la linea no cierra
-        // como cola valida, el "(.+?)" sigue probando con un numero mas adelante).
-        const TAIL_UN_SOLO_NUMERO = "(?:\\s*(?:\\+\\s*IVA(?:\\s*X\\s*U\\.?)?|[\\/xX]\\s*(?:Kg|kg|KG|M|m|Metro|metro)s?\\.?|FINAL|APROX\\.?|Aprox\\.?|[+\\/]))*";
+        // tolera "/Kg", "X Kg", "/Metro" (precio por unidad de peso/largo), y
+        // despues de eso "FINAL"/"APROX" sueltos (frecuentes en OC viejas). El
+        // relleno generico (FINAL/APROX/+//) SOLO se acepta si antes hubo al
+        // menos una senal fuerte real (+IVA o /Kg-similar) - si no, una linea de
+        // puras dimensiones sin precio (ej. "16 X 32 APROX") podria colarse como
+        // si fuera un item. Esto se hace solo en esta fila de un-unico-numero: al
+        // no haber un segundo numero que desambiguar, no hay riesgo de que se
+        // elija por error un numero de la descripcion como si fuera el precio (si
+        // el resto de la linea no cierra como cola valida, el "(.+?)" sigue
+        // probando con un numero mas adelante).
+        const TAIL_FUERTE = "(?:\\+\\s*IVA(?:\\s*X\\s*U\\.?)?|[\\/xX]\\s*(?:Kg|kg|KG|M|m|Metro|metro)s?\\.?)";
+        const TAIL_RELLENO_FINAL = "(?:\\s*(?:FINAL|APROX\\.?|Aprox\\.?|[+\\/]))?";
+        const TAIL_UN_SOLO_NUMERO = "(?:(?:\\s*" + TAIL_FUERTE + ")+" + TAIL_RELLENO_FINAL + ")?";
         const filaItemRegex1 = new RegExp(
             "^(\\d+(?:[.,]\\d+)?)\\s*(" + UNIDADES + ")?\\s+(.+?)\\s+" + MONEDA +
             "(\\d[\\d.,]*)" + TAIL_UN_SOLO_NUMERO + "\\s*$", "i");
+        // Filtro de seguridad: si la "descripcion" capturada quedo formada solo
+        // por numeros/x/guiones/espacios/puntuacion (sin ninguna letra), es casi
+        // seguro una linea de dimensiones sueltas o de referencia (ej. "5 X 305 X
+        // 1000", "2 x 1000 x 2000", "1.6 - 3487859"), no un item real - se
+        // descarta en vez de guardar un precio inventado. OJO: no usar "sin
+        // ninguna letra" en general - hay codigos de material validos sin letras
+        // (ej. aluminio "6061", "6063").
+        const descripcionParecePuraDimension = (desc) => /^[\dXx.,\-\s]+$/.test(desc.trim());
         for (let i = idxHeader + 1; i < fin; i++) {
             const linea = lineas[i];
             const m2 = filaItemRegex2.exec(linea);
-            if (m2) {
+            if (m2 && !descripcionParecePuraDimension(m2[3])) {
                 items.push({
                     cantidad: m2[1], unidad: (m2[2] || unidadDefault).toUpperCase(),
                     descripcion: normalizarColorDescripcion(m2[3].trim()),
@@ -405,8 +419,8 @@ function parseTextoOC(lineas, nombreArchivo) {
                 });
                 continue;
             }
-            const m1 = filaItemRegex1.exec(linea);
-            if (m1) {
+            const m1 = !m2 && filaItemRegex1.exec(linea);
+            if (m1 && !descripcionParecePuraDimension(m1[3])) {
                 const cant = parseFloat(m1[1].replace(",", ".")) || 0;
                 const tot = parseFloat(m1[4].replace(/\./g, "").replace(",", ".")) || 0;
                 const pu = cant > 0 ? (tot / cant) : tot;
