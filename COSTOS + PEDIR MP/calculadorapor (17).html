@@ -370,15 +370,15 @@ function parseTextoOC(lineas, nombreArchivo) {
         // pegado entre los dos numeros (ej. "U$s 0,033 + IVA X U. U$s 19,96").
         const filaItemRegex2 = new RegExp(
             "^(\\d+(?:[.,]\\d+)?)\\s*(" + UNIDADES + ")?\\s+(.+?)\\s+" + MONEDA +
-            "(\\d+(?:[.,]\\d+)?)\\s*" + IVA_SUFIJO + "\\s+" + MONEDA +
-            "(\\d+(?:[.,]\\d+)?)\\s*" + IVA_SUFIJO + "\\s*$", "i");
+            "(\\d[\\d.,]*)\\s*" + IVA_SUFIJO + "\\s+" + MONEDA +
+            "(\\d[\\d.,]*)\\s*" + IVA_SUFIJO + "\\s*$", "i");
         // Fila con un solo numero (sin Precio Unitario separado, solo el total de
         // la linea con "+ IVA" al final) - plantillas viejas de "Orden de Compra"
         // (ej. "45 METROS AISI 316L BARRA REDONDA U$D 124,75 + IVA"). El precio
         // unitario se calcula dividiendo el total por la cantidad.
         const filaItemRegex1 = new RegExp(
             "^(\\d+(?:[.,]\\d+)?)\\s*(" + UNIDADES + ")?\\s+(.+?)\\s+" + MONEDA +
-            "(\\d+(?:[.,]\\d+)?)\\s*" + IVA_SUFIJO + "\\s*$", "i");
+            "(\\d[\\d.,]*)\\s*" + IVA_SUFIJO + "\\s*$", "i");
         for (let i = idxHeader + 1; i < fin; i++) {
             const linea = lineas[i];
             const m2 = filaItemRegex2.exec(linea);
