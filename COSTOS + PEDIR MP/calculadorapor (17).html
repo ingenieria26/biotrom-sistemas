@@ -19,9 +19,9 @@
     <button type="button" id="ocFiltroMp" onclick="ocCambiarFiltroTipo('mp')" style="padding:6px 14px; font-size:12px; font-weight:600; background:#fff; color:#444; border:none; cursor:pointer; border-left:1px solid #dadce0;">Materia Prima</button>
     <button type="button" id="ocFiltroHerramienta" onclick="ocCambiarFiltroTipo('herramienta')" style="padding:6px 14px; font-size:12px; font-weight:600; background:#fff; color:#444; border:none; cursor:pointer; border-left:1px solid #dadce0;">Herramientas / Insumos</button>
 </div>
-<div style="overflow-x:auto; margin-top:10px;">
+<div style="overflow:auto; max-height:420px; margin-top:10px; border:1px solid #e8eaed; border-radius:6px;">
     <table id="oc_tabla" style="width:100%; font-size:12px;">
-        <thead><tr><th>N&deg; OC</th><th>Fecha</th><th>Proveedor</th><th>Items comprados</th><th>Total (USD)</th><th>Archivo</th><th></th></tr></thead>
+        <thead><tr><th style="position:sticky; top:0; background:#fafafa; z-index:1;">N&deg; OC</th><th style="position:sticky; top:0; background:#fafafa; z-index:1;">Fecha</th><th style="position:sticky; top:0; background:#fafafa; z-index:1;">Proveedor</th><th style="position:sticky; top:0; background:#fafafa; z-index:1;">Items comprados</th><th style="position:sticky; top:0; background:#fafafa; z-index:1;">Total (USD)</th><th style="position:sticky; top:0; background:#fafafa; z-index:1;">Archivo</th><th style="position:sticky; top:0; background:#fafafa; z-index:1;"></th></tr></thead>
         <tbody id="oc_tbody"></tbody>
     </table>
 </div>
@@ -33,9 +33,9 @@
     <input type="text" id="mp_ultimos_precios_buscar" placeholder="Buscar material..."
         style="width:100%; box-sizing:border-box; padding:8px 12px; font-size:13px; border:1px solid #dadce0; border-radius:6px; outline:none; margin-bottom:10px;"
         oninput="renderUltimosPreciosMP()" autocomplete="off">
-    <div style="overflow-x:auto;">
+    <div style="overflow:auto; max-height:420px; border:1px solid #e8eaed; border-radius:6px;">
         <table style="width:100%; font-size:12px;">
-            <thead><tr><th>Material</th><th>Ultimo Precio</th><th>Fecha</th><th>Proveedor</th><th>OC</th></tr></thead>
+            <thead><tr><th style="position:sticky; top:0; background:#fafafa; z-index:1;">Material</th><th style="position:sticky; top:0; background:#fafafa; z-index:1;">Ultimo Precio</th><th style="position:sticky; top:0; background:#fafafa; z-index:1;">Fecha</th><th style="position:sticky; top:0; background:#fafafa; z-index:1;">Proveedor</th><th style="position:sticky; top:0; background:#fafafa; z-index:1;">OC</th></tr></thead>
             <tbody id="mp_ultimos_precios_tbody"></tbody>
         </table>
     </div>
