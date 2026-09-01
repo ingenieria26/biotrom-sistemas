@@ -324,7 +324,7 @@ const PARADA_COLORS = {
 function paradaTint(code){ return (PARADA_COLORS[code] && PARADA_COLORS[code].dim) || 'var(--surface2)'; }
 function paradaSolid(code){ return (PARADA_COLORS[code] && PARADA_COLORS[code].bg) || 'var(--border2)'; }
 const DAY_NAMES = ['LUNES','MARTES','MIÉRCOLES','JUEVES','VIERNES','SÁBADO'];
-const ROWS = 24; // 08:00 .. 07:00 del día siguiente
+const ROWS = 24; // 07:00 .. 06:00 del día siguiente
 
 // ── STATE ─────────────────────────────────────────────────────────────
 let weekMonday = isoMonday(new Date());
@@ -371,7 +371,7 @@ function toISODate(d){
 }
 function fmtDDMM(d){ return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0'); }
 function fmtDDMMYY(d){ return fmtDDMM(d)+'/'+String(d.getFullYear()).slice(2); }
-function fmtHour(i){ return String((8+i)%24).padStart(2,'0')+':00'; }
+function fmtHour(i){ return String((7+i)%24).padStart(2,'0')+':00'; }
 // Interpreta la Duración tal como se escribe en la planilla de papel:
 // "45", "45'" o "45min" -> 45 minutos · "1h", "1h30", "1h 30'" -> 90 minutos
 // "90s"/"90\"" -> segundos (se redondean al minuto) · combinables entre sí.
@@ -408,7 +408,7 @@ function parseDuracionMinutes(raw){
 function computeTimeRange(startRow, minutes){
   const mins = parseDuracionMinutes(minutes);
   if(!mins || mins<=0) return fmtHour(startRow);
-  const startTotal = ((8+startRow)%24) * 60;
+  const startTotal = ((7+startRow)%24) * 60;
   const endTotal = startTotal + mins;
   const endHour = Math.floor(endTotal/60) % 24;
   const endMin = endTotal % 60;
