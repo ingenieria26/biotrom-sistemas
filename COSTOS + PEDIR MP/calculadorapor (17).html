@@ -115,16 +115,34 @@ function restaurarSnapshotSiExiste(codigo) {
 // completa Modalidad/Moneda/Precio directo desde ahi (en vez de tipearlo a mano).
 // "MTS" o sin unidad = precio por metro lineal (las OC de barras dicen "CANT.
 // Mts" en el encabezado); "KG"/"KGS" = precio por kilogramo.
-function _normalizarDescMP(s){return(s||"").toUpperCase().replace(/[().,]/g," ").replace(/Ø\s*/g,"Ø").replace(/\s+/g," ").trim()}
+// Firma de matching de materia prima: en vez de exigir texto identico
+// caracter a caracter (que rompe con diferencias de formato entre el
+// maestro de MP y lo que imprime cada proveedor en su PDF, ej. "Ø 11,1"
+// vs "Ø11,11"), se compara por el material base (todo menos el diametro
+// y el color entre parentesis) + el diametro redondeado a 1 decimal, asi
+// absorbe diferencias chicas de precision/formato sin mezclar diametros
+// realmente distintos.
+function _firmaMP(desc){
+    const d=(desc||"").toUpperCase();
+    const dm=/Ø\s*([\d]+(?:[.,]\d+)?)/.exec(d);
+    const diametroRaw=dm?parseFloat(dm[1].replace(",",".")):null;
+    const diametro=diametroRaw!=null?Math.round(diametroRaw*10)/10:null;
+    const base=d.replace(/Ø\s*[\d]+(?:[.,]\d+)?/g," ")
+        .replace(/\([^)]*\)/g," ")
+        .replace(/[^A-ZÁÉÍÓÚÑ0-9 ]/g," ")
+        .replace(/\s+/g," ")
+        .trim();
+    return base+(diametro!=null?"|Ø"+diametro:"");
+}
 function _parseNumeroArg(s){if(!s)return 0;return parseFloat(String(s).replace(/\./g,"").replace(",","."))||0}
 function _buscarPrecioEnOC(desc){
-    const objetivo=_normalizarDescMP(desc);
+    const objetivo=_firmaMP(desc);
     if(!objetivo)return null;
     const todas=_cargarOrdenesCompra();
     let mejor=null;
     Object.values(todas).forEach(oc=>{
         (oc.items||[]).forEach(it=>{
-            if(_normalizarDescMP(it.descripcion)===objetivo){
+            if(_firmaMP(it.descripcion)===objetivo){
                 if(!mejor||_esOcMasReciente(oc,mejor.oc))mejor={item:it,oc:oc};
             }
         });
@@ -137,7 +155,7 @@ function _construirIndiceMP(){
     Object.values(todas).forEach(oc=>{
         (oc.items||[]).forEach(it=>{
             if(clasificarItemOC(oc,it)!=="mp")return;
-            const key=_normalizarDescMP(it.descripcion);
+            const key=_firmaMP(it.descripcion);
             if(!key)return;
             if(!indice[key]||_esOcMasReciente(oc,indice[key].oc)){
                 indice[key]={item:it,oc:oc};
