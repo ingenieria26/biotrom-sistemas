@@ -251,7 +251,10 @@ async function procesarArchivosOC(fileList) {
     for (const file of archivos) {
         if (estado) estado.innerText = "Leyendo " + file.name + "...";
         try {
-            const datos = await leerPdfOC(file);
+            const datos = await Promise.race([
+                leerPdfOC(file),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Tiempo de espera agotado leyendo el PDF (20s) - si abriste este archivo con doble clic (file://) probá abrirlo desde el servidor local en su lugar")), 20000)),
+            ]);
             if (!datos.numero) {
                 fail++;
                 console.error("OC sin numero detectado en", file.name, datos);
@@ -326,7 +329,7 @@ function parseTextoOC(lineas, nombreArchivo) {
     // El titulo "ORDEN DE COMPRA Nº ####" a veces se corta en dos filas visuales
     // (el "ATENCION: ..." de al lado empuja "Nº ####" a la fila siguiente) - por
     // eso el numero se busca solo, sin exigir "ORDEN DE COMPRA" pegado antes.
-    const numero = buscar(/N[\u00ba\u00b0o]\s*(\d{3,6})\b/i);
+    const numero = buscar(/N[\u00ba\u00b0o]\s*:?\s*(\d{3,6})\b/i);
     // Algunas plantillas no dicen "FECHA:" y ponen la fecha pegada al encabezado
     // (ej. "BIOTROM S.A. 16/09/2020") - si no hay etiqueta, se busca una fecha
     // suelta en la primera linea como respaldo.
@@ -366,19 +369,24 @@ function parseTextoOC(lineas, nombreArchivo) {
         const UNIDADES = "MTS?|METROS?|KGS?|UN|UNI?|U\\.?|PZAS?|LTS?";
         const MONEDA = "(?:USD|ARS|U\\$S|U\\$D)?\\s*\\$?\\s*";
         const IVA_SUFIJO = "(?:\\+\\s*IVA(?:\\s*X\\s*U\\.?)?)?";
+        // Moneda pegada DESPUES de un numero, antes del "+ IVA" (ej. "14,29 USD +
+        // iva"), a diferencia de MONEDA que va pegada ANTES del numero siguiente.
+        const MONEDA_SUF = "\\s*(?:USD|ARS|U\\$S|U\\$D)?";
         // Fila con Precio Unitario Y Total (2 numeros) - a veces con "+ IVA X U."
-        // pegado entre los dos numeros (ej. "U$s 0,033 + IVA X U. U$s 19,96").
+        // pegado entre los dos numeros (ej. "U$s 0,033 + IVA X U. U$s 19,96"), o
+        // con la moneda repetida despues de cada numero (ej. "14,29 USD + iva $
+        // 857,40 USD + IVA").
         const filaItemRegex2 = new RegExp(
             "^(\\d+(?:[.,]\\d+)?)\\s*(" + UNIDADES + ")?\\s+(.+?)\\s+" + MONEDA +
-            "(\\d[\\d.,]*)\\s*" + IVA_SUFIJO + "\\s+" + MONEDA +
-            "(\\d[\\d.,]*)\\s*" + IVA_SUFIJO + "\\s*$", "i");
+            "(\\d[\\d.,]*)" + MONEDA_SUF + "\\s*" + IVA_SUFIJO + "\\s+" + MONEDA +
+            "(\\d[\\d.,]*)" + MONEDA_SUF + "\\s*" + IVA_SUFIJO + "\\s*$", "i");
         // Fila con un solo numero (sin Precio Unitario separado, solo el total de
         // la linea con "+ IVA" al final) - plantillas viejas de "Orden de Compra"
         // (ej. "45 METROS AISI 316L BARRA REDONDA U$D 124,75 + IVA"). El precio
         // unitario se calcula dividiendo el total por la cantidad.
         const filaItemRegex1 = new RegExp(
             "^(\\d+(?:[.,]\\d+)?)\\s*(" + UNIDADES + ")?\\s+(.+?)\\s+" + MONEDA +
-            "(\\d[\\d.,]*)\\s*" + IVA_SUFIJO + "\\s*$", "i");
+            "(\\d[\\d.,]*)" + MONEDA_SUF + "\\s*" + IVA_SUFIJO + "\\s*$", "i");
         for (let i = idxHeader + 1; i < fin; i++) {
             const linea = lineas[i];
             const m2 = filaItemRegex2.exec(linea);
