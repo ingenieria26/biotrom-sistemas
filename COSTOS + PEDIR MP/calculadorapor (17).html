@@ -376,9 +376,17 @@ function parseTextoOC(lineas, nombreArchivo) {
         // pegado entre los dos numeros (ej. "U$s 0,033 + IVA X U. U$s 19,96"), o
         // con la moneda repetida despues de cada numero (ej. "14,29 USD + iva $
         // 857,40 USD + IVA").
+        // Si nada de eso esta presente (ninguna OC con moneda en la fila), el
+        // primer numero NO puede venir pegado a un "Ø" (diametro) - si no, en
+        // filas sin simbolo de moneda (ej. "8 304 BARRA Ø 6,35 8,2") el diametro
+        // de la descripcion se confundiria con el precio unitario, y ademas se
+        // perderia el diametro real de la pieza (quedaria en la descripcion
+        // "304 BARRA Ø" sin numero). Esas filas caen a filaItemRegex1 en su lugar,
+        // que sí conserva "Ø 6,35" en la descripcion y toma "8,2" como precio.
+        const NO_PRECEDIDO_POR_DIAMETRO = "(?<!Ø\\s{0,3})(?<!ø\\s{0,3})";
         const filaItemRegex2 = new RegExp(
             "^(\\d+(?:[.,]\\d+)?)\\s*(" + UNIDADES + ")?\\s+(.+?)\\s+" + MONEDA +
-            "(\\d[\\d.,]*)" + MONEDA_SUF + "\\s*" + IVA_SUFIJO + "\\s+" + MONEDA +
+            NO_PRECEDIDO_POR_DIAMETRO + "(\\d[\\d.,]*)" + MONEDA_SUF + "\\s*" + IVA_SUFIJO + "\\s+" + MONEDA +
             "(\\d[\\d.,]*)" + MONEDA_SUF + "\\s*" + IVA_SUFIJO + "\\s*$", "i");
         // Fila con un solo numero (sin Precio Unitario separado, solo el total de
         // la linea con "+ IVA" al final) - plantillas viejas de "Orden de Compra"
