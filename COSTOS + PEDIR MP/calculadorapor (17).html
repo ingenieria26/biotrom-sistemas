@@ -389,6 +389,19 @@ function _parsePrecioPorLoteOC(item){
     const pu=_parseNumeroArg(item.precioUnitario);
     return cant>0?pu/cant:null;
 }
+// Proveedores de corte/mecanizado tercerizado que facturan por LOTE (la
+// cantidad de la fila = el lote que se manda a fabricar), aunque el numero
+// quede en la columna "P.U." - confirmado a mano por el usuario (2026-09-08)
+// para GRG MECANIZADO (OC 1895: $68.000 por el lote de 10 piezas x3
+// orificios = $6.800 c/u real). Sumar aca cualquier otro proveedor que
+// facture igual, a medida que se confirme - por default (proveedor no
+// listado, ej. CORTES DE PRECISION en la OC 1821) se asume que "P.U." ya es
+// precio por pieza, que es el caso mas comun.
+const PROVEEDORES_PRECIO_POR_LOTE=["GRG MECANIZADO"];
+function _facturaPorLote(proveedor){
+    const p=(proveedor||"").toUpperCase();
+    return PROVEEDORES_PRECIO_POR_LOTE.some(nombre=>p.includes(nombre));
+}
 function buscarOCparaTerceros(n){
     const box=document.getElementById(`op${n}_terceros_resultados`);
     if(!box)return;
@@ -416,12 +429,22 @@ function buscarOCparaTerceros(n){
         const cant=_parseNumeroArg(c.item.cantidad);
         const puTalCual=_parsePrecioUnitarioOC(c.item);
         const porLote=_parsePrecioPorLoteOC(c.item);
-        const opcionLote=(porLote!=null&&cant>1)?`<span onclick="event.stopPropagation();aplicarCostoTercerosDesdeOC(${n},${porLote})" style="color:#1a73e8;text-decoration:underline;cursor:pointer;">÷ ${cant} pzas = $${porLote.toFixed(2)} c/u (si "${c.item.precioUnitario}" es precio por LOTE, no por pieza)</span>`:"";
+        const tieneOpcionLote=porLote!=null&&cant>1;
+        const porLoteEsPrincipal=tieneOpcionLote&&_facturaPorLote(c.oc.proveedor);
+        const principal=porLoteEsPrincipal?porLote:puTalCual;
+        const principalTxt=porLoteEsPrincipal
+            ?`USD $${porLote.toFixed(2)} c/u (proveedor factura por lote de ${cant} — "${c.item.precioUnitario}" ÷ ${cant})`
+            :`USD $${c.item.precioUnitario} c/u (tal cual en la OC)`;
+        const secundario=porLoteEsPrincipal?puTalCual:porLote;
+        const secundarioTxt=porLoteEsPrincipal
+            ?`usar "${c.item.precioUnitario}" tal cual (sin dividir)`
+            :`÷ ${cant} pzas = $${(porLote??0).toFixed(2)} c/u (si "${c.item.precioUnitario}" es precio por LOTE, no por pieza)`;
+        const opcionSecundaria=tieneOpcionLote?`<div style="font-size:10px;margin-top:2px;"><span onclick="event.stopPropagation();aplicarCostoTercerosDesdeOC(${n},${secundario})" style="color:#1a73e8;text-decoration:underline;cursor:pointer;">${secundarioTxt}</span></div>`:"";
         return `<div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;">
-                <div onclick="aplicarCostoTercerosDesdeOC(${n},${puTalCual})" style="cursor:pointer;" onmouseover="this.style.background='#f0f7ff'" onmouseout="this.style.background=''">
-                <strong>${c.item.descripcion}</strong> — USD $${c.item.precioUnitario} c/u (tal cual en la OC)<br>
+                <div onclick="aplicarCostoTercerosDesdeOC(${n},${principal})" style="cursor:pointer;" onmouseover="this.style.background='#f0f7ff'" onmouseout="this.style.background=''">
+                <strong>${c.item.descripcion}</strong> — ${principalTxt}<br>
                 <span style="font-size:10px;color:var(--color-text-tertiary);">${cant} pzas · total OC $${c.item.total} · OC N° ${c.oc.numero} · ${c.oc.proveedor||"-"} · ${c.oc.fecha||"-"} · coincidencia ${Math.round(c.score*100)}%</span>
-                </div>${opcionLote?`<div style="font-size:10px;margin-top:2px;">${opcionLote}</div>`:""}
+                </div>${opcionSecundaria}
                 </div>`;
     }).join("");
     box.style.display="block";
