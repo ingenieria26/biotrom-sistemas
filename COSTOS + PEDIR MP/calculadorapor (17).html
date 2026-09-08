@@ -541,6 +541,24 @@ function _mensualEstimadoCategoria(cat,horasMes){
     if(cat.hora)return cat.hora*horasMes;
     return null;
 }
+// Unificacion SOLO para el listado de tareas de Trabajadores - el texto
+// crudo de cada paso en DB_CARTAS_PLANOS (lo que se ve en "Pasos de la Carta
+// de Proceso") NO se toca, sigue mostrando la variante exacta que tiene cada
+// carta. Ac lo unico que se hace es agrupar variantes del mismo trabajo bajo
+// una sola etiqueta para no repetir la tarea 2-3 veces en la lista de
+// checkboxes. " Gómez, Eustaquio" pegado al final de un paso es un error de
+// carga de datos (nombre de persona colado en el campo de proceso), no una
+// tarea distinta - se saca siempre.
+function _normalizarTarea(t){
+    let n=t.replace(/\s+G[oó]mez,\s*Eustaquio\s*$/i,"").trim();
+    const UNIFICAR={
+        "Pulidora paño":"Pulidora",
+        "Pulidora plana":"Pulidora",
+        "Lav. de ultrasonido":"Ultrasonido",
+        "Torno CNC / Paralelo":"Torno paralelo"
+    };
+    return UNIFICAR[n]||n;
+}
 let _tareasCartasCache=null;
 function _tareasDisponibles(){
     if(_tareasCartasCache)return _tareasCartasCache;
@@ -548,7 +566,7 @@ function _tareasDisponibles(){
     Object.values(DB_CARTAS_PLANOS).forEach(datos=>{
         (datos.pasos||[]).forEach(([op,texto])=>{
             const t=(texto||"").trim();
-            if(t&&!t.includes("#"))set.add(t);
+            if(t&&!t.includes("#"))set.add(_normalizarTarea(t));
         });
     });
     ["Control de Calidad","Depósito / Logística","Mantenimiento","Administrativo","Supervisión"].forEach(x=>set.add(x));
