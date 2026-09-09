@@ -425,14 +425,18 @@ function _extraerProductoDeHtml(txt){
 }
 // El costo "con indirectos" no existía en archivos viejos (esa linea se
 // agregó despues) - si falta, se usa el costo directo como mejor disponible.
+// "$0.0000" (o vacio) significa que ese guardado se hizo desde otra pestaña
+// sin ningun producto realmente calculado en ese momento - no es un costo
+// real, se descarta.
 function _extraerCostoDeHtml(txt){
+    const numerico=s=>parseFloat((s||"").replace(/[^0-9.]/g,""))||0;
     let mUsd=/id="final_indirectos_usd"[^>]*>([^<]+)</.exec(txt);
     let mArs=/id="final_indirectos_ars"[^>]*>([^<]+)</.exec(txt);
-    if(!mUsd||!/\d/.test(mUsd[1])){
+    if(!mUsd||numerico(mUsd[1])<=0){
         mUsd=/id="final_usd"[^>]*>([^<]+)</.exec(txt);
         mArs=/id="final_ars"[^>]*>([^<]+)</.exec(txt);
     }
-    if(!mUsd||!/\d/.test(mUsd[1]))return null;
+    if(!mUsd||numerico(mUsd[1])<=0)return null;
     return{usd:mUsd[1].trim(),ars:mArs?mArs[1].trim():""};
 }
 function restaurarHistorialDesdeArchivos(fileList){
@@ -458,7 +462,7 @@ function restaurarHistorialDesdeArchivos(fileList){
             const costoFinalArs=costo.ars;
             const fecha=mFecha?`${mFecha[1]}/${mFecha[2]}/${mFecha[3]}`:"";
             if(!yaExiste(codigoProd,fecha,costoFinalUsd)){
-                historial.push({fecha,nombreProd,codigoProd,costoFinalUsd,costoFinalArs,archivo:file.name,maqOp1:"",scrapMaquina:0,scrapPieza:0,scrapReal:null,destruccionReal:null,reprocesoReal:null,_restaurado:true});
+                historial.push({fecha,nombreProd,codigoProd,costoUsd:costoFinalUsd,costoArs:costoFinalArs,costoFinalUsd,costoFinalArs,archivo:file.name+" (restaurado)",maqOp1:"",scrapMaquina:0,scrapPieza:0,scrapReal:null,destruccionReal:null,reprocesoReal:null,_restaurado:true});
                 agregados++;
             }
             resolve();
