@@ -346,7 +346,44 @@ function restaurarSnapshotSiExiste(codigo) {
     calcularTodo();
     return true;
   } catch (e) { return false; }
-}const LS_HISTORIAL="biotrom_calcpp_historial";function historialRegistrar(nombreArchivo,fechaDisplay,tc){const nombreProd=_descActual||document.querySelector('#tab-productos > div[style*="justify-content"] p')?.innerText||"Producto sin nombre";const codigoProd=_codigoActual||document.querySelector('#tab-productos > div[style*="justify-content"] p:nth-child(2)')?.innerText||"";const costoUsd=document.getElementById("final_usd")?.innerText||"—";const costoArs=document.getElementById("final_ars")?.innerText||"";const costoFinalUsd=document.getElementById("final_indirectos_usd")?.innerText||"—";const costoFinalArs=document.getElementById("final_indirectos_ars")?.innerText||"";const maqOp1=document.getElementById("op1_maq")?.value||"";const scrapMaquina=parseFloat(document.getElementById("prodScrapMaquina")?.value)||0;const scrapPieza=parseFloat(document.getElementById("prodScrapPieza")?.value)||0;const snapshot=capturarSnapshotInputs();let historial=[];try{historial=JSON.parse(localStorage.getItem(LS_HISTORIAL)||"[]")}catch(e){historial=[]}historial.unshift({fecha:fechaDisplay,nombreProd:nombreProd,codigoProd:codigoProd,tc:tc,costoUsd:costoUsd,costoArs:costoArs,costoFinalUsd:costoFinalUsd,costoFinalArs:costoFinalArs,maqOp1:maqOp1,scrapMaquina:scrapMaquina,scrapPieza:scrapPieza,scrapReal:null,destruccionReal:null,reprocesoReal:null,archivo:nombreArchivo,snapshot:snapshot});if(historial.length>300)historial=historial.slice(0,300);try{localStorage.setItem(LS_HISTORIAL,JSON.stringify(historial))}catch(e){}}// Gasto Histórico Estimado: cantidad total historica de piezas por codigo
+}const LS_HISTORIAL="biotrom_calcpp_historial";
+// Recuperación puntual (2026-09-09): el LS_HISTORIAL real se pisó con datos
+// de prueba en una sesión anterior. Se revisaron a mano los 18 archivos
+// "BIOTROM_Costos_*.html" que quedaban en Descargas (cada uno es una foto
+// completa del cálculo de ese momento) y estos son los únicos con un costo
+// real y no-cero adentro - el resto se habían guardado desde otras pestañas
+// (Materia Prima, Tarifario) sin ningún producto calculado en ese momento.
+// Se descartó a propósito un cuarto guardado de CAPUCHON R.A. del 07/08
+// (USD $2896.2853, en el archivo sin sufijo, 16:49hs) por ser un valor
+// claramente erróneo: 10 minutos después el usuario guardó 3 veces seguidas
+// (16:56hs) el mismo producto con USD $2.4282, indicando que corrigió un
+// dato mal cargado - se usa esa version corregida.
+const HISTORIAL_RECUPERADO_2026_09_09=[
+    {fecha:"25/08/2026",nombreProd:"Cuerpo Central RA",codigoProd:"1CA01280",costoUsd:"USD $0.4021",costoArs:"· ARS $615",costoFinalUsd:"USD $0.4021",costoFinalArs:"· ARS $615",archivo:"BIOTROM_Costos_25-08-2026_TC-25-08-2026.html (recuperado)",maqOp1:"",scrapMaquina:0,scrapPieza:0,scrapReal:null,destruccionReal:null,reprocesoReal:null,_restaurado:true},
+    {fecha:"07/08/2026",nombreProd:"CAPUCHON R. A.",codigoProd:"1CA01300",costoUsd:"USD $2.4282",costoArs:"· ARS $3.691",costoFinalUsd:"USD $2.4282",costoFinalArs:"· ARS $3.691",archivo:"BIOTROM_Costos_07-08-2026_TC-06-08-2026 (1).html (recuperado)",maqOp1:"",scrapMaquina:0,scrapPieza:0,scrapReal:null,destruccionReal:null,reprocesoReal:null,_restaurado:true},
+    {fecha:"03/08/2026",nombreProd:"Cuerpo Central RA",codigoProd:"1CA01280",costoUsd:"USD $7.3434",costoArs:"· ARS $11.089",costoFinalUsd:"USD $7.3434",costoFinalArs:"· ARS $11.089",archivo:"BIOTROM_Costos_03-08-2026_TC-31-07-2026.html (recuperado)",maqOp1:"",scrapMaquina:0,scrapPieza:0,scrapReal:null,destruccionReal:null,reprocesoReal:null,_restaurado:true}
+];
+function _aplicarHistorialRecuperado(){
+    const FLAG="biotrom_calcpp_historial_recuperado_v1";
+    try{if(localStorage.getItem(FLAG))return}catch(e){return}
+    let historial=[];
+    try{historial=JSON.parse(localStorage.getItem(LS_HISTORIAL)||"[]")}catch(e){historial=[]}
+    const yaExiste=(codigo,fecha,costo)=>historial.some(h=>h.codigoProd===codigo&&h.fecha===fecha&&h.costoFinalUsd===costo);
+    HISTORIAL_RECUPERADO_2026_09_09.forEach(h=>{
+        if(!yaExiste(h.codigoProd,h.fecha,h.costoFinalUsd))historial.push(Object.assign({},h));
+    });
+    historial.sort((a,b)=>{
+        const pa=(a.fecha||"").split("/").reverse().join("");
+        const pb=(b.fecha||"").split("/").reverse().join("");
+        return pb.localeCompare(pa);
+    });
+    try{
+        localStorage.setItem(LS_HISTORIAL,JSON.stringify(historial));
+        localStorage.setItem(FLAG,"1");
+    }catch(e){}
+}
+_aplicarHistorialRecuperado();
+function historialRegistrar(nombreArchivo,fechaDisplay,tc){const nombreProd=_descActual||document.querySelector('#tab-productos > div[style*="justify-content"] p')?.innerText||"Producto sin nombre";const codigoProd=_codigoActual||document.querySelector('#tab-productos > div[style*="justify-content"] p:nth-child(2)')?.innerText||"";const costoUsd=document.getElementById("final_usd")?.innerText||"—";const costoArs=document.getElementById("final_ars")?.innerText||"";const costoFinalUsd=document.getElementById("final_indirectos_usd")?.innerText||"—";const costoFinalArs=document.getElementById("final_indirectos_ars")?.innerText||"";const maqOp1=document.getElementById("op1_maq")?.value||"";const scrapMaquina=parseFloat(document.getElementById("prodScrapMaquina")?.value)||0;const scrapPieza=parseFloat(document.getElementById("prodScrapPieza")?.value)||0;const snapshot=capturarSnapshotInputs();let historial=[];try{historial=JSON.parse(localStorage.getItem(LS_HISTORIAL)||"[]")}catch(e){historial=[]}historial.unshift({fecha:fechaDisplay,nombreProd:nombreProd,codigoProd:codigoProd,tc:tc,costoUsd:costoUsd,costoArs:costoArs,costoFinalUsd:costoFinalUsd,costoFinalArs:costoFinalArs,maqOp1:maqOp1,scrapMaquina:scrapMaquina,scrapPieza:scrapPieza,scrapReal:null,destruccionReal:null,reprocesoReal:null,archivo:nombreArchivo,snapshot:snapshot});if(historial.length>300)historial=historial.slice(0,300);try{localStorage.setItem(LS_HISTORIAL,JSON.stringify(historial))}catch(e){}}// Gasto Histórico Estimado: cantidad total historica de piezas por codigo
 // (LOTES_PROMEDIO_OF: promedio*count de OFs cerradas 2024-2026, no hay fecha
 // por OF individual asi que no se puede filtrar a "ultimo año" de verdad) x
 // el ultimo costo por pieza guardado con "Guardar calculo" para ese codigo
