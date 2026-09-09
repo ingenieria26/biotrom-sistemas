@@ -136,14 +136,24 @@ const LOTES_PROMEDIO_OF={"10T35110":[13,1],"10T35210":[56,2],"10X11550":[300,1],
 // la ultima OF conocida en su lugar, mucho mas util que un numero
 // inventado). No se puede generalizar el resto de los ~40 codigos
 // sospechosos sin mas OF escaneadas.
-const CODIGOS_LOTE_CONFIRMADO_SIN_MEZCLA=["1CA01020","1CA01010","1AX03004"];
+const CODIGOS_LOTE_CONFIRMADO_SIN_MEZCLA=["1CA01020","1CA01010","1AX03004","1DX01060","1AX00035","1AX00039","6CU10003","1AX000102","1AX14006","1AA14001","1AX000101","1AA06003","1AA10021","1AX000103","1AX000107","1AX000104","1AX000105","6CT01007","6CT30202","6CT70000","6CU01005"];
 const LARGOS_REALES_POR_CODIGO={
     "1EX01310":[[100,30],[150,15],[200,20],[250,10],[300,20]],
     "1CX01130":[[100,10],[150,150],[200,190],[250,150],[300,225],[350,125],[400,85],[450,60]],
     // OF Nº7159 (13/7/2026), MP 61E21 - mismo reparto real que 1CX01130 (misma
     // barra de caño 304 Ø11, confirmado con la OF escaneada).
     "1CX01120":[[100,10],[150,150],[200,190],[250,150],[300,225],[350,125],[400,85],[450,60]],
-    "2HT35505":[[50,36],[60,36],[70,26],[80,30],[90,14],[100,30],[180,6]]
+    "2HT35505":[[50,36],[60,36],[70,26],[80,30],[90,14],[100,30],[180,6]],
+    "1EX01330":[[100,30],[150,15],[200,20],[250,10],[300,20]],
+    "1CX01180":[[100,10],[150,150],[200,190],[250,150],[300,225],[350,125],[400,85],[450,60]],
+    "1DX01089":[[50,2],[75,3],[150,5],[175,5],[250,11]],
+    "1AA10005":[[300,20],[400,10],[230,10]]
+};
+// Igual que LARGOS_REALES_POR_CODIGO pero para familias que varian por
+// CANTIDAD DE ORIFICIOS en vez de por largo (ej. placas HP) - mismo reparto
+// real de la ultima OF conocida, chips con unidad "orif" en vez de "mm".
+const ORIFICIOS_REALES_POR_CODIGO={
+    "4LT30404":[[4,21],[5,20],[6,15],[7,40],[8,30],[9,11],[10,10],[11,5],[12,5]]
 };
 function renderLoteHistorico(codigo){
     const box=document.getElementById("loteHistoricoBox");
@@ -154,6 +164,15 @@ function renderLoteHistorico(codigo){
             `<button type="button" onclick="aplicarLoteHistorico(${pzas})" style="margin:2px 4px 0 0;padding:2px 8px;background:#fff;border:1px solid #1a73e8;color:#1a73e8;border-radius:12px;font-size:11px;cursor:pointer;">${largo}mm → ${pzas} pzas</button>`
         ).join("");
         box.innerHTML=`📊 Este código se pide con largos distintos en la misma OF — reparto real de la última OF conocida (elegí el que corresponda al largo que estás por cargar):<br>${chips}`;
+        box.style.display="block";
+        return;
+    }
+    const orificiosReales=ORIFICIOS_REALES_POR_CODIGO[codigo];
+    if(orificiosReales){
+        const chips=orificiosReales.map(([orif,pzas])=>
+            `<button type="button" onclick="aplicarLoteHistorico(${pzas})" style="margin:2px 4px 0 0;padding:2px 8px;background:#fff;border:1px solid #1a73e8;color:#1a73e8;border-radius:12px;font-size:11px;cursor:pointer;">${orif} orif → ${pzas} pzas</button>`
+        ).join("");
+        box.innerHTML=`📊 Este código se pide con distinta cantidad de orificios en la misma OF — reparto real de la última OF conocida (elegí el que corresponda a la variante que estás por cargar):<br>${chips}`;
         box.style.display="block";
         return;
     }
