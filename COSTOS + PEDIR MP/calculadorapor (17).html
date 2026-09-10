@@ -302,6 +302,15 @@ function actualizarTiempoAproxCiclo(id,tipo,valor){
     overrides[id]=base;
     _guardarTiemposAproxOverrides(overrides);
 }
+let _tiempoAproxEditando=null;
+function editarTiempoAprox(id){
+    _tiempoAproxEditando=id;
+    renderTiemposAprox();
+}
+function cerrarEdicionTiempoAprox(){
+    _tiempoAproxEditando=null;
+    renderTiemposAprox();
+}
 function renderTiemposAprox(){
     const thead=document.getElementById("tiempos_aprox_thead");
     const tbody=document.getElementById("tiempos_aprox_tbody");
@@ -309,23 +318,32 @@ function renderTiemposAprox(){
     const tipos=_cargarTiposPiezaAprox();
     thead.innerHTML='<tr><th>Máquina / Proceso</th><th>Producción es...</th><th>Set-Up (min)</th>'
         +tipos.map(t=>'<th>'+t.label+(t.id!=="otros"?' <button onclick="eliminarTipoPiezaAprox(\''+t.id+'\')" title="Eliminar columna" style="border:none;background:none;color:#c00;cursor:pointer;font-size:11px;">✕</button>':'')+'</th>').join('')
-        +'</tr>';
+        +'<th></th></tr>';
     tbody.innerHTML=TIEMPOS_APROX_ORDEN.map(id=>{
         const v=_tiempoAproxBase(id);
         const conTipos=TIEMPOS_APROX_MAQUINAS_CON_TIPOS.includes(id);
-        const celdasTipo=tipos.map(t=>{
-            if(t.id!=="otros"&&!conTipos)return'<td style="text-align:center;color:var(--color-text-tertiary)">—</td>';
-            const val=v.ciclos[t.id]??v.ciclos.otros??0;
-            return '<td><input type="number" step="0.1" value="'+val+'" style="width:64px" class="table-input" onchange="actualizarTiempoAproxCiclo(\''+id+'\',\''+t.id+'\',this.value)"></td>';
-        }).join("");
-        return '<tr><td>'+_nombreMaqAprox(id)+'</td>'
-            +'<td><select class="table-select" style="font-size:11px" onchange="actualizarTiempoAprox(\''+id+'\',\'unidad\',this.value)">'
-                +'<option value="pieza"'+(v.unidad==="pieza"?" selected":"")+'>por pieza</option>'
-                +'<option value="lote"'+(v.unidad==="lote"?" selected":"")+'>por lote</option>'
-            +'</select></td>'
-            +'<td><input type="number" step="0.1" value="'+v.setup+'" style="width:70px" class="table-input" onchange="actualizarTiempoAprox(\''+id+'\',\'setup\',this.value)"></td>'
-            +celdasTipo
-            +'</tr>';
+        const editando=_tiempoAproxEditando===id;
+        let celdaUnidad,celdaSetup,celdasTipo,celdaAccion;
+        if(editando){
+            celdaUnidad='<td><select class="table-select" style="font-size:11px" onchange="actualizarTiempoAprox(\''+id+'\',\'unidad\',this.value)"><option value="pieza"'+(v.unidad==="pieza"?" selected":"")+'>por pieza</option><option value="lote"'+(v.unidad==="lote"?" selected":"")+'>por lote</option></select></td>';
+            celdaSetup='<td><input type="number" step="0.1" value="'+v.setup+'" style="width:70px" class="table-input" onchange="actualizarTiempoAprox(\''+id+'\',\'setup\',this.value)"></td>';
+            celdasTipo=tipos.map(t=>{
+                if(t.id!=="otros"&&!conTipos)return'<td style="text-align:center;color:var(--color-text-tertiary)">—</td>';
+                const val=v.ciclos[t.id]??v.ciclos.otros??0;
+                return '<td><input type="number" step="0.1" value="'+val+'" style="width:64px" class="table-input" onchange="actualizarTiempoAproxCiclo(\''+id+'\',\''+t.id+'\',this.value)"></td>';
+            }).join("");
+            celdaAccion='<td><button onclick="cerrarEdicionTiempoAprox()" style="color:#1a73e8;border:none;background:none;cursor:pointer;font-size:14px;" title="Listo">✓</button></td>';
+        }else{
+            celdaUnidad='<td>'+(v.unidad==="lote"?"por lote":"por pieza")+'</td>';
+            celdaSetup='<td>'+v.setup+'</td>';
+            celdasTipo=tipos.map(t=>{
+                if(t.id!=="otros"&&!conTipos)return'<td style="text-align:center;color:var(--color-text-tertiary)">—</td>';
+                const val=v.ciclos[t.id]??v.ciclos.otros??0;
+                return '<td>'+val+'</td>';
+            }).join("");
+            celdaAccion='<td><button onclick="editarTiempoAprox(\''+id+'\')" style="border:none;background:none;cursor:pointer;font-size:13px;" title="Editar">✏️</button></td>';
+        }
+        return '<tr'+(editando?' style="background:#fff8e1"':'')+'><td>'+_nombreMaqAprox(id)+'</td>'+celdaUnidad+celdaSetup+celdasTipo+celdaAccion+'</tr>';
     }).join("");
 }
 function mostrarSubTabTiempos(cual){
@@ -755,24 +773,27 @@ const HISTORIAL_RECUPERADO_2026_09_09=[
     {fecha:"07/08/2026",nombreProd:"CAPUCHON R. A.",codigoProd:"1CA01300",costoUsd:"USD $2.4282",costoArs:"· ARS $3.691",costoFinalUsd:"USD $2.4282",costoFinalArs:"· ARS $3.691",archivo:"BIOTROM_Costos_07-08-2026_TC-06-08-2026 (1).html (recuperado)",maqOp1:"",scrapMaquina:0,scrapPieza:0,scrapReal:null,destruccionReal:null,reprocesoReal:null,_restaurado:true},
     {fecha:"03/08/2026",nombreProd:"Cuerpo Central RA",codigoProd:"1CA01280",costoUsd:"USD $7.3434",costoArs:"· ARS $11.089",costoFinalUsd:"USD $7.3434",costoFinalArs:"· ARS $11.089",archivo:"BIOTROM_Costos_03-08-2026_TC-31-07-2026.html (recuperado)",maqOp1:"",scrapMaquina:0,scrapPieza:0,scrapReal:null,destruccionReal:null,reprocesoReal:null,_restaurado:true}
 ];
+// Sin flag de "ya se aplico" a proposito: el chequeo yaExiste() de abajo ya
+// es idempotente (no duplica si ya esta), asi que corre en CADA carga de
+// pagina - si el LS_HISTORIAL real se llega a perder o pisar de nuevo (paso
+// 2 veces esta semana por pruebas mias), estos 3 registros se re-completan
+// solos en el siguiente refresh, sin depender de una bandera que quede
+// desincronizada del dato real.
 function _aplicarHistorialRecuperado(){
-    const FLAG="biotrom_calcpp_historial_recuperado_v1";
-    try{if(localStorage.getItem(FLAG))return}catch(e){return}
     let historial=[];
     try{historial=JSON.parse(localStorage.getItem(LS_HISTORIAL)||"[]")}catch(e){historial=[]}
     const yaExiste=(codigo,fecha,costo)=>historial.some(h=>h.codigoProd===codigo&&h.fecha===fecha&&h.costoFinalUsd===costo);
+    let agrego=false;
     HISTORIAL_RECUPERADO_2026_09_09.forEach(h=>{
-        if(!yaExiste(h.codigoProd,h.fecha,h.costoFinalUsd))historial.push(Object.assign({},h));
+        if(!yaExiste(h.codigoProd,h.fecha,h.costoFinalUsd)){historial.push(Object.assign({},h));agrego=true}
     });
+    if(!agrego)return;
     historial.sort((a,b)=>{
         const pa=(a.fecha||"").split("/").reverse().join("");
         const pb=(b.fecha||"").split("/").reverse().join("");
         return pb.localeCompare(pa);
     });
-    try{
-        localStorage.setItem(LS_HISTORIAL,JSON.stringify(historial));
-        localStorage.setItem(FLAG,"1");
-    }catch(e){}
+    try{localStorage.setItem(LS_HISTORIAL,JSON.stringify(historial))}catch(e){}
 }
 _aplicarHistorialRecuperado();
 function historialRegistrar(nombreArchivo,fechaDisplay,tc){const nombreProd=_descActual||document.querySelector('#tab-productos > div[style*="justify-content"] p')?.innerText||"Producto sin nombre";const codigoProd=_codigoActual||document.querySelector('#tab-productos > div[style*="justify-content"] p:nth-child(2)')?.innerText||"";const costoUsd=document.getElementById("final_usd")?.innerText||"—";const costoArs=document.getElementById("final_ars")?.innerText||"";const costoFinalUsd=document.getElementById("final_indirectos_usd")?.innerText||"—";const costoFinalArs=document.getElementById("final_indirectos_ars")?.innerText||"";const maqOp1=document.getElementById("op1_maq")?.value||"";const scrapMaquina=parseFloat(document.getElementById("prodScrapMaquina")?.value)||0;const scrapPieza=parseFloat(document.getElementById("prodScrapPieza")?.value)||0;const snapshot=capturarSnapshotInputs();let historial=[];try{historial=JSON.parse(localStorage.getItem(LS_HISTORIAL)||"[]")}catch(e){historial=[]}historial.unshift({fecha:fechaDisplay,nombreProd:nombreProd,codigoProd:codigoProd,tc:tc,costoUsd:costoUsd,costoArs:costoArs,costoFinalUsd:costoFinalUsd,costoFinalArs:costoFinalArs,maqOp1:maqOp1,scrapMaquina:scrapMaquina,scrapPieza:scrapPieza,scrapReal:null,destruccionReal:null,reprocesoReal:null,archivo:nombreArchivo,snapshot:snapshot});if(historial.length>300)historial=historial.slice(0,300);try{localStorage.setItem(LS_HISTORIAL,JSON.stringify(historial))}catch(e){}}// Gasto Histórico Estimado: cantidad total historica de piezas por codigo
