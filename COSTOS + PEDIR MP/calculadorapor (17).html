@@ -179,14 +179,45 @@ function _maquinaTagTiempoReal(codigo,colIdx){
     const nombre=(DB_MAQUINAS[maqId]?.name||maqId).split(" ")[0];
     return' <span style="font-size:9px;color:#7b1fa2;font-weight:600">('+nombre+')</span>';
 }
+// Codigos "hermanos" de la misma familia por largo (ej. TUBO Ø11 X 100 / X 150
+// / X 200...) - mismo diametro y mismo texto salvo el largo. Reutiliza el
+// indice que ya arma renderFamiliaLargos para los chips de largo.
+function _codigosHermanosLargo(codigo,desc){
+    const m=FAMILIA_LARGO_RE.exec(desc||"");
+    if(!m)return[];
+    const idx=_getFamiliaIndex();
+    const key=desc.slice(0,m.index)+"Ø"+m[1]+"X"+desc.slice(m.index+m[0].length);
+    return(idx.get(key)||[]).map(s=>s.c).filter(c=>c!==codigo);
+}
+// Indices (dentro del array de 13 valores) de las columnas "Set Up" -
+// aviso del usuario (2026-09-10): en un producto que varía solo por largo, el
+// Set Up de la máquina es el MISMO entre largos (es la misma pieza montada
+// igual), pero la Preparación sí puede cambiar según el largo (tope distinto,
+// etc.) - por eso solo el Set Up se sugiere de un código hermano, la
+// Preparación nunca se completa sola.
+const TIEMPOS_REALES_IDX_SETUP=[3,6];
 function renderTiemposRealesBox(codigo){
     const box=document.getElementById("tiemposRealesBox");
     if(!box)return;
-    const vals=_tiemposRealesDeCodigo(codigo);
-    if(!vals){box.style.display="none";box.innerHTML="";return}
+    const original=_tiemposRealesDeCodigo(codigo);
+    const vals=original?original.slice():new Array(13).fill(0);
+    let notaHermano="";
+    const faltaAlgunSetUp=TIEMPOS_REALES_IDX_SETUP.some(i=>!vals[i]);
+    if(faltaAlgunSetUp){
+        const hermanos=_codigosHermanosLargo(codigo,_descActual||"");
+        for(const h of hermanos){
+            const vh=_tiemposRealesDeCodigo(h);
+            if(!vh)continue;
+            let uso=false;
+            TIEMPOS_REALES_IDX_SETUP.forEach(i=>{
+                if(!vals[i]&&vh[i]){vals[i]=vh[i];uso=true}
+            });
+            if(uso){notaHermano=' <span style="color:#7b1fa2">(Set Up tomado de '+h+', mismo largo-familia — la Preparación NO se copia porque puede variar según el largo)</span>';break}
+        }
+    }
+    if(!vals.some(v=>v)){box.style.display="none";box.innerHTML="";return}
     const partes=vals.map((v,i)=>v?TIEMPOS_REALES_LABELS[i]+": <strong>"+v+" min</strong>"+_maquinaTagTiempoReal(codigo,i):null).filter(Boolean).join(" · ");
-    if(!partes){box.style.display="none";box.innerHTML="";return}
-    box.innerHTML="⏱ Tiempos reales medidos para este código (minutos — Prep./Set Up es por lote, el resto por pieza; copiá el que corresponda a la operación de arriba):<br>"+partes;
+    box.innerHTML="⏱ Tiempos reales medidos para este código (minutos — Prep./Set Up es por lote, el resto por pieza; copiá el que corresponda a la operación de arriba):<br>"+partes+notaHermano;
     box.style.display="block";
 }
 let _tiempoRealEditando=null;
