@@ -1553,4 +1553,59 @@ if(document.readyState==='loading'){
   };
 })();
 </script>
+
+<script>
+/* FIX_CLAVO_LARGO */
+(function(){
+  // Regex: matches "X" followed by exactly 2 digits, then end-of-string or space or "("
+  var RX = /(X)(\d{2})(\s|\(|$)/gi;
+
+  function fixClavoDesc(desc){
+    if(!desc || !/CLAV/i.test(desc)) return desc;
+    // Replace X{2 digits} with X{2 digits}0 — only when exactly 2 digits (not 3+)
+    return desc.replace(/(X)(\d{2})(?!\d)/gi, function(m, x, d){ return x + d + '0'; });
+  }
+
+  function applyFix(data){
+    if(!data || !data.length) return 0;
+    var count = 0;
+    data.forEach(function(row){
+      var desc = String(row['Descripcion'] || '');
+      var fixed = fixClavoDesc(desc);
+      if(fixed !== desc){
+        row['Descripcion'] = fixed;
+        count++;
+      }
+    });
+    return count;
+  }
+
+  // Hook into filterAndRender so the fix runs after data loads
+  function hookClavo(){
+    if(!window._ppState || !window._ppState.filterAndRender){
+      setTimeout(hookClavo, 400); return;
+    }
+    // Apply once on first render
+    var applied = false;
+    var origFAR = window._ppState.filterAndRender;
+    var patched = function(){
+      if(!applied && window._ppState.data && window._ppState.data.length){
+        var n = applyFix(window._ppState.data);
+        if(n > 0){
+          applied = true;
+          // Save back to localStorage
+          try{ localStorage.setItem('btmp2_maestropt', JSON.stringify(window._ppState.data)); }catch(e){}
+          console.log('[BIOTROM] fix_clavo_largo: ' + n + ' descripciones corregidas');
+        } else {
+          applied = true; // no changes needed, don't keep checking
+        }
+      }
+      origFAR.call(window._ppState);
+    };
+    window._ppState.filterAndRender = patched;
+    if(typeof window._ppFilter === 'function') window._ppFilter = patched;
+  }
+  hookClavo();
+})();
+</script>
 </body>
