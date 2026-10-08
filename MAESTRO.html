@@ -1973,7 +1973,7 @@ var css=document.createElement("style");css.textContent=".mx-seg{display:flex;ga
  +".mx-t{width:100%;border-collapse:collapse;font-size:12px}.mx-t th{font-size:10px;color:var(--text2,#5a6a7a);padding:4px 6px;border-bottom:1px solid var(--border,#dde3eb)}.mx-t td{padding:4px 6px;border-bottom:1px solid #f0f3f8}.mx-empty{padding:10px;color:var(--text2,#777);font-size:12px}";
 document.head.appendChild(css);
 
-loadD();navFix();buildSeg();renderBadges();loadBtn();wireHoy();
+loadD();navFix();buildSeg();renderBadges();loadBtn();wireHoy();document.addEventListener("DOMContentLoaded",navFix);window.addEventListener("load",navFix);
 if(hoyActive())renderHoy();
 })();
 
