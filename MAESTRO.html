@@ -1834,6 +1834,7 @@ window.mxLoadFiles=function(){var i=$("mxLoadInp");if(i){i.value="";i.click()}};
 
 /* ===================== CSV "stock por deposito" (suma de lotes por producto) ===================== */
 function toastMsg(m,ok){if(window.stkToast)window.stkToast(m,ok);else alert(m)}
+function NC(c){return String(c==null?"":c).replace(/\s+/g,"").toUpperCase()}
 function csvTipo(name){var n=String(name||"").toLowerCase().replace(/[\s_]+/g,"-");if(!/stock-?por-?deposito/.test(n))return null;
  var suf=n.replace(/^.*deposito/,"");
  if(/comp/.test(suf))return"stkcomp";if(/^-?(pt|prod|term)/.test(suf))return"stkpt";if(/mp/.test(suf))return"stockmp";return"?"}
@@ -1841,24 +1842,51 @@ function numAR(s){s=String(s==null?"":s).trim();if(!s)return NaN;if(s.indexOf(",
 function parseCsvStock(text){text=String(text).replace(/^﻿/,"");var lines=text.split(/\r?\n/).filter(function(l){return l.trim()!==""});if(lines.length<2)return null;
  var sep=lines[0].indexOf(";")>=0?";":(lines[0].indexOf("\t")>=0?"\t":",");
  var H=lines[0].split(sep).map(function(h){return h.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")});
- var ip=H.indexOf("producto"),is=H.indexOf("saldo");if(ip<0||is<0)return null;
- var tot={},desc={},filas=0;
+ var ip=H.indexOf("producto"),is=H.indexOf("saldo"),iu=H.indexOf("um");if(ip<0||is<0)return null;
+ var tot={},desc={},um={},filas=0;
  lines.slice(1).forEach(function(l){var c=l.split(sep),p=(c[ip]||"").trim();if(!p)return;var k=p.indexOf(" - ");var cod=(k>=0?p.slice(0,k):p).trim();var v=numAR(c[is]);if(!cod||isNaN(v))return;
-  tot[cod]=Math.round(((tot[cod]||0)+v)*1e3)/1e3;if(desc[cod]===undefined)desc[cod]=k>=0?p.slice(k+3).trim():"";filas++});
- return{tot:tot,desc:desc,filas:filas}}
+  tot[cod]=Math.round(((tot[cod]||0)+v)*1e3)/1e3;if(desc[cod]===undefined)desc[cod]=k>=0?p.slice(k+3).trim():"";
+  if(iu>=0){(um[cod]=um[cod]||{})[String(c[iu]||"").trim().toUpperCase()]=1}filas++});
+ return{tot:tot,desc:desc,um:um,filas:filas}}
 var CSV_LABEL={stockmp:"STOCK MP",stkpt:"STOCK PT",stkcomp:"STOCK COMP"};
-function applyCsvStock(tab,r){var d=state.tabs[tab].data,seen={},upd=0,zero=0,nuevos=0;
- d.forEach(function(row){var c=String(row.Codigo||"").trim();seen[c]=1;if(r.tot[c]!==undefined){row.Stock=r.tot[c];upd++}else{if((parseFloat(row.Stock)||0)!==0)zero++;row.Stock=0}});
- Object.keys(r.tot).forEach(function(c){if(!seen[c]){d.push({Codigo:c,Descripcion:r.desc[c]||"",Stock:r.tot[c]});nuevos++}});
+/* aplica un {tot,desc} a una pestana de stock: lo que no aparece queda en 0 */
+function applyCsvStock(tab,r){var d=state.tabs[tab].data,idx={},upd=0,zero=0,nuevos=0;
+ d.forEach(function(row){idx[NC(row.Codigo)]=row});var hit={};
+ Object.keys(r.tot).forEach(function(c){var row=idx[NC(c)];if(row){row.Stock=r.tot[c];hit[NC(c)]=1;upd++}else{d.push({Codigo:c,Descripcion:r.desc[c]||"",Stock:r.tot[c]});hit[NC(c)]=1;nuevos++}});
+ d.forEach(function(row){if(!hit[NC(row.Codigo)]){if((parseFloat(row.Stock)||0)!==0)zero++;row.Stock=0}});
  state.tabs[tab].filtered=d.slice();
  var dict={};d.forEach(function(row){var c=String(row.Codigo||"").trim(),v=parseFloat(row.Stock);if(c&&!isNaN(v))dict[c]=v});
  try{if(window.stkSyncMaestro)window.stkSyncMaestro(tab,dict)}catch(e){}
  try{if(window.RENDER_MAP&&RENDER_MAP[tab])RENDER_MAP[tab]()}catch(e){}
  try{lsSave(tab,d)}catch(e){}
  if(window.mxStamp)window.mxStamp(tab);
+ return{upd:upd,zero:zero,nuevos:nuevos}}
+function msgTab(tab,x){return CSV_LABEL[tab]+": "+x.upd+" actualizados, "+x.zero+" en 0 (no estaban en el archivo)"+(x.nuevos?", "+x.nuevos+" nuevos":"")}
+/* el archivo de productos terminados trae tambien componentes: se reparte por codigo */
+function planCodes(){var rows=(window._ppState&&window._ppState.initialized&&window._ppState.data)||(window.INIT&&window.INIT.maestro_pt)||[],m={};rows.forEach(function(r){m[NC(r.Codigo)]=String(r.Estado||"").trim().toUpperCase()});return m}
+function routePT(r){var comp={},pt={},mp={},pc={};
+ ((state.tabs.stkcomp&&state.tabs.stkcomp.data)||[]).forEach(function(x){comp[NC(x.Codigo)]=1});
+ ((state.tabs.stkpt&&state.tabs.stkpt.data)||[]).forEach(function(x){pt[NC(x.Codigo)]=1});
+ ((state.tabs.stockmp&&state.tabs.stockmp.data)||[]).forEach(function(x){mp[NC(x.Codigo)]=1});
+ var plan=planCodes(),votes={};
+ function vote(k,t){var p=k.slice(0,4);(votes[p]=votes[p]||{pt:0,comp:0})[t]++}
+ Object.keys(comp).forEach(function(k){vote(k,"comp")});Object.keys(pt).forEach(function(k){vote(k,"pt")});
+ var A={tot:{},desc:{}},B={tot:{},desc:{}},ign=[],porCodigo={pt:0,comp:0};
+ Object.keys(r.tot).forEach(function(c){var k=NC(c),ums=Object.keys(r.um[c]||{}),destino;
+  if(comp[k])destino="comp";else if(pt[k])destino="pt";
+  else if(mp[k]||/^\d{2}[A-Z]\d{2}$/.test(k)||(ums.length&&ums.every(function(u){return u==="MM"}))){ign.push(c);return}
+  else if(plan[k]!==undefined)destino=plan[k]==="COMPONENTE"?"comp":"pt";
+  else{var v=votes[k.slice(0,4)];destino=(v&&v.comp>v.pt)?"comp":"pt";porCodigo[destino]++}
+  var T=destino==="comp"?B:A;T.tot[c]=r.tot[c];T.desc[c]=r.desc[c]});
+ var xa=applyCsvStock("stkpt",A),xb=applyCsvStock("stkcomp",B);
  if(window.rebuildMPPlan)setTimeout(window.rebuildMPPlan,100);
- toastMsg(CSV_LABEL[tab]+": "+upd+" actualizados, "+zero+" puestos en 0 (no estaban en el archivo)"+(nuevos?", "+nuevos+" nuevos":"")+". "+r.filas+" lotes sumados en "+Object.keys(r.tot).length+" productos.",true)}
-function readCsv(f,tab){var rd=new FileReader();rd.onload=function(){var r=parseCsvStock(rd.result);if(!r||!r.filas){toastMsg("No se pudo leer "+f.name+": faltan las columnas Producto y Saldo",false);return}applyCsvStock(tab,r)};rd.readAsText(f,"utf-8")}
+ var extra=(porCodigo.pt+porCodigo.comp?" Sin ficha previa, ubicados por su código: "+porCodigo.pt+" como producto y "+porCodigo.comp+" como componente (revisar).":"");
+ var ig=ign.length?" Ignorados "+ign.length+" de materia prima (mm) que figuran en este archivo: "+ign.slice(0,6).join(", ")+(ign.length>6?"...":"")+".":"";
+ toastMsg(msgTab("stkpt",xa)+" | "+msgTab("stkcomp",xb)+". "+r.filas+" lotes en "+Object.keys(r.tot).length+" códigos."+extra+ig,true)}
+function readCsv(f,tab){var rd=new FileReader();rd.onload=function(){var r=parseCsvStock(rd.result);if(!r||!r.filas){toastMsg("No se pudo leer "+f.name+": faltan las columnas Producto y Saldo",false);return}
+ if(tab==="stkpt"){routePT(r);return}
+ var x=applyCsvStock(tab,r);if(window.rebuildMPPlan)setTimeout(window.rebuildMPPlan,100);
+ toastMsg(msgTab(tab,x)+". "+r.filas+" lotes sumados en "+Object.keys(r.tot).length+" productos.",true)};rd.readAsText(f,"utf-8")}
 document.addEventListener("drop",function(e){var fs=e.dataTransfer&&e.dataTransfer.files;if(!fs)return;
  Array.from(fs).forEach(function(f){if(!/\.csv$/i.test(f.name))return;var t=csvTipo(f.name);
   if(t===null)toastMsg("Archivo CSV no reconocido: "+f.name+". Los de stock se llaman stock-por-deposito...",false);
