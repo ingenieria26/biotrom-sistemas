@@ -1626,114 +1626,153 @@ if(document.readyState==='loading'){
 })();
 </script>
 <script>;(function(){
+"use strict";
+/* CAJAS v2: familias con plantilla (lo que lleva UNA caja) x cantidad de cajas.
+   Datos: {_v:2, fams:[{i:id, n:nombre, b:cajasDeLaLista, o:cajasElegidas|null, x:[[cod,nombre]], it:[[cod,desc,tipo,porCaja]]}]} */
 var KEY="btmp2_cajas";
 var LEGACY=window.CAJAS_PT||{};
 window.CAJAS_PT_LEGACY=LEGACY;
-var D={_v:1,list:[]},filtro="",abiertas={},timer=null,pend=false,focusId=null,DM={},dlCount=-1;
+var D={_v:2,fams:[]},filtro="",tf="ALL",abiertas={},timer=null,pend=false,DM={},dlCount=-1,focusSel=null;
 
 function arr(x){return Array.isArray(x)?x:(x&&typeof x==="object"?Object.keys(x).map(function(k){return x[k]}):[])}
-function norm(){D.list=arr(D.list).filter(Boolean);D.list.forEach(function(c){c.items=arr(c.items).filter(Boolean)})}
-function load(){D={_v:1,list:[]};try{var r=JSON.parse(localStorage.getItem(KEY)||"null");if(r&&typeof r==="object")D=Array.isArray(r)?{_v:1,list:r}:r}catch(e){}norm()}
-function uid(){return"C"+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36)}
+function uid(){return"F"+Date.now().toString(36)+Math.floor(Math.random()*1e5).toString(36)}
 function nf(n){return(parseFloat(n)||0).toLocaleString("es-AR")}
 function toastMsg(m,ok){if(window.stkToast)window.stkToast(m,ok);else alert(m)}
-
-function totals(){var t={};D.list.forEach(function(c){c.items.forEach(function(it){var k=String(it.cod||"").trim();var n=parseFloat(it.cant)||0;if(!k||n<=0)return;t[k]=(t[k]||0)+n})});return t}
-function apply(){var t=totals();window.CAJAS_PT=Object.keys(t).length?t:LEGACY;try{if(window._ppState&&window._ppState.initialized){if(window._ppRecalc)window._ppRecalc();if(window._ppFilter)window._ppFilter()}}catch(e){}}
+function norm(){D.fams=arr(D.fams).filter(Boolean);D.fams.forEach(function(f){f.x=arr(f.x).filter(Boolean).map(function(a){return Array.isArray(a)?a:arr(a)});f.it=arr(f.it).filter(Boolean).map(function(a){return Array.isArray(a)?a:arr(a)});f.b=+f.b||0;f.o=(f.o===null||f.o===undefined||!isFinite(+f.o))?null:+f.o;f.n=String(f.n||"")})}
+function load(){D={_v:2,fams:[]};
+ try{var r=JSON.parse(localStorage.getItem(KEY)||"null");
+  if(r&&typeof r==="object"){if(r._v===2)D=r;else if(r.list){D={_v:2,fams:arr(r.list).map(function(c){return{i:c.id||uid(),n:c.cod||c.desc||"Caja",b:1,o:null,x:[[c.cod||"",c.desc||""]],it:arr(c.items).map(function(it){return[it.cod,it.desc||"","PT",parseFloat(it.cant)||0]})}})}}}}catch(e){}norm()}
+function effN(f){return f.o!==null?f.o:f.b}
+function totals(){var t={};D.fams.forEach(function(f){var n=effN(f);if(!(n>0))return;f.it.forEach(function(a){if(String(a[2]).toUpperCase()!=="PT")return;var k=String(a[0]||"").trim(),s=parseFloat(a[3])||0;if(!k||s<=0)return;t[k]=(t[k]||0)+s*n})});return t}
+function apply(){var t=totals();window.CAJAS_PT=Object.keys(t).length?t:LEGACY;
+ try{if(window._ppState&&window._ppState.initialized){if(window._ppRecalc)window._ppRecalc();if(window._ppFilter)window._ppFilter()}}catch(e){}}
 function flush(){clearTimeout(timer);if(!pend)return;pend=false;try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){toastMsg("No se pudo guardar las cajas en este navegador",false)}}
-function save(){pend=true;apply();clearTimeout(timer);timer=setTimeout(flush,400)}
+function save(){pend=true;apply();clearTimeout(timer);timer=setTimeout(flush,1200)}
+function find(id){for(var i=0;i<D.fams.length;i++)if(D.fams[i].i===id)return D.fams[i];return null}
 
-function descMap(){var m={};function add(a,ck,dk){(a||[]).forEach(function(r){var c=String(r[ck]||"").trim();if(c&&!m[c])m[c]=String(r[dk]||"")})}
- try{var pp=(window._ppState&&window._ppState.data&&window._ppState.data.length)?window._ppState.data:((window.INIT&&window.INIT.maestro_pt)||[]);add(pp,"Codigo","Descripcion")}catch(e){}
- try{add(state.tabs.stkpt.data,"Codigo","Descripcion");add(state.tabs.stkcomp.data,"Codigo","Descripcion")}catch(e){}
- return m}
-function findCaja(id){for(var i=0;i<D.list.length;i++)if(D.list[i].id===id)return D.list[i];return null}
-function dOf(it){return it.desc||DM[String(it.cod||"").trim()]||""}
+function descMap(){var m={};function add(a){(a||[]).forEach(function(r){var c=String(r.Codigo||"").trim();if(c&&!m[c])m[c]=String(r.Descripcion||"")})}
+ try{add((window._ppState&&window._ppState.data&&window._ppState.data.length)?window._ppState.data:((window.INIT&&window.INIT.maestro_pt)||[]))}catch(e){}
+ try{add(state.tabs.stkpt.data);add(state.tabs.stkcomp.data)}catch(e){}return m}
+function tipoOk(t){return tf==="ALL"||String(t).toUpperCase()===tf}
+function tipoTag(t){t=String(t).toUpperCase();return'<span class="cj-tag cj-t-'+(t==="W"?"W":"PT")+'">'+(t==="W"?"Instrumental":"Prod. terminado")+'</span>'}
 
 function buildTop(){var top=document.getElementById("cajasTop");if(!top||top._built)return;top._built=true;
- top.innerHTML='<div class="toolbar" style="padding:10px 0 8px">'
-  +'<input type="text" id="cajasFiltro" placeholder="🔍 Buscar caja o producto..." style="width:260px">'
+ top.innerHTML='<div class="toolbar" style="padding:10px 0 8px;flex-wrap:wrap;gap:8px">'
+  +'<input type="text" id="cajasFiltro" placeholder="Buscar familia, caja o producto..." style="width:260px">'
+  +'<span class="cj-seg" id="cajasTf"><button type="button" data-tf="ALL" class="on">Todos</button><button type="button" data-tf="PT">Producto terminado</button><button type="button" data-tf="W">Instrumental</button></span>'
   +'<span class="spacer"></span>'
-  +'<button class="btn btn-purple cj-paste" style="font-size:11px">📋 PEGAR DESDE EXCEL</button> '
+  +'<button class="btn btn-purple cj-up" style="font-size:11px">SUBIR CAJAS</button> '
   +'<button class="btn btn-cyan cj-csv" style="font-size:11px">⬇ CSV</button> '
-  +'<button class="btn cj-new" style="background:#2e7d32;color:#fff;font-size:11px;font-weight:700">➕ NUEVA CAJA</button>'
+  +'<button class="btn cj-new" style="background:#2e7d32;color:#fff;font-size:11px;font-weight:700">+ NUEVA FAMILIA</button>'
+  +'<input type="file" id="cajasFile" accept=".html,.htm,.json" style="display:none">'
   +'</div><datalist id="cajasCodes"></datalist>'}
 function fillDatalist(){var dl=document.getElementById("cajasCodes");if(!dl)return;var ks=Object.keys(DM);if(ks.length===dlCount)return;dlCount=ks.length;dl.innerHTML=ks.map(function(k){return'<option value="'+esc(k)+'">'+esc(DM[k]).slice(0,60)+'</option>'}).join("")}
 
-function match(c,f){if(!f)return true;if([c.cod,c.desc,c.nota].join(" ").toLowerCase().indexOf(f)>=0)return true;return c.items.some(function(it){return(String(it.cod||"")+" "+dOf(it)).toLowerCase().indexOf(f)>=0})}
+function match(f,q){if(!q)return true;if((f.n+" "+f.x.map(function(a){return a[1]}).join(" ")).toLowerCase().indexOf(q)>=0)return true;return f.it.some(function(a){return(String(a[0])+" "+a[1]).toLowerCase().indexOf(q)>=0})}
+
+function bodyHtml(f){var n=effN(f);var h='<div class="cj-edit"><label>Nombre de la familia<input class="cj-fn" data-id="'+esc(f.i)+'" value="'+esc(f.n)+'"></label>'
+  +'<label>Cajas de esta familia (una por línea; código y nombre)<textarea class="cj-fx" data-id="'+esc(f.i)+'" rows="3">'+esc(f.x.map(function(a){return a[1]||a[0]}).join("\n"))+'</textarea></label></div>'
+  +'<div class="cj-note">Plantilla: lo que lleva <b>una</b> caja de esta familia. El total es la cantidad por caja × '+n+' caja'+(n===1?"":"s")+'. Solo los productos terminados suman a EN CAJAS.</div>'
+  +'<table class="cj-t"><thead><tr><th style="width:110px">Código</th><th>Descripción</th><th style="width:110px">Tipo</th><th style="width:90px">Por caja</th><th style="width:80px;text-align:right">Total</th><th style="width:34px"></th></tr></thead><tbody>';
+  f.it.forEach(function(a,i){if(!tipoOk(a[2]))return;var isPT=String(a[2]).toUpperCase()==="PT";var d=a[1]||DM[String(a[0]).trim()]||"";
+   h+='<tr><td>'+esc(a[0])+'</td><td>'+(d?esc(d):(isPT?'<span class="cj-warn">código no encontrado en el Maestro</span>':""))+'</td><td>'+tipoTag(a[2])+'</td><td><input type="number" min="0" class="cj-std" data-id="'+esc(f.i)+'" data-i="'+i+'" value="'+esc(a[3])+'"></td><td style="text-align:right">'+nf((parseFloat(a[3])||0)*n)+'</td><td><button class="cj-x cj-del-item" data-id="'+esc(f.i)+'" data-i="'+i+'" title="Quitar">✕</button></td></tr>'});
+  h+='<tr class="cj-addrow"><td><input class="cj-new-cod" list="cajasCodes" placeholder="Código..." autocomplete="off"></td><td class="cj-newdesc" style="color:var(--text2,#777)"></td><td><select class="cj-new-tipo"><option value="PT">Prod. terminado</option><option value="W">Instrumental</option></select></td><td><input type="number" min="1" class="cj-new-qty" value="1"></td><td></td><td><button class="cj-add-item btn" style="background:#2e7d32;color:#fff;padding:3px 8px" title="Agregar">+</button></td></tr></tbody></table>';
+  return h}
 
 function render(){var root=document.getElementById("cajasBody");if(!root)return;buildTop();var y=window.scrollY;DM=descMap();fillDatalist();
- var f=filtro.trim().toLowerCase();var tot=totals();var keys=Object.keys(tot).sort();var nU=0;keys.forEach(function(k){nU+=tot[k]});
- var h='<div class="kpi-row">'+kpiCard("Cajas",nf(D.list.length),"")+kpiCard("Productos distintos",nf(keys.length),"")+kpiCard("Unidades en cajas",nf(nU),"green")+'</div>';
- h+=keys.length?'<div class="cj-banner cj-ok">✅ La columna <b>EN CAJAS</b> del Plan de Producción se calcula con las cajas cargadas acá.</div>'
-  :'<div class="cj-banner">ℹ️ Todavía no hay productos cargados en cajas: <b>EN CAJAS</b> del Plan usa la tabla fija anterior. Al cargar el primer producto en una caja, pasa a usar esta pestaña.</div>';
- var list=D.list.slice().sort(function(a,b){return String(a.cod||"").localeCompare(String(b.cod||""),"es",{numeric:true})}).filter(function(c){return match(c,f)});
- if(!list.length)h+='<div style="padding:24px;text-align:center;color:var(--text2,#777)">'+(D.list.length?"Ninguna caja coincide con la búsqueda.":"Todavía no hay cajas. Tocá “Nueva caja” o pegá el listado desde Excel.")+'</div>';
- list.forEach(function(c){var u=0;c.items.forEach(function(it){u+=parseFloat(it.cant)||0});var open=abiertas[c.id]||(f&&1);
-  h+='<details class="cj-card" data-id="'+esc(c.id)+'"'+(open?' open':'')+'><summary><span class="cj-cod">'+esc(c.cod||"(sin código)")+'</span><span class="cj-desc">'+esc(c.desc||"")+'</span><span class="cj-meta">'+c.items.length+' prod. · '+nf(u)+' u.</span><button class="cj-del" data-id="'+esc(c.id)+'" title="Eliminar caja">🗑</button></summary><div class="cj-body">'
-   +'<div class="cj-edit"><label>Código<input class="cj-f" data-f="cod" data-id="'+esc(c.id)+'" value="'+esc(c.cod||"")+'"></label><label>Descripción<input class="cj-f" data-f="desc" data-id="'+esc(c.id)+'" value="'+esc(c.desc||"")+'"></label><label>Nota<input class="cj-f" data-f="nota" data-id="'+esc(c.id)+'" value="'+esc(c.nota||"")+'"></label></div>'
-   +'<table class="cj-t"><thead><tr><th>Código</th><th>Descripción</th><th style="width:110px">Lleva</th><th style="width:34px"></th></tr></thead><tbody>';
-  c.items.forEach(function(it,i){var d=dOf(it);h+='<tr><td>'+esc(it.cod)+'</td><td>'+(d?esc(d):'<span class="cj-warn">código no encontrado en el Maestro</span>')+'</td><td><input type="number" min="0" class="cj-qty" data-id="'+esc(c.id)+'" data-i="'+i+'" value="'+esc(it.cant)+'"></td><td><button class="cj-x cj-del-item" data-id="'+esc(c.id)+'" data-i="'+i+'" title="Quitar">✕</button></td></tr>'});
-  h+='<tr class="cj-addrow"><td><input class="cj-new-cod" list="cajasCodes" placeholder="Código de producto..." autocomplete="off"></td><td class="cj-newdesc" style="color:var(--text2,#777)"></td><td><input type="number" min="1" class="cj-new-qty" value="1"></td><td><button class="cj-add-item btn" style="background:#2e7d32;color:#fff;padding:3px 8px" title="Agregar">+</button></td></tr>'
-   +'</tbody></table></div></details>'});
- if(keys.length){h+='<div class="cj-sumtitle">Resumen por producto (suma de todas las cajas)</div><div class="table-wrap"><div class="table-scroll" style="max-height:40vh"><table><thead><tr><th>Código</th><th>Descripción</th><th>Total en cajas</th><th>Cajas</th></tr></thead><tbody>';
-  keys.forEach(function(k){var en=[];D.list.forEach(function(c){var n=0;c.items.forEach(function(it){if(String(it.cod||"").trim()===k)n+=parseFloat(it.cant)||0});if(n>0)en.push((c.cod||"(sin código)")+" ×"+nf(n))});
-   var d=DM[k]||"";if(f&&(k+" "+d+" "+en.join(" ")).toLowerCase().indexOf(f)<0)return;h+='<tr><td>'+esc(k)+'</td><td>'+esc(d)+'</td><td><b>'+nf(tot[k])+'</b></td><td style="font-size:11px;color:var(--text2,#555)">'+esc(en.join(" · "))+'</td></tr>'});
-  h+='</tbody></table></div></div>'}
+ var q=filtro.trim().toLowerCase(),tot=totals(),keys=Object.keys(tot),nU=0,nC=0;keys.forEach(function(k){nU+=tot[k]});D.fams.forEach(function(f){nC+=effN(f)});
+ var h='<div class="kpi-row">'+kpiCard("Familias",nf(D.fams.length),"")+kpiCard("Cajas",nf(nC),"")+kpiCard("Productos terminados distintos",nf(keys.length),"")+kpiCard("Unidades en cajas",nf(nU),"green")+'</div>';
+ h+=keys.length?'<div class="cj-banner cj-ok">La columna <b>EN CAJAS</b> del Plan de Producción se calcula con las cajas cargadas acá (cantidad por caja × cantidad de cajas).</div>'
+  :'<div class="cj-banner">Todavía no hay cajas cargadas: <b>EN CAJAS</b> del Plan usa la tabla fija anterior. Usá <b>Subir cajas</b> con el archivo INFO_CAJAS.html para cargarlas.</div>';
+ var list=D.fams.slice().sort(function(a,b){return a.n.localeCompare(b.n,"es",{numeric:true})}).filter(function(f){return match(f,q)});
+ if(!list.length)h+='<div style="padding:24px;text-align:center;color:var(--text2,#777)">'+(D.fams.length?"Ninguna familia coincide con la búsqueda.":"Todavía no hay familias. Subí el archivo de cajas o creá una familia nueva.")+'</div>';
+ list.forEach(function(f){var n=effN(f),pt=0,w=0;f.it.forEach(function(a){if(String(a[2]).toUpperCase()==="PT")pt++;else w++});var open=abiertas[f.i]||(q&&list.length<=8);
+  var dif=f.o!==null&&f.o!==f.b;
+  h+='<details class="cj-card" data-id="'+esc(f.i)+'"'+(open?' open':'')+'><summary><span class="cj-cod">'+esc(f.n||"(sin nombre)")+'</span><span class="cj-meta">'+pt+' prod. terminados · '+w+' instrumental</span>'
+   +'<span class="cj-ncajas"><label>Cajas</label><input type="number" min="0" class="cj-n'+(dif?" cj-dif":"")+'" data-id="'+esc(f.i)+'" value="'+n+'" title="Cantidad de cajas de esta familia">'
+   +(dif?'<span class="cj-real">(lista: '+f.b+') <a href="#" class="cj-nreset" data-id="'+esc(f.i)+'">volver</a></span>':'<span class="cj-real">(lista: '+f.b+')</span>')+'</span>'
+   +'<button class="cj-del" data-id="'+esc(f.i)+'" title="Eliminar familia">🗑</button></summary><div class="cj-body">'+(open?bodyHtml(f):"")+'</div></details>'});
+ if(keys.length){h+='<details class="cj-sum"><summary class="cj-sumtitle">Resumen por producto terminado ('+keys.length+')</summary><div class="cj-sumbody"></div></details>'}
  root.innerHTML=h;window.scrollTo(0,y);
- if(focusId){var det=root.querySelector('details[data-id="'+focusId+'"]');if(det){var inp=det.querySelector(focusId&&det.dataset.focusCod?".cj-f":".cj-new-cod");if(inp)inp.focus()}focusId=null}}
+ if(focusSel){var el=root.querySelector(focusSel);if(el)el.focus();focusSel=null}}
 
-function addItem(id){var det=document.querySelector('#cajasBody details[data-id="'+id+'"]');var c=findCaja(id);if(!det||!c)return;
- var cod=det.querySelector(".cj-new-cod").value.trim().toUpperCase();var q=parseFloat(det.querySelector(".cj-new-qty").value);
+function sumHtml(){var tot=totals(),keys=Object.keys(tot).sort();var q=filtro.trim().toLowerCase();
+ var h='<div class="table-wrap"><div class="table-scroll" style="max-height:45vh"><table><thead><tr><th>Código</th><th>Descripción</th><th>Total en cajas</th><th>Familias</th></tr></thead><tbody>';
+ var by={};D.fams.forEach(function(f){var n=effN(f);f.it.forEach(function(a){if(String(a[2]).toUpperCase()!=="PT")return;var k=String(a[0]).trim();var s=(parseFloat(a[3])||0)*n;if(s>0)(by[k]=by[k]||[]).push(f.n+" ×"+nf(s))})});
+ keys.forEach(function(k){var d=DM[k]||"";if(q&&(k+" "+d+" "+(by[k]||[]).join(" ")).toLowerCase().indexOf(q)<0)return;h+='<tr><td>'+esc(k)+'</td><td>'+esc(d)+'</td><td><b>'+nf(tot[k])+'</b></td><td style="font-size:11px;color:var(--text2,#555)">'+esc((by[k]||[]).join(" · "))+'</td></tr>'});
+ return h+'</tbody></table></div></div>'}
+
+function addItem(id){var det=document.querySelector('#cajasBody details[data-id="'+id+'"]');var f=find(id);if(!det||!f)return;
+ var cod=det.querySelector(".cj-new-cod").value.trim().toUpperCase(),q=parseFloat(det.querySelector(".cj-new-qty").value),t=det.querySelector(".cj-new-tipo").value;
  if(!cod){toastMsg("Ingresá el código del producto",false);return}if(!(q>0)){toastMsg("La cantidad tiene que ser mayor a 0",false);return}
- var ex=null;c.items.forEach(function(it){if(String(it.cod).trim().toUpperCase()===cod)ex=it});
- if(ex)ex.cant=(parseFloat(ex.cant)||0)+q;else c.items.push({cod:cod,desc:DM[cod]||"",cant:q});
- abiertas[id]=true;focusId=id;save();render()}
+ var ex=null;f.it.forEach(function(a){if(String(a[0]).trim().toUpperCase()===cod)ex=a});
+ if(ex)ex[3]=(parseFloat(ex[3])||0)+q;else f.it.push([cod,DM[cod]||"",t,q]);
+ abiertas[id]=true;focusSel='details[data-id="'+id+'"] .cj-new-cod';save();render()}
 
-function newCaja(){var c={id:uid(),cod:"",desc:"",nota:"",items:[]};D.list.push(c);abiertas[c.id]=true;filtro="";var fi=document.getElementById("cajasFiltro");if(fi)fi.value="";save();render();
- var det=document.querySelector('#cajasBody details[data-id="'+c.id+'"] .cj-f');if(det){det.scrollIntoView({block:"center"});det.focus()}}
+function newFam(){var f={i:uid(),n:"Nueva familia",b:1,o:null,x:[],it:[]};D.fams.push(f);abiertas[f.i]=true;filtro="";var fi=document.getElementById("cajasFiltro");if(fi)fi.value="";save();render();
+ var el=document.querySelector('#cajasBody details[data-id="'+f.i+'"] .cj-fn');if(el){el.scrollIntoView({block:"center"});el.focus();el.select()}}
 
-function exportCsv(){var rows=[["Caja","Descripción caja","Código producto","Descripción","Cantidad"]];
- D.list.forEach(function(c){if(!c.items.length)rows.push([c.cod||"",c.desc||"","","",""]);c.items.forEach(function(it){rows.push([c.cod||"",c.desc||"",it.cod,dOf(it),it.cant])})});
+function exportCsv(){var rows=[["Familia","Cajas","Codigo","Descripcion","Tipo","Por caja","Total"]];
+ D.fams.forEach(function(f){var n=effN(f);if(!f.it.length)rows.push([f.n,n,"","","","",""]);f.it.forEach(function(a){rows.push([f.n,n,a[0],a[1]||DM[String(a[0]).trim()]||"",String(a[2]).toUpperCase()==="W"?"Instrumental":"Producto terminado",a[3],(parseFloat(a[3])||0)*n])})});
  var csv="﻿"+rows.map(function(r){return r.map(function(v){return'"'+String(v==null?"":v).replace(/"/g,'""')+'"'}).join(";")}).join("\r\n");
  var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="cajas_"+new Date().toISOString().slice(0,10)+".csv";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
 
-function openPaste(){if(document.getElementById("cajasPasteDlg"))return;var o=document.createElement("div");o.id="cajasPasteDlg";o.style.cssText="position:fixed;inset:0;z-index:9800;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center";
- o.innerHTML='<div style="background:#fff;border-radius:12px;width:min(720px,94vw);padding:20px 24px;box-shadow:0 8px 40px rgba(0,0,0,.3)"><div style="font-size:15px;font-weight:700;margin-bottom:6px">Pegar cajas desde Excel</div><div style="font-size:12px;color:#555;margin-bottom:10px">Copiá 3 columnas de Excel y pegalas acá: <b>Código de caja</b> · <b>Código de producto</b> · <b>Cantidad</b> (una línea por producto). Si la caja ya existe, el producto se actualiza con la cantidad pegada; si no, se crea la caja.</div><textarea id="cajasPasteTxt" rows="10" style="width:100%;font-family:monospace;font-size:12px;padding:8px;border:1px solid #ccc;border-radius:6px" placeholder="1AC\t1AT00510\t4\n1AC\t1AT00512\t4\n2AC\t2AT00610\t2"></textarea><div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px"><button id="cajasPasteCancel" style="padding:7px 18px;border:1px solid #ccc;border-radius:6px;background:#fff;cursor:pointer">Cancelar</button><button id="cajasPasteOk" style="padding:7px 20px;background:#2e7d32;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700">Importar</button></div></div>';
- document.body.appendChild(o);var close=function(){o.remove()};document.getElementById("cajasPasteCancel").onclick=close;o.addEventListener("mousedown",function(e){if(e.target===o)close()});
- document.getElementById("cajasPasteOk").onclick=function(){var lines=document.getElementById("cajasPasteTxt").value.split(/\r?\n/);var nc=0,nl=0,bad=0;DM=descMap();
-  lines.forEach(function(ln){if(!ln.trim())return;var p=ln.indexOf("\t")>=0?ln.split("\t"):ln.split(/[;,]/);var cc=(p[0]||"").trim().toUpperCase(),cp=(p[1]||"").trim().toUpperCase(),q=parseFloat(String(p[2]||"").trim().replace(",","."));
-   if(!cc||!cp||!(q>0)){if(ln.trim())bad++;return}
-   var caja=null;D.list.forEach(function(c){if(String(c.cod||"").trim().toUpperCase()===cc)caja=c});
-   if(!caja){caja={id:uid(),cod:cc,desc:"",nota:"",items:[]};D.list.push(caja);nc++}
-   var ex=null;caja.items.forEach(function(it){if(String(it.cod).trim().toUpperCase()===cp)ex=it});
-   if(ex)ex.cant=q;else caja.items.push({cod:cp,desc:DM[cp]||"",cant:q});nl++});
-  close();if(nl){save();render()}toastMsg(nl?("Importado: "+nl+" líneas, "+nc+" cajas nuevas"+(bad?" ("+bad+" líneas ignoradas por formato)":"")):"No se importó nada: revisá que haya 3 columnas con cantidad numérica",!!nl)}}
+/* ---- subir cajas: archivo INFO_CAJAS.html (o un .json equivalente) ---- */
+function boxCode(name){var m=String(name).toUpperCase().replace(/\s+/g," ").trim().match(/^(\d[0-9A-Z]+)/);return m?m[1]:String(name).trim()}
+function parseUpload(text){var data=null;
+ var a=text.indexOf("const DATA = ");
+ if(a>=0){var b=text.indexOf("const BOXES = ",a);var raw=text.slice(a+13,b>0?b:undefined).trim().replace(/;\s*$/,"");data=JSON.parse(raw)}
+ else{var j=JSON.parse(text);data=j.DATA||j}
+ var out=[];Object.keys(data).forEach(function(nombre){var f=data[nombre];if(!f||!Array.isArray(f.items))return;
+  out.push({n:nombre,b:parseInt(f.boxCount,10)||arr(f.boxNames).length,x:arr(f.boxNames).map(function(nm){return[boxCode(nm),nm]}),
+   it:f.items.map(function(it){return[String(it.codigo),it.desc||"",String(it.tipo||"").toUpperCase()==="W"?"W":"PT",parseFloat(it.std)||0]})})});
+ return out}
+function importFams(list){var nuevas=0,reempl=0,cajas=0,items=0;
+ list.forEach(function(u){cajas+=u.b;items+=u.it.length;var ex=null;D.fams.forEach(function(f){if(f.n.trim().toLowerCase()===u.n.trim().toLowerCase())ex=f});
+  if(ex){ex.b=u.b;ex.x=u.x;ex.it=u.it;reempl++}else{D.fams.push({i:uid(),n:u.n,b:u.b,o:null,x:u.x,it:u.it});nuevas++}});
+ save();flush();render();
+ toastMsg("Cajas cargadas: "+nuevas+" familias nuevas y "+reempl+" reemplazadas ("+cajas+" cajas, "+items+" ítems). EN CAJAS del Plan ya usa estos datos.",true)}
+function onFile(f){var rd=new FileReader();rd.onload=function(){var list;try{list=parseUpload(String(rd.result))}catch(e){list=null}
+ if(!list||!list.length){toastMsg("No se pudo leer "+f.name+": no encontré las familias de cajas (se espera el archivo INFO_CAJAS.html)",false);return}
+ var c=0,it=0;list.forEach(function(u){c+=u.b;it+=u.it.length});
+ if(confirm("Subir "+list.length+" familias ("+c+" cajas, "+it+" ítems).\n\nLas familias con el mismo nombre se reemplazan (se conserva la cantidad de cajas que hayas elegido). Las demás quedan como están.\n\n¿Continuar?"))importFams(list)};
+ rd.readAsText(f,"utf-8")}
 
 function wire(){var tab=document.getElementById("tab-cajas");if(!tab||tab._wired)return;tab._wired=true;
  tab.addEventListener("click",function(e){var t=e.target;
-  if(t.closest(".cj-new")){newCaja();return}
-  if(t.closest(".cj-paste")){openPaste();return}
+  if(t.closest(".cj-new")){newFam();return}
   if(t.closest(".cj-csv")){exportCsv();return}
-  var del=t.closest(".cj-del");if(del){e.preventDefault();e.stopPropagation();var c=findCaja(del.dataset.id);if(c&&confirm("¿Eliminar la caja "+(c.cod||"(sin código)")+" y sus "+c.items.length+" productos?")){D.list=D.list.filter(function(x){return x.id!==c.id});save();render()}return}
-  var di=t.closest(".cj-del-item");if(di){var cj=findCaja(di.dataset.id);if(cj){cj.items.splice(+di.dataset.i,1);abiertas[cj.id]=true;save();render()}return}
+  if(t.closest(".cj-up")){var fi=document.getElementById("cajasFile");fi.value="";fi.click();return}
+  var tfb=t.closest("#cajasTf button");if(tfb){tf=tfb.dataset.tf;tab.querySelectorAll("#cajasTf button").forEach(function(b){b.classList.toggle("on",b===tfb)});render();return}
+  var rs=t.closest(".cj-nreset");if(rs){e.preventDefault();e.stopPropagation();var f0=find(rs.dataset.id);if(f0){f0.o=null;save();render()}return}
+  var del=t.closest(".cj-del");if(del){e.preventDefault();e.stopPropagation();var c=find(del.dataset.id);if(c&&confirm("¿Eliminar la familia \""+c.n+"\" con sus "+c.it.length+" ítems?")){D.fams=D.fams.filter(function(x){return x.i!==c.i});save();render()}return}
+  if(t.closest(".cj-ncajas")){e.preventDefault();return}
+  var di=t.closest(".cj-del-item");if(di){var cj=find(di.dataset.id);if(cj){cj.it.splice(+di.dataset.i,1);abiertas[cj.i]=true;save();render()}return}
   var ai=t.closest(".cj-add-item");if(ai){addItem(ai.closest("details").dataset.id)}});
- tab.addEventListener("toggle",function(e){var d=e.target;if(!filtro.trim()&&d&&d.classList&&d.classList.contains("cj-card"))abiertas[d.dataset.id]=d.open},true);
- tab.addEventListener("change",function(e){var el=e.target;
-  if(el.classList.contains("cj-f")){var c=findCaja(el.dataset.id);if(c){c[el.dataset.f]=el.dataset.f==="cod"?el.value.trim().toUpperCase():el.value.trim();abiertas[c.id]=true;save();render()}}
-  else if(el.classList.contains("cj-qty")){var cj=findCaja(el.dataset.id);if(cj){var q=parseFloat(el.value);var it=cj.items[+el.dataset.i];if(it){if(!(q>0))cj.items.splice(+el.dataset.i,1);else it.cant=q;abiertas[cj.id]=true;save();render()}}}});
+ tab.addEventListener("toggle",function(e){var d=e.target;if(!d||!d.classList)return;
+  if(d.classList.contains("cj-card")){var id=d.dataset.id;if(!filtro.trim())abiertas[id]=d.open;var body=d.querySelector(".cj-body");if(d.open&&body&&!body.innerHTML){var f=find(id);if(f){DM=DM&&Object.keys(DM).length?DM:descMap();body.innerHTML=bodyHtml(f)}}}
+  else if(d.classList.contains("cj-sum")&&d.open){var sb=d.querySelector(".cj-sumbody");if(sb)sb.innerHTML=sumHtml()}},true);
+ tab.addEventListener("change",function(e){var el=e.target,f;
+  if(el.id==="cajasFile"){if(el.files&&el.files[0])onFile(el.files[0]);return}
+  if(el.classList.contains("cj-n")){f=find(el.dataset.id);if(f){var v=parseInt(el.value,10);if(!(v>=0)){render();return}f.o=(v===f.b)?null:v;save();render()}}
+  else if(el.classList.contains("cj-fn")){f=find(el.dataset.id);if(f){f.n=el.value.trim()||"(sin nombre)";abiertas[f.i]=true;save();render()}}
+  else if(el.classList.contains("cj-fx")){f=find(el.dataset.id);if(f){f.x=el.value.split(/\r?\n/).map(function(s){return s.trim()}).filter(Boolean).map(function(s){return[boxCode(s),s]});if(f.x.length){f.b=f.x.length}abiertas[f.i]=true;save();render()}}
+  else if(el.classList.contains("cj-std")){f=find(el.dataset.id);if(f){var a=f.it[+el.dataset.i],q=parseFloat(el.value);if(a){if(!(q>0))f.it.splice(+el.dataset.i,1);else a[3]=q;abiertas[f.i]=true;save();render()}}}});
  tab.addEventListener("input",function(e){var el=e.target;
   if(el.id==="cajasFiltro"){filtro=el.value;render();var fi=document.getElementById("cajasFiltro");fi.focus();fi.setSelectionRange(fi.value.length,fi.value.length)}
-  else if(el.classList.contains("cj-new-cod")){var d=DM[el.value.trim().toUpperCase()]||"";el.closest("tr").querySelector(".cj-newdesc").textContent=d}});
+  else if(el.classList.contains("cj-new-cod")){var d=DM[el.value.trim().toUpperCase()]||"";el.closest("tr").querySelector(".cj-newdesc").textContent=d;var sel=el.closest("tr").querySelector(".cj-new-tipo");if(sel)sel.value=d?"PT":"W"}});
  tab.addEventListener("keydown",function(e){var el=e.target;if(e.key==="Enter"&&(el.classList.contains("cj-new-cod")||el.classList.contains("cj-new-qty"))){e.preventDefault();addItem(el.closest("details").dataset.id)}});
  var btn=document.querySelector('.nav-tab[data-tab="cajas"]');if(btn)btn.addEventListener("click",function(){setTimeout(render,0)})}
 
 var st=document.createElement("style");st.textContent=".cj-banner{margin:0 0 12px;padding:8px 12px;border-radius:6px;background:#fff8e1;border:1px solid #ffe082;font-size:12px;color:#5d4037}.cj-banner.cj-ok{background:#e8f5e9;border-color:#a5d6a7;color:#1b5e20}"
- +".cj-card{background:var(--surface,#fff);border:1px solid var(--border,#dde3eb);border-radius:8px;margin:0 0 10px;overflow:hidden}.cj-card>summary{cursor:pointer;padding:10px 14px;display:flex;gap:12px;align-items:center;list-style:none;font-size:13px}.cj-card>summary::-webkit-details-marker{display:none}.cj-card>summary::before{content:'▶';font-size:10px;color:var(--text2,#5a6a7a);transition:transform .15s}.cj-card[open]>summary::before{transform:rotate(90deg)}"
- +".cj-cod{font-weight:700;color:var(--cyan,#1565c0);min-width:70px}.cj-desc{flex:1;color:var(--text,#1a2332);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cj-meta{font-size:11px;color:var(--text2,#5a6a7a);white-space:nowrap}.cj-del{background:none;border:none;cursor:pointer;font-size:14px;opacity:.55}.cj-del:hover{opacity:1}"
- +".cj-body{padding:4px 14px 14px;border-top:1px solid var(--border,#dde3eb)}.cj-edit{display:grid;grid-template-columns:140px 1fr 1fr;gap:10px;margin:10px 0}.cj-edit label{font-size:10px;color:var(--text2,#5a6a7a);display:flex;flex-direction:column;gap:3px}.cj-edit input{padding:5px 8px;border:1px solid var(--border,#c8d0da);border-radius:4px;font-size:12px}"
- +".cj-t{width:100%;border-collapse:collapse;font-size:12px}.cj-t th{text-align:left;font-size:10px;color:var(--text2,#5a6a7a);padding:5px 6px;border-bottom:1px solid var(--border,#dde3eb)}.cj-t td{padding:3px 6px;border-bottom:1px solid #f0f3f8}.cj-t input{width:100%;padding:3px 6px;border:1px solid var(--border,#c8d0da);border-radius:4px;font-size:12px}"
- +".cj-x{background:none;border:none;color:#c62828;cursor:pointer;font-size:13px}.cj-warn{color:#e65100;font-size:11px}.cj-sumtitle{margin:18px 0 8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text2,#5a6a7a)}";
+ +".cj-seg{display:inline-flex}.cj-seg button{padding:5px 12px;border:1px solid var(--cyan,#1565c0);background:#fff;color:var(--cyan,#1565c0);font-size:11px;cursor:pointer}.cj-seg button:first-child{border-radius:14px 0 0 14px}.cj-seg button:last-child{border-radius:0 14px 14px 0}.cj-seg button.on{background:var(--cyan,#1565c0);color:#fff;font-weight:700}"
+ +".cj-card{background:var(--surface,#fff);border:1px solid var(--border,#dde3eb);border-radius:8px;margin:0 0 8px;overflow:hidden}.cj-card>summary{cursor:pointer;padding:9px 14px;display:flex;gap:12px;align-items:center;list-style:none;font-size:13px}.cj-card>summary::-webkit-details-marker{display:none}.cj-card>summary::before{content:'\\25B6';font-size:10px;color:var(--text2,#5a6a7a);transition:transform .15s}.cj-card[open]>summary::before{transform:rotate(90deg)}"
+ +".cj-cod{font-weight:700;color:var(--cyan,#1565c0);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cj-meta{font-size:11px;color:var(--text2,#5a6a7a);white-space:nowrap}.cj-ncajas{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text2,#5a6a7a);white-space:nowrap}.cj-ncajas input{width:64px;padding:3px 6px;border:1px solid var(--border,#c8d0da);border-radius:4px;font-size:13px;font-weight:700;text-align:right}.cj-ncajas input.cj-dif{border-color:#e65100;background:#fff3e0}.cj-real{font-size:10px}.cj-real a{color:#1565c0}"
+ +".cj-del{background:none;border:none;cursor:pointer;font-size:14px;opacity:.55}.cj-del:hover{opacity:1}"
+ +".cj-body{padding:4px 14px 14px;border-top:1px solid var(--border,#dde3eb)}.cj-edit{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}.cj-edit label{font-size:10px;color:var(--text2,#5a6a7a);display:flex;flex-direction:column;gap:3px}.cj-edit input,.cj-edit textarea{padding:5px 8px;border:1px solid var(--border,#c8d0da);border-radius:4px;font-size:12px;font-family:inherit}.cj-note{font-size:11px;color:var(--text2,#5a6a7a);margin:0 0 8px}"
+ +".cj-t{width:100%;border-collapse:collapse;font-size:12px}.cj-t th{text-align:left;font-size:10px;color:var(--text2,#5a6a7a);padding:5px 6px;border-bottom:1px solid var(--border,#dde3eb)}.cj-t td{padding:3px 6px;border-bottom:1px solid #f0f3f8}.cj-t input,.cj-t select{width:100%;padding:3px 6px;border:1px solid var(--border,#c8d0da);border-radius:4px;font-size:12px}"
+ +".cj-tag{font-size:10px;padding:1px 6px;border-radius:8px;white-space:nowrap}.cj-t-PT{background:#dcfce7;color:#15803d}.cj-t-W{background:#dbeafe;color:#1d4ed8}"
+ +".cj-x{background:none;border:none;color:#c62828;cursor:pointer;font-size:13px}.cj-warn{color:#e65100;font-size:11px}.cj-sum{margin-top:16px}.cj-sumtitle{cursor:pointer;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text2,#5a6a7a);padding:6px 0}";
 document.head.appendChild(st);
 
 window.cajasReload=function(){load();apply();render()};
