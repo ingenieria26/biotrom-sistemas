@@ -1643,8 +1643,9 @@ function load(){D={_v:2,fams:[]};
  try{var r=(window.__mxRemote&&window.__mxRemote.cajas)||JSON.parse(localStorage.getItem(KEY)||"null");
   if(r&&typeof r==="object"){if(r._v===2)D=r;else if(r.list){D={_v:2,fams:arr(r.list).map(function(c){return{i:c.id||uid(),n:c.cod||c.desc||"Caja",b:1,o:null,x:[[c.cod||"",c.desc||""]],it:arr(c.items).map(function(it){return[it.cod,it.desc||"","PT",parseFloat(it.cant)||0]})}})}}}}catch(e){}norm()}
 function effN(f){return f.o!==null?f.o:f.b}
-function totals(){var t={};D.fams.forEach(function(f){var n=effN(f);if(!(n>0))return;f.it.forEach(function(a){if(String(a[2]).toUpperCase()!=="PT")return;var k=String(a[0]||"").trim(),s=parseFloat(a[3])||0;if(!k||s<=0)return;t[k]=(t[k]||0)+s*n})});return t}
-function apply(){var t=totals();window.CAJAS_PT=Object.keys(t).length?t:LEGACY;
+function nUse(f){var m=window.mxCajasModo&&window.mxCajasModo();return m?m.n:effN(f)}
+function totals(){var t={};D.fams.forEach(function(f){var n=nUse(f);if(!(n>0))return;f.it.forEach(function(a){if(String(a[2]).toUpperCase()!=="PT")return;var k=String(a[0]||"").trim(),s=parseFloat(a[3])||0;if(!k||s<=0)return;t[k]=(t[k]||0)+s*n})});return t}
+function apply(){var t=totals();var mD=window.mxCajasModo&&window.mxCajasModo();window.CAJAS_PT=(Object.keys(t).length||mD)?t:LEGACY;
  try{if(window._ppState&&window._ppState.initialized){if(window._ppRecalc)window._ppRecalc();if(window._ppFilter)window._ppFilter()}}catch(e){}}
 function flush(){clearTimeout(timer);if(!pend)return;pend=false;try{if(window.mxSafeSave)window.mxSafeSave("cajas",D);else localStorage.setItem(KEY,JSON.stringify(D))}catch(e){toastMsg("No se pudo guardar las cajas",false)}}
 function save(){pend=true;apply();clearTimeout(timer);timer=setTimeout(flush,1200)}
@@ -1670,7 +1671,7 @@ function fillDatalist(){var dl=document.getElementById("cajasCodes");if(!dl)retu
 
 function match(f,q){if(!q)return true;if((f.n+" "+f.x.map(function(a){return a[1]}).join(" ")).toLowerCase().indexOf(q)>=0)return true;return f.it.some(function(a){return(String(a[0])+" "+a[1]).toLowerCase().indexOf(q)>=0})}
 
-function bodyHtml(f){var n=effN(f);var h='<div class="cj-edit"><label>Nombre de la familia<input class="cj-fn" data-id="'+esc(f.i)+'" value="'+esc(f.n)+'"></label>'
+function bodyHtml(f){var n=nUse(f);var h='<div class="cj-edit"><label>Nombre de la familia<input class="cj-fn" data-id="'+esc(f.i)+'" value="'+esc(f.n)+'"></label>'
   +'<label>Cajas de esta familia (una por línea; código y nombre)<textarea class="cj-fx" data-id="'+esc(f.i)+'" rows="3">'+esc(f.x.map(function(a){return a[1]||a[0]}).join("\n"))+'</textarea></label></div>'
   +'<div class="cj-note">Plantilla: lo que lleva <b>una</b> caja de esta familia. El total es la cantidad por caja × '+n+' caja'+(n===1?"":"s")+'. Solo los productos terminados suman a EN CAJAS.</div>'
   +'<table class="cj-t"><thead><tr><th style="width:110px">Código</th><th>Descripción</th><th style="width:110px">Tipo</th><th style="width:90px">Por caja</th><th style="width:80px;text-align:right">Total</th><th style="width:34px"></th></tr></thead><tbody>';
@@ -1680,10 +1681,11 @@ function bodyHtml(f){var n=effN(f);var h='<div class="cj-edit"><label>Nombre de 
   return h}
 
 function render(){var root=document.getElementById("cajasBody");if(!root)return;buildTop();var y=window.scrollY;DM=descMap();fillDatalist();
- var q=filtro.trim().toLowerCase(),tot=totals(),keys=Object.keys(tot),nU=0,nC=0;keys.forEach(function(k){nU+=tot[k]});D.fams.forEach(function(f){nC+=effN(f)});
+ var q=filtro.trim().toLowerCase(),tot=totals(),keys=Object.keys(tot),nU=0,nC=0;keys.forEach(function(k){nU+=tot[k]});D.fams.forEach(function(f){nC+=nUse(f)});
  var h='<div class="kpi-row">'+kpiCard("Familias",nf(D.fams.length),"")+kpiCard("Cajas",nf(nC),"")+kpiCard("Productos terminados distintos",nf(keys.length),"")+kpiCard("Unidades en cajas",nf(nU),"green")+'</div>';
  h+=keys.length?'<div class="cj-banner cj-ok">La columna <b>EN CAJAS</b> del Plan de Producción se calcula con las cajas cargadas acá (cantidad por caja × cantidad de cajas).</div>'
   :'<div class="cj-banner">Todavía no hay cajas cargadas: <b>EN CAJAS</b> del Plan usa la tabla fija anterior. Usá <b>Subir cajas</b> con el archivo INFO_CAJAS.html para cargarlas.</div>';
+ {var mD=window.mxCajasModo&&window.mxCajasModo();if(mD)h+='<div class="cj-banner">Parámetro de cajas (en el Plan): <b>definir '+mD.n+' caja'+(mD.n===1?'':'s')+' por familia</b>. Se ignora la cantidad de cajas de cada familia. Para volver a usar las existentes, elegí "Existentes" en el Plan de Producción.</div>'}
  var list=D.fams.slice().sort(function(a,b){return a.n.localeCompare(b.n,"es",{numeric:true})}).filter(function(f){return match(f,q)});
  if(!list.length)h+='<div style="padding:24px;text-align:center;color:var(--text2,#777)">'+(D.fams.length?"Ninguna familia coincide con la búsqueda.":"Todavía no hay familias. Subí el archivo de cajas o creá una familia nueva.")+'</div>';
  list.forEach(function(f){var n=effN(f),pt=0,w=0;f.it.forEach(function(a){if(String(a[2]).toUpperCase()==="PT")pt++;else w++});var open=abiertas[f.i]||(q&&list.length<=8);
@@ -1698,7 +1700,7 @@ function render(){var root=document.getElementById("cajasBody");if(!root)return;
 
 function sumHtml(){var tot=totals(),keys=Object.keys(tot).sort();var q=filtro.trim().toLowerCase();
  var h='<div class="table-wrap"><div class="table-scroll" style="max-height:45vh"><table><thead><tr><th>Código</th><th>Descripción</th><th>Total en cajas</th><th>Familias</th></tr></thead><tbody>';
- var by={};D.fams.forEach(function(f){var n=effN(f);f.it.forEach(function(a){if(String(a[2]).toUpperCase()!=="PT")return;var k=String(a[0]).trim();var s=(parseFloat(a[3])||0)*n;if(s>0)(by[k]=by[k]||[]).push(f.n+" ×"+nf(s))})});
+ var by={};D.fams.forEach(function(f){var n=nUse(f);f.it.forEach(function(a){if(String(a[2]).toUpperCase()!=="PT")return;var k=String(a[0]).trim();var s=(parseFloat(a[3])||0)*n;if(s>0)(by[k]=by[k]||[]).push(f.n+" ×"+nf(s))})});
  keys.forEach(function(k){var d=DM[k]||"";if(q&&(k+" "+d+" "+(by[k]||[]).join(" ")).toLowerCase().indexOf(q)<0)return;h+='<tr><td>'+esc(k)+'</td><td>'+esc(d)+'</td><td><b>'+nf(tot[k])+'</b></td><td style="font-size:11px;color:var(--text2,#555)">'+esc((by[k]||[]).join(" · "))+'</td></tr>'});
  return h+'</tbody></table></div></div>'}
 
@@ -1713,7 +1715,7 @@ function newFam(){var f={i:uid(),n:"Nueva familia",b:1,o:null,x:[],it:[]};D.fams
  var el=document.querySelector('#cajasBody details[data-id="'+f.i+'"] .cj-fn');if(el){el.scrollIntoView({block:"center"});el.focus();el.select()}}
 
 function exportCsv(){var rows=[["Familia","Cajas","Codigo","Descripcion","Tipo","Por caja","Total"]];
- D.fams.forEach(function(f){var n=effN(f);if(!f.it.length)rows.push([f.n,n,"","","","",""]);f.it.forEach(function(a){rows.push([f.n,n,a[0],a[1]||DM[String(a[0]).trim()]||"",String(a[2]).toUpperCase()==="W"?"Instrumental":"Producto terminado",a[3],(parseFloat(a[3])||0)*n])})});
+ D.fams.forEach(function(f){var n=nUse(f);if(!f.it.length)rows.push([f.n,n,"","","","",""]);f.it.forEach(function(a){rows.push([f.n,n,a[0],a[1]||DM[String(a[0]).trim()]||"",String(a[2]).toUpperCase()==="W"?"Instrumental":"Producto terminado",a[3],(parseFloat(a[3])||0)*n])})});
  var csv="﻿"+rows.map(function(r){return r.map(function(v){return'"'+String(v==null?"":v).replace(/"/g,'""')+'"'}).join(";")}).join("\r\n");
  var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="cajas_"+new Date().toISOString().slice(0,10)+".csv";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},500)}
 
@@ -1776,6 +1778,7 @@ var st=document.createElement("style");st.textContent=".cj-banner{margin:0 0 12p
 document.head.appendChild(st);
 
 window.cajasReload=function(){load();apply();render()};
+window.cajasApply=function(){apply();render()};
 window.addEventListener("pagehide",flush);window.addEventListener("beforeunload",flush);
 load();apply();wire();render();
 })();
@@ -1809,9 +1812,9 @@ window.mxMemoria=function(){var n=0;try{for(var i=0;i<localStorage.length;i++){v
 ;(function(){
 "use strict";
 /* ===================== PARAMETROS COMPARTIDOS (Plan + PEDIR MP) ===================== */
-var PKEY="btmp2_params",P={proy:6,seg:6,crec:20},guard=false;
-function loadP(){try{var r=(window.__mxRemote&&window.__mxRemote.params)||JSON.parse(localStorage.getItem(PKEY)||"null");if(r&&r.proy!=null)P={proy:+r.proy,seg:+r.seg,crec:+r.crec}}catch(e){}}
-function saveP(){try{localStorage.setItem(PKEY,JSON.stringify({_v:1,proy:P.proy,seg:P.seg,crec:P.crec}))}catch(e){}}
+var PKEY="btmp2_params",P={proy:6,seg:6,crec:20,cm:"E",cn:1},guard=false;
+function loadP(){try{var r=(window.__mxRemote&&window.__mxRemote.params)||JSON.parse(localStorage.getItem(PKEY)||"null");if(r&&r.proy!=null)P={proy:+r.proy,seg:+r.seg,crec:+r.crec,cm:r.cm==="D"?"D":"E",cn:(r.cn!=null&&+r.cn>=0)?+r.cn:1}}catch(e){}}
+function saveP(){try{localStorage.setItem(PKEY,JSON.stringify({_v:1,proy:P.proy,seg:P.seg,crec:P.crec,cm:P.cm,cn:P.cn}))}catch(e){}}
 function ev(id){var e=document.getElementById(id);if(e)e.dispatchEvent(new Event("input",{bubbles:true}))}
 function put(a,b,v){[a,b].forEach(function(id){var e=document.getElementById(id);if(e)e.value=v})}
 function setPlan(){put("ppProy","ppProyNum",P.proy);put("ppSeg","ppSegNum",P.seg);put("ppCrec","ppCrecNum",P.crec);
@@ -1820,11 +1823,20 @@ function setMP(){if(!origSet)return;guard=true;try{origSet("proy",P.proy);origSe
 var origSet=window.setMPParam;
 if(origSet){window.setMPParam=function(t,v){origSet(t,v);if(guard)return;P[t]=+v;saveP();setPlan()}}
 document.addEventListener("input",function(e){var id=e.target&&e.target.id;if(guard||!/^pp(Proy|Seg|Crec)(Num)?$/.test(id||""))return;
- setTimeout(function(){var a=document.getElementById("ppProy"),b=document.getElementById("ppSeg"),c=document.getElementById("ppCrec");if(!a||!b||!c)return;P={proy:+a.value,seg:+b.value,crec:+c.value};saveP();setMP()},0)});
+ setTimeout(function(){var a=document.getElementById("ppProy"),b=document.getElementById("ppSeg"),c=document.getElementById("ppCrec");if(!a||!b||!c)return;P.proy=+a.value;P.seg=+b.value;P.crec=+c.value;saveP();setMP()},0)});
 var origInit=window._ppInit;
 if(origInit){window._ppInit=function(){var r=origInit.apply(this,arguments);setTimeout(setPlan,0);return r}}
-window.mxParamsReload=function(){loadP();setMP();setPlan()};
-loadP();setMP();setPlan();
+window.mxParamsReload=function(){loadP();setMP();setPlan();cajasUiSync();cajasRecalc()};
+window.mxCajasModo=function(){return P.cm==="D"?{n:P.cn}:null};
+function cajasRecalc(){if(window.cajasApply)try{window.cajasApply()}catch(e){}}
+function cajasUiBuild(){var anchor=document.getElementById("ppParamsLbl");if(!anchor||document.getElementById("mxCajasPar"))return;
+ var w=document.createElement("span");w.id="mxCajasPar";w.style.cssText="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)";
+ w.innerHTML='Cajas <span style="display:inline-flex;gap:4px"><button type="button" class="pp-preset-btn" data-m="E" title="Usa la cantidad de cajas que hay de cada familia (pestaña CAJAS)">Existentes</button><button type="button" class="pp-preset-btn" data-m="D" title="Escribí por cuántas cajas de cada familia se quiere fabricar">Definir</button></span><input type="number" id="mxCajasN" min="0" step="1" style="width:46px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--cyan);font-weight:700;text-align:center;background:var(--surface)"><span id="mxCajasTxt" style="color:var(--text2)"></span>';
+ anchor.parentNode.insertBefore(w,anchor);
+ w.addEventListener("click",function(e){var b=e.target.closest("button[data-m]");if(!b)return;P.cm=b.dataset.m;saveP();cajasUiSync();cajasRecalc()});
+ w.querySelector("#mxCajasN").addEventListener("change",function(){var v=parseInt(this.value,10);if(v>=0)P.cn=v;saveP();cajasUiSync();cajasRecalc()})}
+function cajasUiSync(){var w=document.getElementById("mxCajasPar");if(!w)return;w.querySelectorAll("button[data-m]").forEach(function(b){b.classList.toggle("active",b.dataset.m===P.cm)});var n=document.getElementById("mxCajasN");n.value=P.cn;n.disabled=P.cm!=="D";n.style.opacity=P.cm==="D"?1:.45;document.getElementById("mxCajasTxt").textContent=P.cm==="D"?"cajas por familia":"(las de cada familia)"}
+loadP();setMP();setPlan();cajasUiBuild();cajasUiSync();
 })();
 ;(function(){
 "use strict";
