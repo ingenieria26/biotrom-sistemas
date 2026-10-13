@@ -205,7 +205,7 @@ td.cant-cell.verif input{background:var(--amber-dim)}
   #printArea h2{font-size:13px;margin-bottom:4px}
 }
 </style>
-</head>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"></head>
 <body>
 
 <div class="header no-print">
@@ -1445,5 +1445,22 @@ initDragHandlers();
 loadCargaOfs();
 setInterval(loadCargaOfs, 60000); // refresca la lista de OFs de Carga de Máquina
 </script>
-</body>
+<style id="bt-theme">/* ===== CONTROL DE PRODUCCION · tema corporativo (solo estilos) ===== */
+:root{--bg:#f8fafc;--surface2:#f1f5f9;--border:#e2e8f0;--border2:#cbd5e1;--text:#334155;--muted:#64748b;--accent:#4f46e5;--accent-dim:rgba(79,70,229,.09);--blue:#4f46e5;--hyundai:#4f46e5;--shadow:0 1px 2px rgba(15,23,42,.04),0 6px 16px rgba(15,23,42,.06)}
+html body,html body *{font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}
+html body{-webkit-font-smoothing:antialiased}
+.header{padding:12px 24px;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.4) blur(10px)}
+.logo-mark{background:linear-gradient(135deg,#1e3a8a,#4f46e5);border-radius:10px;width:36px;height:36px}
+.logo-text{color:#0f172a;font-weight:800;letter-spacing:-.01em}
+.btn,.iconbtn,.mchip,.tab{transition:background .2s,border-color .2s,color .2s,box-shadow .2s}
+.btn-accent{background:#4f46e5}.btn-accent:hover{background:#4338ca}
+.btn:focus-visible,.iconbtn:focus-visible,.mchip:focus-visible,.tab:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}
+.toolbar input:focus,.toolbar select:focus{box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+.tab{font-weight:700}
+.tab.active{color:#4338ca;border-bottom-color:#4f46e5}
+table.grid{border-radius:12px}
+table.grid th{background:#f8fafc;font-weight:700}
+table.grid tbody tr:nth-child(even){background:#fafbfd}
+.weeklabel,.sheet-title,.tab .n{font-variant-numeric:tabular-nums}
+#bt-back{position:fixed;right:14px;bottom:14px;z-index:99999;display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;font:600 12px "Plus Jakarta Sans",system-ui,sans-serif;text-decoration:none;box-shadow:0 4px 14px rgba(15,23,42,.18);transition:background .2s,border-color .2s}#bt-back:hover{background:#f1f5f9;border-color:#94a3b8}#bt-back:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}@media print{#bt-back{display:none}}</style><a id="bt-back" href="../BIOTROM_Inicio.html" aria-label="Volver al inicio">&larr; Inicio</a></body>
 </html>

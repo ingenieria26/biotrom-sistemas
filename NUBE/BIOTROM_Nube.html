@@ -57,7 +57,7 @@
   .info{background:#eaf5fb;border:1px solid #bfe0f0;border-radius:8px;padding:12px 14px;font-size:.7rem;color:#0a5a78;line-height:1.6;margin-bottom:16px}
   .info code{background:#dbeef7;padding:1px 5px;border-radius:3px}
 </style>
-</head>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"></head>
 <body>
 <header>
   <div class="ico" style="font-size:1.3rem">☁️</div>
@@ -354,5 +354,34 @@ function nbAttr(s){ return String(s==null?'':s).replace(/'/g, "\\'"); }
 
 nbCargarTodo();
 </script>
-</body>
+<style id="bt-theme">/* ===== NUBE · tema corporativo (solo estilos) ===== */
+:root{--bg:#f8fafc;--bg2:#fff;--bg3:#f1f5f9;--border:#e2e8f0;--cyan:#4338ca;--green:#059669;--red:#dc2626;--yellow:#d97706;--text:#334155;--text-dim:#64748b;--font:'Plus Jakarta Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}
+html body{font-family:var(--font);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:var(--font)}
+header{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.92);backdrop-filter:saturate(1.4) blur(10px);box-shadow:0 1px 2px rgba(15,23,42,.05);padding:12px 24px}
+header h1{color:#1e3a8a;font-weight:800;letter-spacing:.1em}
+header span{color:#64748b}
+header .ico{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:#eef2ff;font-size:1.2rem}
+a.volver{border:1px solid #e2e8f0;background:#fff;color:#334155;border-radius:10px;padding:8px 14px;font-weight:600;transition:background .2s,border-color .2s}
+a.volver:hover{background:#f1f5f9;border-color:#cbd5e1}
+a.volver:focus-visible,.btn:focus-visible,.chip:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}
+.wrap{max-width:1180px;padding:28px 24px}
+.card{border-radius:14px;box-shadow:0 1px 2px rgba(15,23,42,.04);padding:22px}
+.card h2{color:#0f172a;font-weight:700;font-size:1rem}
+.field input,.field select,.toolbar input{border-radius:8px;transition:border-color .2s,box-shadow .2s}
+.field input:focus,.field select:focus,.toolbar input:focus{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.15)}
+.chip{border-radius:999px;transition:border-color .2s,color .2s,background .2s}
+.chip:hover{background:#eef2ff}
+.drop{border-radius:14px;border-color:#cbd5e1;transition:border-color .2s,background .2s}
+.drop:hover{border-color:#818cf8;background:#f5f7ff}
+.drop.over{border-color:#4f46e5;background:#eef2ff}
+th{background:#f8fafc;letter-spacing:.06em}
+.tag{background:#eef2ff;border-color:#c7d2fe;color:#3730a3}
+.btn{border-radius:8px;font-weight:600;transition:background .2s,border-color .2s,color .2s}
+.btn.primary{background:#4f46e5;border-color:#4f46e5}
+.btn.primary:hover{background:#4338ca;opacity:1}
+.info{background:#eef2ff;border-color:#c7d2fe;color:#3730a3;border-radius:12px}
+.info code{background:#e0e7ff}
+@media(max-width:640px){header{padding:10px 14px}.wrap{padding:16px 12px}}
+</style></body>
 </html>
