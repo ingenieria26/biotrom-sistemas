@@ -1913,14 +1913,24 @@ window.mxLoadFiles=function(){var i=$("mxLoadInp");if(i){i.value="";i.click()}};
 /* ===================== CSV "stock por deposito" (suma de lotes por producto) ===================== */
 function toastMsg(m,ok){if(window.stkToast)window.stkToast(m,ok);else alert(m)}
 function NC(c){return String(c==null?"":c).replace(/\s+/g,"").toUpperCase()}
-function csvTipo(name){var n=String(name||"").toLowerCase().replace(/[\s_]+/g,"-");if(!/stock-?por-?deposito/.test(n))return null;
+function csvTipo(name){var n=String(name||"").toLowerCase().replace(/[\s_]+/g,"-");
+ if(/stock-?resumen/.test(n)){var s=n.replace(/^.*resumen/,"").replace(/\(\d+\)/g,"");if(/comp/.test(s))return"stkcomp";if(/pt|prod|term/.test(s))return"stkpt";if(/mp/.test(s))return"stockmp";return"auto"}
+ if(!/stock-?por-?deposito/.test(n))return null;
  var suf=n.replace(/^.*deposito/,"");
  if(/comp/.test(suf))return"stkcomp";if(/^-?(pt|prod|term)/.test(suf))return"stkpt";if(/mp/.test(suf))return"stockmp";return"?"}
 function numAR(s){s=String(s==null?"":s).trim();if(!s)return NaN;if(s.indexOf(",")>=0)s=s.replace(/\./g,"").replace(",",".");else s=s.replace(/\./g,"");return Number(s)}
+/* Excel convierte codigos tipo 11E01 en notacion cientifica (1,10E+02): se recuperan (exponente real = mostrado - 1) */
+function normSci(c){var m=/^(\d)[,.](\d)0E\+(\d{2})$/i.exec(c);if(!m)return c;var e=parseInt(m[3],10)-1;return e<0?c:m[1]+m[2]+"E"+String(e).padStart(2,"0")}
 function parseCsvStock(text){text=String(text).replace(/^﻿/,"");var lines=text.split(/\r?\n/).filter(function(l){return l.trim()!==""});if(lines.length<2)return null;
  var sep=lines[0].indexOf(";")>=0?";":(lines[0].indexOf("\t")>=0?"\t":",");
  var H=lines[0].split(sep).map(function(h){return h.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")});
- var ip=H.indexOf("producto"),is=H.indexOf("saldo"),iu=H.indexOf("um");if(ip<0||is<0)return null;
+ var ip=H.indexOf("producto"),is=H.indexOf("saldo"),iu=H.indexOf("um");
+ var ic=H.indexOf("nomenclatura");if(ic<0)ic=H.indexOf("codigo");var ides=H.indexOf("descripcion");
+ if(ip<0&&ic>=0&&is>=0){var tot2={},desc2={},um2={},f2=0;
+  lines.slice(1).forEach(function(l){var c=l.split(sep),cod=normSci((c[ic]||"").trim());var m=/^\s*(-?[\d.,]+)\s*(.*)$/.exec(c[is]||"");if(!cod||!m)return;var v=numAR(m[1]);if(isNaN(v))return;
+   tot2[cod]=Math.round(((tot2[cod]||0)+v)*1e3)/1e3;if(desc2[cod]===undefined)desc2[cod]=ides>=0?String(c[ides]||"").replace(/^"|"$/g,"").trim():"";(um2[cod]=um2[cod]||{})[(m[2]||"").trim().toUpperCase()]=1;f2++});
+  return{tot:tot2,desc:desc2,um:um2,filas:f2}}
+ if(ip<0||is<0)return null;
  var tot={},desc={},um={},filas=0;
  lines.slice(1).forEach(function(l){var c=l.split(sep),p=(c[ip]||"").trim();if(!p)return;var k=p.indexOf(" - ");var cod=(k>=0?p.slice(0,k):p).trim();var v=numAR(c[is]);if(!cod||isNaN(v))return;
   tot[cod]=Math.round(((tot[cod]||0)+v)*1e3)/1e3;if(desc[cod]===undefined)desc[cod]=k>=0?p.slice(k+3).trim():"";
@@ -1961,13 +1971,14 @@ function routePT(r){var comp={},pt={},mp={},pc={};
  var extra=(porCodigo.pt+porCodigo.comp?" Sin ficha previa, ubicados por su código: "+porCodigo.pt+" como producto y "+porCodigo.comp+" como componente (revisar).":"");
  var ig=ign.length?" Ignorados "+ign.length+" de materia prima (mm) que figuran en este archivo: "+ign.slice(0,6).join(", ")+(ign.length>6?"...":"")+".":"";
  toastMsg(msgTab("stkpt",xa)+" | "+msgTab("stkcomp",xb)+". "+r.filas+" lotes en "+Object.keys(r.tot).length+" códigos."+extra+ig,true)}
-function readCsv(f,tab){var rd=new FileReader();rd.onload=function(){var r=parseCsvStock(rd.result);if(!r||!r.filas){toastMsg("No se pudo leer "+f.name+": faltan las columnas Producto y Saldo",false);return}
+function readCsv(f,tab){var rd=new FileReader();rd.onload=function(){var r=parseCsvStock(rd.result);if(!r||!r.filas){toastMsg("No se pudo leer "+f.name+": faltan las columnas Producto/Nomenclatura y Saldo",false);return}
+ if(tab==="auto"){var ks=Object.keys(r.tot),mpN=ks.filter(function(k){return/^\d{2}[A-Z]\d{0,2}$/i.test(k)}).length;tab=mpN>ks.length*0.6?"stockmp":"stkpt"}
  if(tab==="stkpt"){routePT(r);return}
  var x=applyCsvStock(tab,r);if(window.rebuildMPPlan)setTimeout(window.rebuildMPPlan,100);
  toastMsg(msgTab(tab,x)+". "+r.filas+" lotes sumados en "+Object.keys(r.tot).length+" productos.",true)};rd.readAsText(f,"utf-8")}
 document.addEventListener("drop",function(e){var fs=e.dataTransfer&&e.dataTransfer.files;if(!fs)return;
  Array.from(fs).forEach(function(f){if(!/\.csv$/i.test(f.name))return;var t=csvTipo(f.name);
-  if(t===null)toastMsg("Archivo CSV no reconocido: "+f.name+". Los de stock se llaman stock-por-deposito...",false);
+  if(t===null)toastMsg("Archivo CSV no reconocido: "+f.name+". Los de stock se llaman stock-por-deposito... o stock-resumen...",false);
   else if(t==="?")toastMsg("No sé si "+f.name+" es de MP, productos o componentes: terminalo en mp, pt o comp (ej. stock-por-depositomp.csv)",false);
   else readCsv(f,t)})});
 
