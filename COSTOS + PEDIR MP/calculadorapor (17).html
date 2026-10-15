@@ -2414,6 +2414,27 @@ function mpUsados(){var desc=descripciones(),guard=costosGuardados(),mp={};
  Object.keys(OF_CANTIDAD_POR_CODIGO_ANIO).forEach(function(cod){var q=(OF_CANTIDAD_POR_CODIGO_ANIO[cod]||{})[PERIODO]||0;if(!q||esInstrumental(cod))return;if(guard[cod]&&!guard[cod].sinDesglose)return;
   var c=cartaDe(cod,desc[cod]||"");if(!c||!c.mp)return;var o=mp[c.mp]||(mp[c.mp]={cod:c.mp,n:0});o.n++});
  var arr=Object.keys(mp).map(function(k){return mp[k]});arr.sort(function(a,b){return b.n-a.n});return arr}
+/* Precio automatico: el de la OC MAS NUEVA del mismo material y diametro (barras redondas). Las OC mas viejas no se tienen en cuenta:
+   si llega una OC nueva del mismo material, pasa a ser la que vale. El precio por unidad de una OC no siempre es por metro (a veces es por kg),
+   asi que se prueba cada interpretacion y se descarta la que da un precio por kg fuera de lo razonable para ese material. */
+var MATS2={"21":/TITANIO\s*ALEADO|TI\.?\s*ALEADO|GR\.?\s*5/,"22":/TITANIO\s*PURO|GRADO\s*[1-4]/,"11":/316/,"12":/F\s?138/,"61":/304/,"62":/316/,"63":/420(?!\s*B)/,"66":/420\s*B/,"82":/302/,"83":/455/,"84":/465/,"85":/N\s?360/,"31":/CROMO\s*COBALTO|CR\s*CO/,"42":/UHMWPE|POLIETILENO/,"43":/PEEK/,"44":/TEFLON|PTFE/,"46":/\bPOM\b|DELRIN|ACETAL/,"51":/ALUMINIO|\bAL\b\.?/,"52":/6061|6063|ALUMINIO|\bAL\b\.?/,"60":/NITINOL/};
+var BANDA={"21":[30,200],"22":[25,200],"11":[3,20],"12":[3,60],"61":[2.5,20],"62":[2.5,20],"63":[2.5,25],"66":[2.5,25],"82":[2.5,40],"83":[2.5,40],"84":[2.5,40],"85":[2.5,40],"31":[30,400],"42":[3,80],"43":[40,500],"44":[8,200],"46":[3,60],"51":[2.5,25],"52":[2.5,25],"60":[50,800]};
+/* precio de una OC: con coma, la coma es el decimal (57,37 / 1.234,50); sin coma, el punto es el decimal (57.3700) */
+function numP(s){s=String(s==null?"":s).trim();if(s.indexOf(",")>=0)s=s.replace(/\./g,"").replace(",",".");var v=parseFloat(s);return isNaN(v)?0:v}
+function numD2(s){var m=/Ø\s*([\d][\d.,\s]*)/.exec(s||"");if(!m)return null;var v=parseFloat(m[1].replace(/\s/g,"").replace(",","."));return isNaN(v)?null:v}
+function fechaOC(f){var m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(String(f||""));if(!m)return null;var y=+m[3];if(y<100)y+=2000;return new Date(y,+m[2]-1,+m[1])}
+function precioAuto(cod){var d=descMP(cod),pf=String(cod).slice(0,2),re=MATS2[pf],band=BANDA[pf],dia=numD2(d);
+ if(!re||!band||dia==null||/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|ROSCAD|RESORTE|MICRO|TORNILLO/i.test(d))return{ok:false};
+ var dens=mpDetectarDensidad(cod,d),kgm=Math.PI*Math.pow(dia/2,2)*dens/1000,centro=Math.sqrt(band[0]*band[1]),cand=[];
+ Object.values(_cargarOrdenesCompra()).forEach(function(oc){(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u))return;if(/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|TORN|ARANDELA|TUERCA|ROSCAD/.test(u))return;var x=numD2(it.descripcion);if(x==null||Math.abs(x-dia)>0.05)return;var p=numP(it.precioUnitario);if(!(p>0))return;cand.push({oc:oc,it:it,p:p,u:u})})});
+ cand.sort(function(a,b){return _esOcMasReciente(a.oc,b.oc)?-1:_esOcMasReciente(b.oc,a.oc)?1:0});
+ for(var i=0;i<cand.length;i++){var c=cand[i],un=String(c.it.unidad||"").toUpperCase(),opts;
+  if(/^KG/.test(un)||/X\s*KG|\/\s*KG|POR\s*KG/.test(c.u))opts=["kg"];else opts=["m","kg"];
+  var best=null;opts.forEach(function(o){var kg=o==="m"?c.p/kgm:c.p;if(kg>=band[0]&&kg<=band[1]){var dist=Math.abs(Math.log(kg/centro));if(!best||dist<best.dist)best={o:o,kg:kg,dist:dist}}});
+  if(best){var fd=fechaOC(c.oc.fecha),dias=fd?Math.round((Date.now()-fd.getTime())/86400000):null;
+   return{ok:true,precio:c.p,unidad:best.o,moneda:c.oc.moneda==="ars"?"ars":"usd",oc:c.oc.numero,fecha:c.oc.fecha||"",dias:dias,desc:c.it.descripcion,kg:best.kg,saltadas:i}}}
+ return{ok:false,hayOC:cand.length>0}}
+function textoOC(a){var u=a.unidad==="kg"?"kg":"m";return"OC "+a.oc+" ("+(a.fecha||"s/f")+"): "+(a.moneda==="ars"?"ARS ":"USD ")+fmt(a.precio,2)+"/"+u+(a.saltadas?" · se saltearon "+a.saltadas+" OC más nueva"+(a.saltadas>1?"s":"")+" con precio no razonable":"")}
 /* Pista de precio: la OC mas reciente de un material parecido (misma familia y mismo diametro). Es solo una pista: el precio por unidad de las OC no siempre es comparable (kg, metros, barras), por eso se confirma a mano. */
 var MATS={"21":/TITANIO\s*ALEADO|TI\.?\s*ALEADO/,"22":/TITANIO\s*PURO/,"11":/316/,"12":/F\s?138/,"61":/304/,"62":/316/,"63":/420(?!\s*B)/,"66":/420\s*B/,"31":/CROMO\s*COBALTO|CR\s*CO/,"42":/UHMWPE/,"43":/PEEK/,"46":/\bPOM\b|DELRIN/,"52":/6061|6063|AL\./,"51":/ALUMINIO|AL\./};
 function numD(s){var m=/Ø\s*([\d][\d.,\s]*)/.exec(s||"");if(!m)return null;var v=parseFloat(m[1].replace(/\s/g,"").replace(",","."));return isNaN(v)?null:v}
@@ -2439,11 +2460,12 @@ function render(){var box=document.getElementById("expPanel");if(!box)return;var
  +'<p id="expProg" style="font-size:12px;color:#334155;margin:8px 0 0">'+esc(corriendo?progreso:(resumenRun||(MAS?("Último cálculo masivo: "+(MAS.fecha||"")+" · "+resumenMas(MAS)):"Todavía no se hizo el cálculo masivo en esta computadora.")))+'</p></div>'
  +'<div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:12px"><p style="font-weight:700;color:#1e3a8a;margin:0 0 4px;font-size:13px">🧱 Precio de la materia prima</p>'
  +'<p style="font-size:12px;color:#64748b;margin:0 0 8px">Cargá el precio de cada materia prima que usan los productos sin cálculo guardado. Si dejás un precio vacío, se intenta tomar de las Órdenes de Compra guardadas; si tampoco está ahí, el costo de esos productos queda según la opción de arriba. Los precios se guardan y valen para todas las computadoras.</p>'
- +(mpl.length?'<div style="overflow:auto;max-height:260px"><table style="width:100%;font-size:12px"><thead><tr><th>Código</th><th>Materia prima</th><th style="text-align:right">Productos</th><th>Precio</th><th>Unidad</th><th>Moneda</th><th>Origen</th></tr></thead><tbody>'+mpl.map(function(o){var p=PRECIOS[o.cod]||{},oc=hintOC(o.cod);
-   return'<tr><td><b>'+esc(o.cod)+'</b></td><td>'+esc(descMP(o.cod))+'</td><td style="text-align:right">'+o.n+'</td><td><input type="number" min="0" step="0.01" class="table-input" style="width:90px" value="'+(p.precio>0?p.precio:"")+'" placeholder="—" onchange="expPrecio(\''+o.cod+'\',\'precio\',this.value)"></td>'
-   +'<td><select style="padding:4px" onchange="expPrecio(\''+o.cod+'\',\'unidad\',this.value)">'+[["kg","por kg"],["m","por metro"],["barra","por barra de 3 m"]].map(function(u){return'<option value="'+u[0]+'"'+((p.unidad||"kg")===u[0]?" selected":"")+'>'+u[1]+'</option>'}).join("")+'</select></td>'
-   +'<td><select style="padding:4px" onchange="expPrecio(\''+o.cod+'\',\'moneda\',this.value)"><option value="usd"'+((p.moneda||"usd")==="usd"?" selected":"")+'>USD</option><option value="ars"'+(p.moneda==="ars"?" selected":"")+'>ARS</option></select></td>'
-   +'<td style="color:#64748b;font-size:11px;max-width:360px">'+(p.precio>0?"cargado":(oc?'<span title="Pista tomada de las órdenes de compra: confirmá el precio y la unidad a mano">'+esc(oc)+'</span>':"sin precio"))+'</td></tr>'}).join("")+'</tbody></table></div>':'<p style="font-size:12px;color:#94a3b8;margin:0">No hay materias primas pendientes: ningún producto sin cálculo guardado tiene carta de proceso.</p>')+'</div>'
+ +(mpl.length?'<div style="overflow:auto;max-height:260px"><table style="width:100%;font-size:12px"><thead><tr><th>Código</th><th>Materia prima</th><th style="text-align:right">Productos</th><th>Precio</th><th>Unidad</th><th>Moneda</th><th>Origen</th></tr></thead><tbody>'+mpl.map(function(o){var p=PRECIOS[o.cod]||{},man=p.precio>0,au=man?null:precioAuto(o.cod),oc=(!man&&!au.ok)?hintOC(o.cod):"",pr=man?p.precio:(au&&au.ok?au.precio:""),un=man?(p.unidad||"kg"):(au&&au.ok?au.unidad:"kg"),mo=man?(p.moneda||"usd"):(au&&au.ok?au.moneda:"usd");
+   var origen=man?'manual · <a href="#" onclick="expAuto(\''+o.cod+'\');return false" style="color:#4338ca">volver a automático</a>':(au&&au.ok?'<span style="color:#047857" title="Se usa siempre la OC más nueva de este material">automático — '+esc(textoOC(au))+'</span>'+(au.dias!=null&&au.dias>365?' <span style="color:#b45309" title="La OC más nueva de este material es vieja">⚠ de hace '+(Math.round(au.dias/36.5)/10)+' años</span>':''):(oc?'sin precio automático · <span title="Pista de OC de un material parecido: confirmá el precio y la unidad a mano">'+esc(oc)+'</span>':"sin precio"));
+   return'<tr><td><b>'+esc(o.cod)+'</b></td><td>'+esc(descMP(o.cod))+'</td><td style="text-align:right">'+o.n+'</td><td><input type="number" min="0" step="0.01" class="table-input" style="width:90px" value="'+(pr!==""?Math.round(pr*100)/100:"")+'" placeholder="—" onchange="expPrecio(\''+o.cod+'\',\'precio\',this.value)"></td>'
+   +'<td><select style="padding:4px" onchange="expPrecio(\''+o.cod+'\',\'unidad\',this.value)">'+[["kg","por kg"],["m","por metro"],["barra","por barra de 3 m"]].map(function(u){return'<option value="'+u[0]+'"'+(un===u[0]?" selected":"")+'>'+u[1]+'</option>'}).join("")+'</select></td>'
+   +'<td><select style="padding:4px" onchange="expPrecio(\''+o.cod+'\',\'moneda\',this.value)"><option value="usd"'+(mo==="usd"?" selected":"")+'>USD</option><option value="ars"'+(mo==="ars"?" selected":"")+'>ARS</option></select></td>'
+   +'<td style="color:#64748b;font-size:11px;max-width:420px">'+origen+'</td>'+'</tr>'}).join("")+'</tbody></table></div>':'<p style="font-size:12px;color:#94a3b8;margin:0">No hay materias primas pendientes: ningún producto sin cálculo guardado tiene carta de proceso.</p>')+'</div>'
  +'<div class="cards" style="margin-bottom:10px"><div class="card"><div class="card-label">Productos en el Excel</div><div class="card-val">'+filas.length+'</div><div class="card-sub">con producción en '+PERIODO_TXT+(armar.excluidos?' · sin '+armar.excluidos+' instrumentales y partes de caja/instrumental, que por ahora no se costean':'')+'</div></div>'
  +'<div class="card"><div class="card-label">Con costo</div><div class="card-val">'+con+'</div><div class="card-sub">'+(filas.length-con)+' en blanco (el motivo está en la tabla)</div></div>'
  +'<div class="card"><div class="card-label">Piezas producidas</div><div class="card-val">'+piezas.toLocaleString("es-AR")+'</div><div class="card-sub">suma de los 12 meses</div></div></div>'
@@ -2452,7 +2474,9 @@ function render(){var box=document.getElementById("expPanel");if(!box)return;var
  +'</tbody></table></div>';
  box.innerHTML=h}
 window.expSet=function(k,v){S[k]=v;render()};
-window.expPrecio=function(cod,k,v){var p=PRECIOS[cod]||(PRECIOS[cod]={precio:0,unidad:"kg",moneda:"usd"});if(k==="precio")p.precio=parseFloat(v)||0;else p[k]=v;guardarPrecios();render()};
+window.expPrecio=function(cod,k,v){var p=PRECIOS[cod];if(!(p&&p.precio>0)){var e=precioEfectivo(cod);p=PRECIOS[cod]={precio:e?e.precio:0,unidad:e?e.unidad:"kg",moneda:e?e.moneda:"usd"}}if(k==="precio")p.precio=parseFloat(v)||0;else p[k]=v;if(!(p.precio>0))delete PRECIOS[cod];guardarPrecios();render()};
+window.expAuto=function(cod){delete PRECIOS[cod];guardarPrecios();render()};
+function precioEfectivo(cod){var m=PRECIOS[cod];if(m&&m.precio>0)return{origen:"manual",precio:m.precio,unidad:m.unidad||"kg",moneda:m.moneda||"usd"};var a=precioAuto(cod);if(a.ok)return{origen:"oc",precio:a.precio,unidad:a.unidad,moneda:a.moneda,oc:a};return null}
 window.expCancelar=function(){cancelar=true};
 /* ---------- calculo masivo: corre en una copia oculta de la calculadora (iframe) ---------- */
 function setProg(t){progreso=t;var e=document.getElementById("expProg");if(e)e.textContent=t}
@@ -2461,7 +2485,8 @@ async function esperar(cond,ms){var t=Date.now();while(Date.now()-t<ms){try{if(c
 function costoMetroMP(w,code,p){var $=function(id){return w.document.getElementById(id)};var dsc=descMP(code);if(!dsc)return{cm:null,fuente:"código de materia prima desconocido"};
  try{w.mpSeleccionarCodigo(code,dsc)}catch(e){return{cm:null,fuente:"error al leer la materia prima"}}
  var fuente="";
- if(p&&p.precio>0){$("mp_modalidad").value={kg:"kg",m:"metro",barra:"barra"}[p.unidad||"kg"];try{w.mpOnChangeModalidad()}catch(e){}$("mp_moneda").value=p.moneda||"usd";$("mp_precio").value=p.precio;if($("mp_mas_iva"))$("mp_mas_iva").checked=false;fuente="precio cargado"}
+ var ef=p&&p.precio>0?{origen:"manual",precio:p.precio,unidad:p.unidad||"kg",moneda:p.moneda||"usd"}:null,au=null;if(!ef){au=precioAuto(code);if(au.ok)ef={origen:"oc",precio:au.precio,unidad:au.unidad,moneda:au.moneda}}
+ if(ef){$("mp_modalidad").value={kg:"kg",m:"metro",barra:"barra"}[ef.unidad||"kg"];try{w.mpOnChangeModalidad()}catch(e){}$("mp_moneda").value=ef.moneda||"usd";$("mp_precio").value=ef.precio;if($("mp_mas_iva"))$("mp_mas_iva").checked=false;fuente=ef.origen==="manual"?"precio cargado a mano":"OC más nueva — "+textoOC(au)}
  else if(/Precio tomado de OC/.test($("mp_oc_info").innerText))fuente="Orden de Compra";
  else return{cm:null,fuente:"sin precio"};
  w.mpCalcular();var cm=parseUsd($("mp_resultado_usd").innerText);
@@ -2532,6 +2557,7 @@ window.expDescargar=function(){var d=datos();if(!d.rows.length){alert("No hay pr
   XLSX.writeFile(wb,nombreArchivo()+".xlsx")})};
 var _st=window.switchTab;
 window.switchTab=function(id,btn){var r=_st.apply(this,arguments);if(id==="tab-exportar")render();return r};
+document.addEventListener("oc-actualizadas",function(){if(activo())render()});
 cargarLocal();bajarPrecios();
 })();
 </script><script>/* ===================== ORDENES DE COMPRA: traerlas de la Nube (sin congelar el navegador) =====================
@@ -2602,7 +2628,7 @@ window.ocTraerDeLaNube=async function(){
    if(fallas.length)console.warn("OC con problemas:",fallas)}
  }catch(e){est("No se pudo traer las OC de la Nube: "+(e.message||e));barra(0,0)}
  corriendo=false;if(b)b.disabled=false;if(c)c.style.display="none";
- try{renderOrdenesCompra();renderUltimosPreciosMP()}catch(e){}
+ try{renderOrdenesCompra();renderUltimosPreciosMP()}catch(e){}try{document.dispatchEvent(new Event("oc-actualizadas"))}catch(e){}
 };
 })();
 </script></body></html>
