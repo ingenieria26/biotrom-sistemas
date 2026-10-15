@@ -1859,6 +1859,7 @@ async function leerPdfOC(file) {
     for (let p = 1; p <= pdf.numPages; p++) {
         const page = await pdf.getPage(p);
         const content = await page.getTextContent();
+        try { page.cleanup(); } catch (e) {}
         const items = content.items
             .map(it => ({ str: it.str, x: it.transform[4], y: it.transform[5] }))
             .filter(it => it.str.trim());
@@ -1875,6 +1876,7 @@ async function leerPdfOC(file) {
             if (texto) lineas.push(texto);
         });
     }
+    try { await pdf.destroy(); } catch (e) {}
     return parseTextoOC(lineas, file.name);
 }
 
@@ -1939,14 +1941,17 @@ function parseTextoOC(lineas, nombreArchivo) {
     // encabezado solo pide "CANT" + "DESCRIPCI" en la misma linea, y la fila de
     // item separa un posible token de unidad antes de la descripcion, con
     // fallback a la unidad indicada entre corchetes en el encabezado.
+    let _hdrUnidad = "", _hdrPrecioPor = "";
     const idxHeader = lineas.findIndex(l => /CANT\.?.*DESCRIPCI/i.test(l));
     const idxSubtotal = lineas.findIndex(l => /^\s*Subtotal/i.test(l));
     const items = [];
     if (idxHeader !== -1) {
         const fin = idxSubtotal !== -1 ? idxSubtotal : lineas.length;
         const headerTxt = lineas[idxHeader] + " " + (lineas[idxHeader + 1] || "");
-        const unidadHeaderMatch = /\[\s*(kgs?|kilos?|mts?|metros?|m)\s*\]/i.exec(headerTxt);
-        const unidadDefault = unidadHeaderMatch ? (/k/i.test(unidadHeaderMatch[1]) ? "KG" : "MTS") : "";
+        const unidadHeaderMatch = /\[\s*(kgs?|kilos?|mts?|metros?|m)\s*\]/i.exec(headerTxt) || /CANT\.?\s*(kgs?|kilos?|mts?|metros?|m|unid(?:ades)?|un|u)\b/i.exec(headerTxt);
+        const unidadDefault = unidadHeaderMatch ? (/^k/i.test(unidadHeaderMatch[1]) ? "KG" : (/^(un|u)/i.test(unidadHeaderMatch[1]) ? "UN" : "MTS")) : "";
+        _hdrUnidad = unidadDefault;
+        _hdrPrecioPor = /P\.?\s*U\.?\s*x\s*(?:kg|kilo)/i.test((lineas[idxHeader - 1] || "") + " " + headerTxt) ? "kg" : "";
         const UNIDADES = "MTS?|METROS?|KGS?|UN|UNI?|U\\.?|PZAS?|LTS?";
         const MONEDA = "(?:USD|ARS|U\\$S|U\\$D)?\\s*\\$?\\s*";
         const IVA_SUFIJO = "(?:\\+\\s*IVA(?:\\s*X\\s*U\\.?)?)?";
@@ -2048,6 +2053,7 @@ function parseTextoOC(lineas, nombreArchivo) {
         numero, fecha, proveedor, direccion, telefono,
         subtotal, iva, total, condPago, formaEntrega, plazoEntrega, moneda,
         items, archivo: nombreArchivo, guardadoEl: new Date().toISOString(),
+        unidadCant: _hdrUnidad, precioPor: _hdrPrecioPor, v: 2,
     };
 }
 const MP_KEYWORDS_FORMA=["BARRA","CHAPA","CAÑO","CANO","PLANCHUELA","TUBO","HEXAGONAL","REDONDA","CUADRADA","RESORTE","ALAMBRE"];const MP_KEYWORDS_MATERIAL=["AISI","316","304","420","F138","F139","TI ALEADO","TITANIO","POM","PEEK","UHMWPE","CR-CO","CROMO COBALTO","NITINOL","ACERO","ALUMINIO","6061","6063"];function esItemMateriaPrima(descripcion){const d=(descripcion||"").toUpperCase();return MP_KEYWORDS_FORMA.some(k=>d.includes(k))||MP_KEYWORDS_MATERIAL.some(k=>d.includes(k))}function esProveedorFarmacia(proveedor){const p=(proveedor||"").toUpperCase();return p.includes("FARMACIA")||p.includes("FARMACITY")}function clasificarItemOC(oc,it){if(esProveedorFarmacia(oc.proveedor))return"farmacia";return esItemMateriaPrima(it.descripcion)?"mp":"herramienta"}let _ocFiltroTipo="todas";function ocCambiarFiltroTipo(valor){_ocFiltroTipo=valor;["ocFiltroTodas","ocFiltroMp","ocFiltroHerramienta"].forEach(id=>{const b=document.getElementById(id);if(!b)return;const activo=(id==="ocFiltroTodas"&&valor==="todas")||(id==="ocFiltroMp"&&valor==="mp")||(id==="ocFiltroHerramienta"&&valor==="herramienta");b.style.background=activo?"#1a73e8":"#fff";b.style.color=activo?"#fff":"#444"});renderOrdenesCompra()}function _parsearFechaOC(f){if(!f)return null;const m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(f);if(!m)return null;let[,d,mo,y]=m;if(y.length===2)y=(parseInt(y)<50?"20":"19")+y;const dt=new Date(+y,+mo-1,+d);return isNaN(dt.getTime())?null:dt}function _esOcMasReciente(candidatoOc,actualOc){if(!actualOc)return true;const fc=_parsearFechaOC(candidatoOc.fecha),fa=_parsearFechaOC(actualOc.fecha);if(fc&&fa)return fc.getTime()>fa.getTime();if(fc&&!fa)return true;if(!fc&&fa)return false;return(parseInt(candidatoOc.numero)||0)>(parseInt(actualOc.numero)||0)}function renderOrdenesCompra() {
@@ -2094,7 +2100,7 @@ const MP_KEYWORDS_FORMA=["BARRA","CHAPA","CAÑO","CANO","PLANCHUELA","TUBO","HEX
             + '<td><strong>' + oc.numero + '</strong></td>'
             + '<td>' + (oc.fecha || "-") + '</td>'
             + '<td>' + (oc.proveedor || "-") + '</td>'
-            + '<td style="font-size:11px;">' + (itemsTxt || "-") + '</td>'
+            + '<td style="font-size:11px;">' + ((oc.unidadCant || oc.precioPor) ? '<div style="font-size:10px; color:#64748b; margin-bottom:3px;">Cantidad en <b>' + (oc.unidadCant || "?") + '</b>' + (oc.precioPor ? ' &middot; precio por <b>' + oc.precioPor + '</b>' : '') + '</div>' : '') + (itemsTxt || "-") + '</td>'
             + '<td>' + (oc.moneda === "ars" ? "ARS $" : "USD $") + (oc.total || "-") + '</td>'
             + '<td style="font-size:10px; color:var(--color-text-tertiary);">' + (oc.archivo || "") + '</td>'
             + '<td><button onclick="eliminarOC(\'' + oc.numero + '\')" title="Quitar" style="background:none; border:none; color:#c00; cursor:pointer; font-size:13px;">x</button></td>'
@@ -2425,18 +2431,20 @@ function numD2(s){var m=/Ø\s*([\d][\d.,\s]*)/.exec(s||"");if(!m)return null;var
 function fechaOC(f){var m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(String(f||""));if(!m)return null;var y=+m[3];if(y<100)y+=2000;return new Date(y,+m[2]-1,+m[1])}
 /* Pendiente de ln(precio) contra ln(diametro^2) entre los items del mismo material de UNA OC: ~1 = precios por metro (crecen con la seccion);
    ~0 = precio por kilo (iguales para todos los diametros). Sirve para saber la unidad cuando la OC no la indica. */
-function pendienteOC(oc,re){var pts={};(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u))return;if(/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|TORN|ARANDELA|TUERCA|ROSCAD/.test(u))return;var x=numD2(it.descripcion),p=numP(it.precioUnitario);if(x==null||!(p>0))return;(pts[x]=pts[x]||[]).push(p)});
+function pendienteOC(oc,re){var pts={};(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u))return;if(clasificarItemOC(oc,it)!=="mp")return;if(/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|TORN|ARANDELA|TUERCA|ROSCAD/.test(u))return;var x=numD2(it.descripcion),p=numP(it.precioUnitario);if(x==null||!(p>0))return;(pts[x]=pts[x]||[]).push(p)});
  var ks=Object.keys(pts).map(Number);if(ks.length<2||Math.max.apply(null,ks)/Math.min.apply(null,ks)<1.3)return null;
  var X=[],Y=[];ks.forEach(function(k){var a=pts[k];X.push(Math.log(k*k));Y.push(Math.log(a.reduce(function(s,v){return s+v},0)/a.length))});
  var n=X.length,mx=X.reduce(function(s,v){return s+v},0)/n,my=Y.reduce(function(s,v){return s+v},0)/n,num=0,den=0;for(var i=0;i<n;i++){num+=(X[i]-mx)*(Y[i]-my);den+=(X[i]-mx)*(X[i]-mx)}return den>0?num/den:null}
 function precioAuto(cod){var d=descMP(cod),pf=String(cod).slice(0,2),re=MATS2[pf],band=BANDA[pf],dia=numD2(d);
  if(!re||!band||dia==null||/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|ROSCAD|RESORTE|MICRO|TORNILLO/i.test(d))return{ok:false};
  var dens=mpDetectarDensidad(cod,d),kgm=Math.PI*Math.pow(dia/2,2)*dens/1000,centro=Math.sqrt(band[0]*band[1]),cand=[];
- Object.values(_cargarOrdenesCompra()).forEach(function(oc){(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u))return;if(/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|TORN|ARANDELA|TUERCA|ROSCAD/.test(u))return;var x=numD2(it.descripcion);if(x==null||Math.abs(x-dia)>0.05)return;var p=numP(it.precioUnitario);if(!(p>0))return;cand.push({oc:oc,it:it,p:p,u:u})})});
+ Object.values(_cargarOrdenesCompra()).forEach(function(oc){(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u))return;if(clasificarItemOC(oc,it)!=="mp")return;if(/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|TORN|ARANDELA|TUERCA|ROSCAD/.test(u))return;var x=numD2(it.descripcion);if(x==null||Math.abs(x-dia)>0.05)return;var p=numP(it.precioUnitario);if(!(p>0))return;cand.push({oc:oc,it:it,p:p,u:u})})});
  cand.sort(function(a,b){return _esOcMasReciente(a.oc,b.oc)?-1:_esOcMasReciente(b.oc,a.oc)?1:0});
  for(var i=0;i<cand.length;i++){var c=cand[i],un=String(c.it.unidad||"").toUpperCase().replace(/\./g,"").trim(),opts,metodo="",forz=null;
   /* 1) la descripcion o la unidad dicen "kg"; 2) la relacion precio/diametro dentro de la OC; 3) la columna de unidad (casi nunca viene); 4) el precio habitual del material */
-  if(/^KG/.test(un)||/X\s*KG|\/\s*KG|POR\s*KG/.test(c.u)){forz="kg";metodo="precio por kg, según la OC"}
+  if(c.oc.precioPor==="kg"){forz="kg";metodo="el encabezado de la OC dice precio por kg"}
+  else if(/^KG/.test(un)||/X\s*KG|\/\s*KG|POR\s*KG/.test(c.u)){forz="kg";metodo="precio por kg, según la OC"}
+  else if((c.oc.v||0)>=2&&/^(M|MT|MTS|METRO|METROS)$/.test(un)){forz="m";metodo="el encabezado de la OC dice cantidad en metros"}
   else{var sl=pendienteOC(c.oc,re);if(sl!=null&&sl>=0.6){forz="m";metodo="por metro: el precio crece con el diámetro en esa OC"}else if(sl!=null&&sl<=0.3){forz="kg";metodo="por kg: el precio es igual para todos los diámetros de esa OC"}
    else if(/^(M|MT|MTS|METRO|METROS)$/.test(un)){metodo="unidad de la OC: metros"}}
   opts=forz?[forz]:["m","kg"];
@@ -2578,7 +2586,7 @@ cargarLocal();bajarPrecios();
 "use strict";
 var FB_PDF="https://biotrom-carga-maquina-default-rtdb"+".firebaseio.com/pdfs_binarios/OC";
 var FB_OCP=FB_BASE_CALCPP+"/ordenes_compra";
-var corriendo=false,cancelar=false,LS_FALL="biotrom_calcpp_oc_ilegibles",LS_LEI="biotrom_calcpp_oc_leidas";
+var corriendo=false,cancelar=false,LS_FALL="biotrom_calcpp_oc_ilegibles",LS_LEI="biotrom_calcpp_oc_leidas_v2";
 function leerLei(){try{return JSON.parse(localStorage.getItem(LS_LEI)||"{}")||{}}catch(e){return{}}}
 function leerFall(){try{return JSON.parse(localStorage.getItem(LS_FALL)||"{}")||{}}catch(e){return{}}}
 function el(id){return document.getElementById(id)}
@@ -2589,7 +2597,7 @@ function fxT(u,o,ms){var c=new AbortController(),t=setTimeout(function(){c.abort
 function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
 function b64ABytes(b64){var bin=atob(b64),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u}
 function clave(n){return String(n).replace(/[.$#\[\]\/]/g,"_")}
-function aSet(todas){var s={};Object.keys(todas).forEach(function(k){var a=String(todas[k].archivo||"").toLowerCase().replace(/\.pdf$/,"");if(a)s[a]=1});return s}
+function aSet(todas){var s={};Object.keys(todas).forEach(function(k){if((todas[k].v||0)<2)return;var a=String(todas[k].archivo||"").toLowerCase().replace(/\.pdf$/,"");if(a)s[a]=1});return s}
 function guardarLocal(todas){try{localStorage.setItem(LS_ORDENES_COMPRA,JSON.stringify(todas));return true}catch(e){return false}}
 async function subirLote(lote){var ks=Object.keys(lote);if(!ks.length)return;try{await fxT(FB_OCP+".json",{method:"PATCH",body:JSON.stringify(lote)},60000)}catch(e){}}
 window.ocCancelar=function(){cancelar=true;est("Cancelando… se guarda lo leído hasta ahora.")};
@@ -2604,7 +2612,7 @@ window.ocTraerDeLaNube=async function(){
   var claves=Object.keys((await rk.json())||{});
   var todas=_cargarOrdenesCompra();
   /* 1) las que otra computadora ya leyó: se traen como texto, sin volver a leer el PDF */
-  try{var rp=await fxT(FB_OCP+".json",{},90000);if(rp.ok){var rem=await rp.json()||{};Object.keys(rem).forEach(function(n){if(!todas[n]){todas[n]=rem[n];deNube++}})}}catch(e){}
+  try{var rp=await fxT(FB_OCP+".json",{},90000);if(rp.ok){var rem=await rp.json()||{};Object.keys(rem).forEach(function(n){if((rem[n].v||0)>=2&&(!todas[n]||(todas[n].v||0)<2)){todas[n]=rem[n];deNube++}})}}catch(e){}
   if(deNube)guardarLocal(todas);
   var have=aSet(todas),fall=leerFall(),lei=leerLei(),pend=claves.filter(function(k){return!have[k.toLowerCase()]&&!fall[k]&&!lei[k]}),nIleg=claves.filter(function(k){return!have[k.toLowerCase()]&&fall[k]}).length;
   if(!pend.length){est("Listo: las órdenes de compra de la Nube ya están guardadas en este navegador"+(deNube?" ("+deNube+" bajadas ya leídas desde la Nube)":"")+(nIleg?". "+nIleg+" PDF no se pueden leer (dañados o sin número de OC): "+Object.keys(fall).slice(0,5).join(", ")+(nIleg>5?"…":""):"")+".");barra(0,0)}
