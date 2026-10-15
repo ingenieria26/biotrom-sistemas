@@ -16,15 +16,16 @@ body{padding:10px}
 <div class="card" style="background:white;">
     <p style="font-size:12px; color:var(--color-text-secondary); margin:0 0 10px;">
         Subi uno o varios PDF de Orden de Compra (se leen en el momento, en este navegador &mdash; no se suben a ningun lado).
+        Si ya los subiste a la herramienta NUBE (tipo OC), usá "&#9729; Traer de la Nube": los baja y los lee de a uno (puede tardar varios minutos), y la primera computadora que lo hace los deja leídos para las demás.
         Quedan guardados por N&deg; de OC para poder buscarlos despues por numero, proveedor o material comprado.
     </p>
-    <input type="file" id="oc_file_input" accept="application/pdf" multiple onchange="procesarArchivosOC(this.files)" style="display:none"><button type="button" onclick="document.getElementById('oc_file_input').click()" style="padding:7px 14px;border:1px solid #dadce0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#1a3a6b">Elegir archivos</button> <input type="file" id="oc_folder_input" webkitdirectory directory multiple onchange="procesarArchivosOC(this.files)" style="display:none"><button type="button" onclick="document.getElementById('oc_folder_input').click()" style="padding:7px 14px;border:1px solid #dadce0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#1a3a6b;margin-left:8px">📁 Elegir carpeta</button>
+    <input type="file" id="oc_file_input" accept="application/pdf" multiple onchange="procesarArchivosOC(this.files)" style="display:none"><button type="button" onclick="document.getElementById('oc_file_input').click()" style="padding:7px 14px;border:1px solid #dadce0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#1a3a6b">Elegir archivos</button> <input type="file" id="oc_folder_input" webkitdirectory directory multiple onchange="procesarArchivosOC(this.files)" style="display:none"><button type="button" onclick="document.getElementById('oc_folder_input').click()" style="padding:7px 14px;border:1px solid #dadce0;border-radius:6px;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#1a3a6b;margin-left:8px">📁 Elegir carpeta</button> <button type="button" id="oc_nube_btn" onclick="ocTraerDeLaNube()" style="padding:7px 14px;border:1px solid #4f46e5;border-radius:6px;background:#4f46e5;font-size:12px;font-weight:600;cursor:pointer;color:#fff;margin-left:8px">☁ Traer de la Nube</button> <button type="button" id="oc_cancel_btn" onclick="ocCancelar()" style="display:none;padding:7px 14px;border:1px solid #dadce0;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;color:#b91c1c;margin-left:6px">Cancelar</button> <progress id="oc_prog" value="0" max="1" style="display:none;width:100%;margin-top:8px"></progress>
     <div id="oc_estado" style="font-size:12px; margin-top:8px; color:var(--color-text-secondary);"></div>
 </div>
 <div style="margin-top:14px; position:relative;">
     <input type="text" id="oc_buscar" placeholder="Buscar por N. de OC, proveedor o material..."
         style="width:100%; box-sizing:border-box; padding:8px 12px; font-size:13px; border:1px solid #dadce0; border-radius:6px; outline:none;"
-        oninput="renderOrdenesCompra()" autocomplete="off">
+        oninput="clearTimeout(window._ocT);window._ocT=setTimeout(renderOrdenesCompra,250)" autocomplete="off">
 </div>
 <div style="margin-top:10px; display:flex; gap:0; border:1px solid #dadce0; border-radius:6px; overflow:hidden; width:fit-content;">
     <button type="button" id="ocFiltroTodas" onclick="ocCambiarFiltroTipo('todas')" style="padding:6px 14px; font-size:12px; font-weight:600; background:#1a73e8; color:#fff; border:none; cursor:pointer;">Todas</button>
@@ -1818,6 +1819,7 @@ async function procesarArchivosOC(fileList) {
         return;
     }
     let ok = 0, fail = 0;
+    const _todasOC = _cargarOrdenesCompra();
     for (const file of archivos) {
         if (estado) estado.innerText = "Leyendo " + file.name + "...";
         try {
@@ -1830,15 +1832,16 @@ async function procesarArchivosOC(fileList) {
                 console.error("OC sin numero detectado en", file.name, datos);
                 continue;
             }
-            const todas = _cargarOrdenesCompra();
-            todas[datos.numero] = datos;
-            _guardarOrdenesCompra(todas);
+            _todasOC[datos.numero] = datos;
             ok++;
+            if (ok % 20 === 0) _guardarOrdenesCompra(_todasOC);
+            await new Promise(r => setTimeout(r, 0));
         } catch (e) {
             fail++;
             console.error("Error leyendo OC", file.name, e);
         }
     }
+    _guardarOrdenesCompra(_todasOC);
     if (estado) {
         estado.innerText = ok + (ok === 1 ? " orden de compra guardada" : " ordenes de compra guardadas")
             + (fail ? " - " + fail + " con error (revisar consola)" : "")
@@ -2069,13 +2072,14 @@ const MP_KEYWORDS_FORMA=["BARRA","CHAPA","CAÑO","CANO","PLANCHUELA","TUBO","HEX
         if ((oc.proveedor || "").toLowerCase().includes(q)) return true;
         return (oc._itemsFiltrados.length ? oc._itemsFiltrados : (oc.items || [])).some(it => (it.descripcion || "").toLowerCase().includes(q));
     }).sort((a, b) => (parseInt(b.numero) || 0) - (parseInt(a.numero) || 0));
+    const _ocTotal = lista.length;
 
     if (!lista.length) {
         tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--color-text-tertiary); padding:20px;">Sin ordenes de compra guardadas todavia' + (filtroTipo!=="todas"?" para este filtro":"") + '.</td></tr>';
         return;
     }
 
-    tbody.innerHTML = lista.map(oc => {
+    tbody.innerHTML = lista.slice(0, 150).map(oc => {
         const itemsMostrar = filtroTipo === "todas" ? (oc.items || []) : oc._itemsFiltrados;
         const itemsTxt = itemsMostrar.map(it => {
             const clase = clasificarItemOC(oc, it);
@@ -2096,6 +2100,7 @@ const MP_KEYWORDS_FORMA=["BARRA","CHAPA","CAÑO","CANO","PLANCHUELA","TUBO","HEX
             + '<td><button onclick="eliminarOC(\'' + oc.numero + '\')" title="Quitar" style="background:none; border:none; color:#c00; cursor:pointer; font-size:13px;">x</button></td>'
             + '</tr>';
     }).join("");
+    if (_ocTotal > 150) tbody.innerHTML += '<tr><td colspan="7" style="text-align:center; color:var(--color-text-secondary); padding:10px; font-size:12px;">Mostrando 150 de ' + _ocTotal + ' órdenes de compra. Buscá por número, proveedor o material para ver el resto.</td></tr>';
 }
 function eliminarOC(numero) {
     const todas = _cargarOrdenesCompra();
@@ -2409,6 +2414,12 @@ function mpUsados(){var desc=descripciones(),guard=costosGuardados(),mp={};
  Object.keys(OF_CANTIDAD_POR_CODIGO_ANIO).forEach(function(cod){var q=(OF_CANTIDAD_POR_CODIGO_ANIO[cod]||{})[PERIODO]||0;if(!q||esInstrumental(cod))return;if(guard[cod]&&!guard[cod].sinDesglose)return;
   var c=cartaDe(cod,desc[cod]||"");if(!c||!c.mp)return;var o=mp[c.mp]||(mp[c.mp]={cod:c.mp,n:0});o.n++});
  var arr=Object.keys(mp).map(function(k){return mp[k]});arr.sort(function(a,b){return b.n-a.n});return arr}
+/* Pista de precio: la OC mas reciente de un material parecido (misma familia y mismo diametro). Es solo una pista: el precio por unidad de las OC no siempre es comparable (kg, metros, barras), por eso se confirma a mano. */
+var MATS={"21":/TITANIO\s*ALEADO|TI\.?\s*ALEADO/,"22":/TITANIO\s*PURO/,"11":/316/,"12":/F\s?138/,"61":/304/,"62":/316/,"63":/420(?!\s*B)/,"66":/420\s*B/,"31":/CROMO\s*COBALTO|CR\s*CO/,"42":/UHMWPE/,"43":/PEEK/,"46":/\bPOM\b|DELRIN/,"52":/6061|6063|AL\./,"51":/ALUMINIO|AL\./};
+function numD(s){var m=/Ø\s*([\d][\d.,\s]*)/.exec(s||"");if(!m)return null;var v=parseFloat(m[1].replace(/\s/g,"").replace(",","."));return isNaN(v)?null:v}
+function hintOC(cod){try{var d=descMP(cod),re=MATS[String(cod).slice(0,2)],dia=numD(d);if(!re||dia==null)return"";var forma=/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA/i.test(d),mejor=null;
+ Object.values(_cargarOrdenesCompra()).forEach(function(oc){(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u))return;if(!forma&&/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|TORN|ARANDELA|TUERCA/.test(u))return;var x=numD(it.descripcion);if(x==null||Math.abs(x-dia)>0.05)return;if(!mejor||_esOcMasReciente(oc,mejor.oc))mejor={oc:oc,it:it}})});
+ return mejor?"OC "+mejor.oc.numero+" ("+(mejor.oc.fecha||"s/f")+"): "+(mejor.oc.moneda==="ars"?"ARS ":"USD ")+mejor.it.precioUnitario+"/"+(mejor.it.unidad||"m")+" — "+mejor.it.descripcion:""}catch(e){return""}}
 function descMP(c){try{var x=DB_MP_REAL.find(function(r){return r.c===c});return x?x.d:""}catch(e){return""}}
 /* ---------- pantalla ---------- */
 function activo(){var t=document.getElementById("tab-exportar");return t&&t.classList.contains("active")}
@@ -2428,11 +2439,11 @@ function render(){var box=document.getElementById("expPanel");if(!box)return;var
  +'<p id="expProg" style="font-size:12px;color:#334155;margin:8px 0 0">'+esc(corriendo?progreso:(resumenRun||(MAS?("Último cálculo masivo: "+(MAS.fecha||"")+" · "+resumenMas(MAS)):"Todavía no se hizo el cálculo masivo en esta computadora.")))+'</p></div>'
  +'<div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:12px"><p style="font-weight:700;color:#1e3a8a;margin:0 0 4px;font-size:13px">🧱 Precio de la materia prima</p>'
  +'<p style="font-size:12px;color:#64748b;margin:0 0 8px">Cargá el precio de cada materia prima que usan los productos sin cálculo guardado. Si dejás un precio vacío, se intenta tomar de las Órdenes de Compra guardadas; si tampoco está ahí, el costo de esos productos queda según la opción de arriba. Los precios se guardan y valen para todas las computadoras.</p>'
- +(mpl.length?'<div style="overflow:auto;max-height:260px"><table style="width:100%;font-size:12px"><thead><tr><th>Código</th><th>Materia prima</th><th style="text-align:right">Productos</th><th>Precio</th><th>Unidad</th><th>Moneda</th><th>Origen</th></tr></thead><tbody>'+mpl.map(function(o){var p=PRECIOS[o.cod]||{},oc="";try{var e=_buscarPrecioEnOC(descMP(o.cod));if(e)oc="OC "+e.oc.numero+": "+e.item.precioUnitario+"/"+(e.item.unidad||"m")}catch(x){}
+ +(mpl.length?'<div style="overflow:auto;max-height:260px"><table style="width:100%;font-size:12px"><thead><tr><th>Código</th><th>Materia prima</th><th style="text-align:right">Productos</th><th>Precio</th><th>Unidad</th><th>Moneda</th><th>Origen</th></tr></thead><tbody>'+mpl.map(function(o){var p=PRECIOS[o.cod]||{},oc=hintOC(o.cod);
    return'<tr><td><b>'+esc(o.cod)+'</b></td><td>'+esc(descMP(o.cod))+'</td><td style="text-align:right">'+o.n+'</td><td><input type="number" min="0" step="0.01" class="table-input" style="width:90px" value="'+(p.precio>0?p.precio:"")+'" placeholder="—" onchange="expPrecio(\''+o.cod+'\',\'precio\',this.value)"></td>'
    +'<td><select style="padding:4px" onchange="expPrecio(\''+o.cod+'\',\'unidad\',this.value)">'+[["kg","por kg"],["m","por metro"],["barra","por barra de 3 m"]].map(function(u){return'<option value="'+u[0]+'"'+((p.unidad||"kg")===u[0]?" selected":"")+'>'+u[1]+'</option>'}).join("")+'</select></td>'
    +'<td><select style="padding:4px" onchange="expPrecio(\''+o.cod+'\',\'moneda\',this.value)"><option value="usd"'+((p.moneda||"usd")==="usd"?" selected":"")+'>USD</option><option value="ars"'+(p.moneda==="ars"?" selected":"")+'>ARS</option></select></td>'
-   +'<td style="color:#64748b;font-size:11px">'+(p.precio>0?"cargado":(oc||"sin precio"))+'</td></tr>'}).join("")+'</tbody></table></div>':'<p style="font-size:12px;color:#94a3b8;margin:0">No hay materias primas pendientes: ningún producto sin cálculo guardado tiene carta de proceso.</p>')+'</div>'
+   +'<td style="color:#64748b;font-size:11px;max-width:360px">'+(p.precio>0?"cargado":(oc?'<span title="Pista tomada de las órdenes de compra: confirmá el precio y la unidad a mano">'+esc(oc)+'</span>':"sin precio"))+'</td></tr>'}).join("")+'</tbody></table></div>':'<p style="font-size:12px;color:#94a3b8;margin:0">No hay materias primas pendientes: ningún producto sin cálculo guardado tiene carta de proceso.</p>')+'</div>'
  +'<div class="cards" style="margin-bottom:10px"><div class="card"><div class="card-label">Productos en el Excel</div><div class="card-val">'+filas.length+'</div><div class="card-sub">con producción en '+PERIODO_TXT+(armar.excluidos?' · sin '+armar.excluidos+' instrumentales y partes de caja/instrumental, que por ahora no se costean':'')+'</div></div>'
  +'<div class="card"><div class="card-label">Con costo</div><div class="card-val">'+con+'</div><div class="card-sub">'+(filas.length-con)+' en blanco (el motivo está en la tabla)</div></div>'
  +'<div class="card"><div class="card-label">Piezas producidas</div><div class="card-val">'+piezas.toLocaleString("es-AR")+'</div><div class="card-sub">suma de los 12 meses</div></div></div>'
@@ -2522,5 +2533,76 @@ window.expDescargar=function(){var d=datos();if(!d.rows.length){alert("No hay pr
 var _st=window.switchTab;
 window.switchTab=function(id,btn){var r=_st.apply(this,arguments);if(id==="tab-exportar")render();return r};
 cargarLocal();bajarPrecios();
+})();
+</script><script>/* ===================== ORDENES DE COMPRA: traerlas de la Nube (sin congelar el navegador) =====================
+   Los PDF de OC se suben a la Nube (herramienta NUBE, tipo "OC"). Aca se bajan de a uno, se leen con la misma
+   logica de siempre (leerPdfOC) y se guardan en este navegador. Cada OC leida tambien se guarda, ya como texto
+   liviano, en la nube de la calculadora: asi las demas computadoras no tienen que volver a leer los PDF. */
+(function(){
+"use strict";
+var FB_PDF="https://biotrom-carga-maquina-default-rtdb"+".firebaseio.com/pdfs_binarios/OC";
+var FB_OCP=FB_BASE_CALCPP+"/ordenes_compra";
+var corriendo=false,cancelar=false,LS_FALL="biotrom_calcpp_oc_ilegibles",LS_LEI="biotrom_calcpp_oc_leidas";
+function leerLei(){try{return JSON.parse(localStorage.getItem(LS_LEI)||"{}")||{}}catch(e){return{}}}
+function leerFall(){try{return JSON.parse(localStorage.getItem(LS_FALL)||"{}")||{}}catch(e){return{}}}
+function el(id){return document.getElementById(id)}
+function est(t){var e=el("oc_estado");if(e)e.innerText=t}
+function barra(a,b){var p=el("oc_prog");if(!p)return;p.style.display=b?"":"none";p.max=b||1;p.value=a||0}
+function fx(u,o){return window.BiotromAuth?BiotromAuth.fetch(u,o):fetch(u,o)}
+function fxT(u,o,ms){var c=new AbortController(),t=setTimeout(function(){c.abort()},ms||60000);return fx(u,Object.assign({},o,{signal:c.signal})).finally(function(){clearTimeout(t)})}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+function b64ABytes(b64){var bin=atob(b64),u=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return u}
+function clave(n){return String(n).replace(/[.$#\[\]\/]/g,"_")}
+function aSet(todas){var s={};Object.keys(todas).forEach(function(k){var a=String(todas[k].archivo||"").toLowerCase().replace(/\.pdf$/,"");if(a)s[a]=1});return s}
+function guardarLocal(todas){try{localStorage.setItem(LS_ORDENES_COMPRA,JSON.stringify(todas));return true}catch(e){return false}}
+async function subirLote(lote){var ks=Object.keys(lote);if(!ks.length)return;try{await fxT(FB_OCP+".json",{method:"PATCH",body:JSON.stringify(lote)},60000)}catch(e){}}
+window.ocCancelar=function(){cancelar=true;est("Cancelando… se guarda lo leído hasta ahora.")};
+window.ocTraerDeLaNube=async function(){
+ if(corriendo)return;
+ if(typeof pdfjsLib==="undefined"){est("No se pudo cargar la librería de lectura de PDF (pdf.js).");return}
+ corriendo=true;cancelar=false;var b=el("oc_nube_btn"),c=el("oc_cancel_btn");if(b)b.disabled=true;if(c)c.style.display="";
+ var ok=0,fail=0,deNube=0,fallas=[],t0=Date.now();
+ try{
+  est("Buscando las órdenes de compra en la Nube…");barra(0,0);
+  var rk=await fxT(FB_PDF+".json?shallow=true",{},60000);if(!rk.ok)throw new Error("la Nube no respondió ("+rk.status+")");
+  var claves=Object.keys((await rk.json())||{});
+  var todas=_cargarOrdenesCompra();
+  /* 1) las que otra computadora ya leyó: se traen como texto, sin volver a leer el PDF */
+  try{var rp=await fxT(FB_OCP+".json",{},90000);if(rp.ok){var rem=await rp.json()||{};Object.keys(rem).forEach(function(n){if(!todas[n]){todas[n]=rem[n];deNube++}})}}catch(e){}
+  if(deNube)guardarLocal(todas);
+  var have=aSet(todas),fall=leerFall(),lei=leerLei(),pend=claves.filter(function(k){return!have[k.toLowerCase()]&&!fall[k]&&!lei[k]}),nIleg=claves.filter(function(k){return!have[k.toLowerCase()]&&fall[k]}).length;
+  if(!pend.length){est("Listo: las órdenes de compra de la Nube ya están guardadas en este navegador"+(deNube?" ("+deNube+" bajadas ya leídas desde la Nube)":"")+(nIleg?". "+nIleg+" PDF no se pueden leer (dañados o sin número de OC): "+Object.keys(fall).slice(0,5).join(", ")+(nIleg>5?"…":""):"")+".");barra(0,0)}
+  else{
+   est("Hay "+claves.length+" OC en la Nube; faltan leer "+pend.length+(deNube?" ("+deNube+" ya vinieron leídas)":"")+". Puede tardar varios minutos: podés seguir usando la calculadora.");
+   /* 2) descarga adelantada de a 3 y lectura de a una, cediendo el control al navegador entre cada archivo */
+   var VENT=3,dl={};
+   function pedir(i){if(i>=pend.length||dl[i])return;var k=pend[i];dl[i]=fxT(FB_PDF+"/"+encodeURIComponent(k)+"/data.json",{},90000).then(function(r){return r.ok?r.json():null}).catch(function(){return null})}
+   for(var j=0;j<VENT&&j<pend.length;j++)pedir(j);
+   var lote={},desdeGuardado=0,lleno=false;
+   for(var i=0;i<pend.length;i++){
+    if(cancelar)break;
+    pedir(i+VENT);
+    var key=pend[i],b64=await dl[i];delete dl[i];
+    barra(i,pend.length);
+    est("Leyendo OC "+(i+1)+" de "+pend.length+": "+key+(fail?" · "+fail+" con problemas":""));
+    if(!b64||typeof b64!=="string"){fail++;fallas.push(key+" (no se pudo bajar)");continue}
+    try{
+     var file=new File([b64ABytes(b64)],key+".pdf",{type:"application/pdf"});
+     var d=await Promise.race([leerPdfOC(file),new Promise(function(_,rej){setTimeout(function(){rej(new Error("tiempo agotado leyendo el PDF"))},30000)})]);
+     if(!d.numero){fail++;fallas.push(key+" (no se detectó el número de OC)");fall[key]=1;continue}
+     todas[d.numero]=d;lote[clave(d.numero)]=d;lei[key]=1;ok++;desdeGuardado++;
+    }catch(e){fail++;fallas.push(key+" ("+(e.message||e)+")");if(/Invalid PDF|tiempo agotado/i.test(String(e.message||e)))fall[key]=1}
+    if(desdeGuardado>=25){if(!guardarLocal(todas)){lleno=true;break}await subirLote(lote);lote={};desdeGuardado=0}
+    await sleep(0)}
+   if(!lleno){if(!guardarLocal(todas))lleno=true;await subirLote(lote)}
+   try{localStorage.setItem(LS_FALL,JSON.stringify(fall));localStorage.setItem(LS_LEI,JSON.stringify(lei))}catch(e){}
+   barra(0,0);
+   if(lleno)est("⚠ La memoria de este navegador se llenó: se leyeron "+ok+" órdenes pero no entran todas. Borrá datos viejos del sitio y volvé a intentar.");
+   else est((cancelar?"Cancelado. ":"Listo. ")+ok+" órdenes de compra leídas y guardadas"+(deNube?", "+deNube+" bajadas ya leídas desde la Nube":"")+(fail?", "+fail+" con problemas (ver la consola)":"")+" · "+Math.round((Date.now()-t0)/1000)+" s.");
+   if(fallas.length)console.warn("OC con problemas:",fallas)}
+ }catch(e){est("No se pudo traer las OC de la Nube: "+(e.message||e));barra(0,0)}
+ corriendo=false;if(b)b.disabled=false;if(c)c.style.display="none";
+ try{renderOrdenesCompra();renderUltimosPreciosMP()}catch(e){}
+};
 })();
 </script></body></html>
