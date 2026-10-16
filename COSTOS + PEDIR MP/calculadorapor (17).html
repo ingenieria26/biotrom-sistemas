@@ -1948,7 +1948,7 @@ function parseTextoOC(lineas, nombreArchivo) {
     if (idxHeader !== -1) {
         const fin = idxSubtotal !== -1 ? idxSubtotal : lineas.length;
         const headerTxt = lineas[idxHeader] + " " + (lineas[idxHeader + 1] || "");
-        const unidadHeaderMatch = /\[\s*(kgs?|kilos?|mts?|metros?|m)\s*\]/i.exec(headerTxt) || /CANT\.?\s*(?:en\s+)?(kgs?|kilos?|mts?|metros?|m|unid(?:ades)?|un|u)\b/i.exec(headerTxt);
+        const unidadHeaderMatch = /\[\s*(kgs?|kilos?|mts?|metros?|m)\s*\]/i.exec(headerTxt) || /CANT\.?\s*(?:en\s+)?(kgs?|kilos?|mts?|metros?|m|unid(?:ades)?|un|u)\b/i.exec(headerTxt) || (/CANT\.?\s*(?:en)?$/i.test(lineas[idxHeader].replace(/DESCRIPCI.*/i, "").trim()) && /^(kgs?|kilos?|mts?|metros?)\b/i.exec((lineas[idxHeader + 1] || "").trim()));
         const unidadDefault = unidadHeaderMatch ? (/^k/i.test(unidadHeaderMatch[1]) ? "KG" : (/^(un|u)/i.test(unidadHeaderMatch[1]) ? "UN" : "MTS")) : "";
         _hdrUnidad = unidadDefault;
         const _hdrPrecioTxt = (lineas[idxHeader - 1] || "") + " " + headerTxt + " " + (lineas[idxHeader + 2] || "");
