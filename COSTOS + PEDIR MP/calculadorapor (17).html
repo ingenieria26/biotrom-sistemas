@@ -1948,10 +1948,11 @@ function parseTextoOC(lineas, nombreArchivo) {
     if (idxHeader !== -1) {
         const fin = idxSubtotal !== -1 ? idxSubtotal : lineas.length;
         const headerTxt = lineas[idxHeader] + " " + (lineas[idxHeader + 1] || "");
-        const unidadHeaderMatch = /\[\s*(kgs?|kilos?|mts?|metros?|m)\s*\]/i.exec(headerTxt) || /CANT\.?\s*(kgs?|kilos?|mts?|metros?|m|unid(?:ades)?|un|u)\b/i.exec(headerTxt);
+        const unidadHeaderMatch = /\[\s*(kgs?|kilos?|mts?|metros?|m)\s*\]/i.exec(headerTxt) || /CANT\.?\s*(?:en\s+)?(kgs?|kilos?|mts?|metros?|m|unid(?:ades)?|un|u)\b/i.exec(headerTxt);
         const unidadDefault = unidadHeaderMatch ? (/^k/i.test(unidadHeaderMatch[1]) ? "KG" : (/^(un|u)/i.test(unidadHeaderMatch[1]) ? "UN" : "MTS")) : "";
         _hdrUnidad = unidadDefault;
-        _hdrPrecioPor = /P\.?\s*U\.?\s*x\s*(?:kg|kilo)/i.test((lineas[idxHeader - 1] || "") + " " + headerTxt) ? "kg" : "";
+        const _hdrPrecioTxt = (lineas[idxHeader - 1] || "") + " " + headerTxt + " " + (lineas[idxHeader + 2] || "");
+        _hdrPrecioPor = /P\.?\s*U\.?\s*x\s*(?:kg|kilo)|USD\s*\/\s*kg/i.test(_hdrPrecioTxt) ? "kg" : (/USD\s*\/\s*(?:m|mts?|metros?)\b/i.test(_hdrPrecioTxt) ? "m" : "");
         const UNIDADES = "MTS?|METROS?|KGS?|UN|UNI?|U\\.?|PZAS?|LTS?";
         const MONEDA = "(?:USD|ARS|U\\$S|U\\$D)?\\s*\\$?\\s*";
         const IVA_SUFIJO = "(?:\\+\\s*IVA(?:\\s*X\\s*U\\.?)?)?";
@@ -2025,6 +2026,7 @@ function parseTextoOC(lineas, nombreArchivo) {
                 });
                 continue;
             }
+            if (/^\s*Env[i\u00ed]o\b|Subtotal|Valores en d[o\u00f3]lares|I\.V\.A/i.test(linea)) break;
             if (items.length && linea.trim() && !/^\[/.test(linea.trim()) && !/:/.test(linea)) {
                 // Fila de continuacion de la descripcion del item anterior (ej. el
                 // diametro "REDONDO Ø 4" queda en un renglon aparte por como se
@@ -2035,6 +2037,10 @@ function parseTextoOC(lineas, nombreArchivo) {
         }
     }
 
+    items.forEach(it => {
+        const mp = /^(chapas?|planchuelas?)\s+(.+)$/i.exec(it.descripcion || "");
+        if (mp && new RegExp(mp[1].replace(/s$/i, ""), "i").test(mp[2])) { if (!it.unidad) it.unidad = mp[1].toUpperCase(); it.descripcion = mp[2]; }
+    });
     // Algunas plantillas viejas dejan Subtotal/I.V.A./Total en blanco (cada
     // renglon de item ya trae su propio total "+ IVA" incluido) - si no hay
     // Total general, se calcula sumando el total de cada item.
@@ -2423,7 +2429,7 @@ function mpUsados(){var desc=descripciones(),guard=costosGuardados(),mp={};
 /* Precio automatico: el de la OC MAS NUEVA del mismo material y diametro (barras redondas). Las OC mas viejas no se tienen en cuenta:
    si llega una OC nueva del mismo material, pasa a ser la que vale. El precio por unidad de una OC no siempre es por metro (a veces es por kg),
    asi que se prueba cada interpretacion y se descarta la que da un precio por kg fuera de lo razonable para ese material. */
-var MATS2={"21":/TITANIO\s*ALEADO|TI\.?\s*ALEADO|GR\.?\s*5/,"22":/TITANIO\s*PURO|GRADO\s*[1-4]/,"11":/316/,"12":/F\s?138/,"61":/304/,"62":/316/,"63":/420(?!\s*B)/,"66":/420\s*B/,"82":/302/,"83":/455/,"84":/465/,"85":/N\s?360/,"31":/CROMO\s*COBALTO|CR\s*CO/,"42":/UHMWPE|POLIETILENO/,"43":/PEEK/,"44":/TEFLON|PTFE/,"46":/\bPOM\b|DELRIN|ACETAL/,"51":/ALUMINIO|\bAL\b\.?/,"52":/6061|6063|ALUMINIO|\bAL\b\.?/,"60":/NITINOL/};
+var MATS2={"21":/TITANIO\s*ALEADO|TI\.?\s*ALEADO|GR\.?\s*5/,"22":/TITANIO\s*PURO|TI\.?\s*PURO|GRADO\s*[1-4]/,"11":/316/,"12":/F\s?138/,"61":/304/,"62":/316/,"63":/420(?!\s*B)/,"66":/420\s*B/,"82":/302/,"83":/455/,"84":/465/,"85":/N\s?360/,"31":/CROMO\s*COBALTO|CR\s*CO/,"42":/UHMWPE|POLIETILENO/,"43":/PEEK/,"44":/TEFLON|PTFE/,"46":/\bPOM\b|DELRIN|ACETAL/,"51":/ALUMINIO|\bAL\b\.?/,"52":/6061|6063|ALUMINIO|\bAL\b\.?/,"60":/NITINOL/};
 var BANDA={"21":[30,200],"22":[25,200],"11":[3,20],"12":[3,60],"61":[2.5,20],"62":[2.5,20],"63":[2.5,25],"66":[2.5,25],"82":[2.5,40],"83":[2.5,40],"84":[2.5,40],"85":[2.5,40],"31":[30,400],"42":[3,80],"43":[40,500],"44":[8,200],"46":[3,60],"51":[2.5,25],"52":[2.5,25],"60":[50,800]};
 /* precio de una OC: con coma, la coma es el decimal (57,37 / 1.234,50); sin coma, el punto es el decimal (57.3700) */
 function numP(s){s=String(s==null?"":s).trim();if(s.indexOf(",")>=0)s=s.replace(/\./g,"").replace(",",".");var v=parseFloat(s);return isNaN(v)?0:v}
@@ -2435,7 +2441,15 @@ function pendienteOC(oc,re){var pts={};(oc.items||[]).forEach(function(it){var u
  var ks=Object.keys(pts).map(Number);if(ks.length<2||Math.max.apply(null,ks)/Math.min.apply(null,ks)<1.3)return null;
  var X=[],Y=[];ks.forEach(function(k){var a=pts[k];X.push(Math.log(k*k));Y.push(Math.log(a.reduce(function(s,v){return s+v},0)/a.length))});
  var n=X.length,mx=X.reduce(function(s,v){return s+v},0)/n,my=Y.reduce(function(s,v){return s+v},0)/n,num=0,den=0;for(var i=0;i<n;i++){num+=(X[i]-mx)*(Y[i]-my);den+=(X[i]-mx)*(X[i]-mx)}return den>0?num/den:null}
+/* Chapas: la OC da el precio de la chapa entera. Para pasarlo a kg hacen falta las medidas de la chapa (no vienen en la OC): se cargan en la tabla. */
+function precioChapa(cod,d,re){var em=/CHAPA\s*([\d][\d.,]*)/i.exec(d||"");if(!em)return null;var esp=parseFloat(em[1].replace(",","."));if(!(esp>0))return null;var cand=[];
+ Object.values(_cargarOrdenesCompra()).forEach(function(oc){(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u)||!/CHAPA/.test(u))return;if(clasificarItemOC(oc,it)!=="mp")return;var m2=/CHAPA\s*([\d][\d.,]*)/.exec(u);if(!m2||Math.abs(parseFloat(m2[1].replace(",","."))-esp)>0.05)return;var p=numP(it.precioUnitario);if(!(p>0))return;cand.push({oc:oc,it:it,p:p})})});
+ if(!cand.length)return null;cand.sort(function(a,b){return _esOcMasReciente(a.oc,b.oc)?-1:_esOcMasReciente(b.oc,a.oc)?1:0});var c=cand[0],fd=fechaOC(c.oc.fecha),dias=fd?Math.round((Date.now()-fd.getTime())/86400000):null;
+ var dm=PRECIOS["chapa:"+cod]||{},w=+dm.ancho||0,l=+dm.largo||0,base={chapa:true,precioChapa:c.p,esp:esp,moneda:c.oc.moneda==="ars"?"ars":"usd",oc:c.oc.numero,fecha:c.oc.fecha||"",dias:dias,desc:c.it.descripcion,saltadas:0};
+ if(!(w>0&&l>0))return Object.assign(base,{ok:false,faltanMedidas:true});
+ var kgCh=w*l*esp*mpDetectarDensidad(cod,d)/1e6;return Object.assign(base,{ok:true,precio:c.p/kgCh,unidad:"kg",kg:c.p/kgCh,kgChapa:kgCh,ancho:w,largo:l,metodo:"precio por chapa entera ÷ "+fmt(kgCh,1)+" kg ("+w+" × "+l+" × "+esp+" mm)"})}
 function precioAuto(cod){var d=descMP(cod),pf=String(cod).slice(0,2),re=MATS2[pf],band=BANDA[pf],dia=numD2(d);
+ if(re&&/CHAPA/i.test(d)&&!/PLANCH/i.test(d)){var pc=precioChapa(cod,d,re);return pc||{ok:false}}
  if(!re||!band||dia==null||/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|ROSCAD|RESORTE|MICRO|TORNILLO/i.test(d))return{ok:false};
  var dens=mpDetectarDensidad(cod,d),kgm=Math.PI*Math.pow(dia/2,2)*dens/1000,centro=Math.sqrt(band[0]*band[1]),cand=[];
  Object.values(_cargarOrdenesCompra()).forEach(function(oc){(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u))return;if(clasificarItemOC(oc,it)!=="mp")return;if(/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|TORN|ARANDELA|TUERCA|ROSCAD/.test(u))return;var x=numD2(it.descripcion);if(x==null||Math.abs(x-dia)>0.05)return;var p=numP(it.precioUnitario);if(!(p>0))return;cand.push({oc:oc,it:it,p:p,u:u})})});
@@ -2443,6 +2457,7 @@ function precioAuto(cod){var d=descMP(cod),pf=String(cod).slice(0,2),re=MATS2[pf
  for(var i=0;i<cand.length;i++){var c=cand[i],un=String(c.it.unidad||"").toUpperCase().replace(/\./g,"").trim(),opts,metodo="",forz=null;
   /* 1) la descripcion o la unidad dicen "kg"; 2) la relacion precio/diametro dentro de la OC; 3) la columna de unidad (casi nunca viene); 4) el precio habitual del material */
   if(c.oc.precioPor==="kg"){forz="kg";metodo="el encabezado de la OC dice precio por kg"}
+  else if(c.oc.precioPor==="m"){forz="m";metodo="el encabezado de la OC dice precio por metro"}
   else if(/^KG/.test(un)||/X\s*KG|\/\s*KG|POR\s*KG/.test(c.u)){forz="kg";metodo="precio por kg, según la OC"}
   else if((c.oc.v||0)>=2&&/^(M|MT|MTS|METRO|METROS)$/.test(un)){forz="m";metodo="el encabezado de la OC dice cantidad en metros"}
   else{var sl=pendienteOC(c.oc,re);if(sl!=null&&sl>=0.6){forz="m";metodo="por metro: el precio crece con el diámetro en esa OC"}else if(sl!=null&&sl<=0.3){forz="kg";metodo="por kg: el precio es igual para todos los diámetros de esa OC"}
@@ -2452,9 +2467,9 @@ function precioAuto(cod){var d=descMP(cod),pf=String(cod).slice(0,2),re=MATS2[pf
   if(ok.length){ok.sort(function(x,y){return x.dist-y.dist});var best=ok[0],amb=!forz&&ok.length>1&&!metodo,fd=fechaOC(c.oc.fecha),dias=fd?Math.round((Date.now()-fd.getTime())/86400000):null;
    return{ok:true,precio:c.p,unidad:best.o,moneda:c.oc.moneda==="ars"?"ars":"usd",oc:c.oc.numero,fecha:c.oc.fecha||"",dias:dias,desc:c.it.descripcion,kg:best.kg,saltadas:i,metodo:metodo,amb:amb}}}
  return{ok:false,hayOC:cand.length>0}}
-function textoOC(a){var u=a.unidad==="kg"?"kg":"m";return"OC "+a.oc+" ("+(a.fecha||"s/f")+"): "+(a.moneda==="ars"?"ARS ":"USD ")+fmt(a.precio,2)+"/"+u+(a.amb?" ⚠ la OC no indica la unidad: se supuso por "+(u==="kg"?"kilo":"metro")+" según el precio habitual, confirmalo":(a.metodo?" ("+a.metodo+")":""))+(a.saltadas?" · se saltearon "+a.saltadas+" OC más nueva"+(a.saltadas>1?"s":"")+" con precio no razonable":"")}
+function textoOC(a){if(a.chapa&&!a.ok)return"OC "+a.oc+" ("+(a.fecha||"s/f")+"): "+(a.moneda==="ars"?"ARS ":"USD ")+fmt(a.precioChapa,2)+" por chapa entera de "+a.esp+" mm";var u=a.unidad==="kg"?"kg":"m";return"OC "+a.oc+" ("+(a.fecha||"s/f")+"): "+(a.moneda==="ars"?"ARS ":"USD ")+fmt(a.precio,2)+"/"+u+(a.amb?" ⚠ la OC no indica la unidad: se supuso por "+(u==="kg"?"kilo":"metro")+" según el precio habitual, confirmalo":(a.metodo?" ("+a.metodo+")":""))+(a.saltadas?" · se saltearon "+a.saltadas+" OC más nueva"+(a.saltadas>1?"s":"")+" con precio no razonable":"")}
 /* Pista de precio: la OC mas reciente de un material parecido (misma familia y mismo diametro). Es solo una pista: el precio por unidad de las OC no siempre es comparable (kg, metros, barras), por eso se confirma a mano. */
-var MATS={"21":/TITANIO\s*ALEADO|TI\.?\s*ALEADO/,"22":/TITANIO\s*PURO/,"11":/316/,"12":/F\s?138/,"61":/304/,"62":/316/,"63":/420(?!\s*B)/,"66":/420\s*B/,"31":/CROMO\s*COBALTO|CR\s*CO/,"42":/UHMWPE/,"43":/PEEK/,"46":/\bPOM\b|DELRIN/,"52":/6061|6063|AL\./,"51":/ALUMINIO|AL\./};
+var MATS={"21":/TITANIO\s*ALEADO|TI\.?\s*ALEADO/,"22":/TITANIO\s*PURO|TI\.?\s*PURO/,"11":/316/,"12":/F\s?138/,"61":/304/,"62":/316/,"63":/420(?!\s*B)/,"66":/420\s*B/,"31":/CROMO\s*COBALTO|CR\s*CO/,"42":/UHMWPE/,"43":/PEEK/,"46":/\bPOM\b|DELRIN/,"52":/6061|6063|AL\./,"51":/ALUMINIO|AL\./};
 function numD(s){var m=/Ø\s*([\d][\d.,\s]*)/.exec(s||"");if(!m)return null;var v=parseFloat(m[1].replace(/\s/g,"").replace(",","."));return isNaN(v)?null:v}
 function hintOC(cod){try{var d=descMP(cod),re=MATS[String(cod).slice(0,2)],dia=numD(d);if(!re||dia==null)return"";var forma=/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA/i.test(d),mejor=null;
  Object.values(_cargarOrdenesCompra()).forEach(function(oc){(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u))return;if(!forma&&/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|TORN|ARANDELA|TUERCA/.test(u))return;var x=numD(it.descripcion);if(x==null||Math.abs(x-dia)>0.05)return;if(!mejor||_esOcMasReciente(oc,mejor.oc))mejor={oc:oc,it:it}})});
@@ -2479,11 +2494,12 @@ function render(){var box=document.getElementById("expPanel");if(!box)return;var
  +'<div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:12px"><p style="font-weight:700;color:#1e3a8a;margin:0 0 4px;font-size:13px">🧱 Precio de la materia prima</p>'
  +'<p style="font-size:12px;color:#64748b;margin:0 0 8px">Cargá el precio de cada materia prima que usan los productos sin cálculo guardado. Si dejás un precio vacío, se intenta tomar de las Órdenes de Compra guardadas; si tampoco está ahí, el costo de esos productos queda según la opción de arriba. Los precios se guardan y valen para todas las computadoras.</p>'
  +(mpl.length?'<div style="overflow:auto;max-height:260px"><table style="width:100%;font-size:12px"><thead><tr><th>Código</th><th>Materia prima</th><th style="text-align:right">Productos</th><th>Precio</th><th>Unidad</th><th>Moneda</th><th>Origen</th></tr></thead><tbody>'+mpl.map(function(o){var p=PRECIOS[o.cod]||{},man=p.precio>0,au=man?null:precioAuto(o.cod),oc=(!man&&!au.ok)?hintOC(o.cod):"",pr=man?p.precio:(au&&au.ok?au.precio:""),un=man?(p.unidad||"kg"):(au&&au.ok?au.unidad:"kg"),mo=man?(p.moneda||"usd"):(au&&au.ok?au.moneda:"usd");
+   var chapaUI="";if(!man&&/CHAPA/i.test(descMP(o.cod))&&au&&au.chapa){var dmx=PRECIOS["chapa:"+o.cod]||{};chapaUI='<div style="margin-top:4px;color:#334155">'+(au.ok?'':'<b style="color:#b45309">'+esc(textoOC(au))+' — falta cargar las medidas para pasarlo a kg:</b><br>')+'Medidas de la chapa (mm): ancho <input type="number" min="0" class="table-input" style="width:70px" value="'+(dmx.ancho||"")+'" onchange="expChapa(\''+o.cod+'\',\'ancho\',this.value)"> × largo <input type="number" min="0" class="table-input" style="width:70px" value="'+(dmx.largo||"")+'" onchange="expChapa(\''+o.cod+'\',\'largo\',this.value)"></div>'}
    var origen=man?'manual · <a href="#" onclick="expAuto(\''+o.cod+'\');return false" style="color:#4338ca">volver a automático</a>':(au&&au.ok?'<span style="color:'+(au.amb?"#b45309":"#047857")+'" title="Se usa siempre la OC más nueva de este material">automático — '+esc(textoOC(au))+'</span>'+(au.dias!=null&&au.dias>365?' <span style="color:#b45309" title="La OC más nueva de este material es vieja">⚠ de hace '+(Math.round(au.dias/36.5)/10)+' años</span>':''):(oc?'sin precio automático · <span title="Pista de OC de un material parecido: confirmá el precio y la unidad a mano">'+esc(oc)+'</span>':"sin precio"));
    return'<tr><td><b>'+esc(o.cod)+'</b></td><td>'+esc(descMP(o.cod))+'</td><td style="text-align:right">'+o.n+'</td><td><input type="number" min="0" step="0.01" class="table-input" style="width:90px" value="'+(pr!==""?Math.round(pr*100)/100:"")+'" placeholder="—" onchange="expPrecio(\''+o.cod+'\',\'precio\',this.value)"></td>'
    +'<td><select style="padding:4px" onchange="expPrecio(\''+o.cod+'\',\'unidad\',this.value)">'+[["kg","por kg"],["m","por metro"],["barra","por barra de 3 m"]].map(function(u){return'<option value="'+u[0]+'"'+(un===u[0]?" selected":"")+'>'+u[1]+'</option>'}).join("")+'</select></td>'
    +'<td><select style="padding:4px" onchange="expPrecio(\''+o.cod+'\',\'moneda\',this.value)"><option value="usd"'+(mo==="usd"?" selected":"")+'>USD</option><option value="ars"'+(mo==="ars"?" selected":"")+'>ARS</option></select></td>'
-   +'<td style="color:#64748b;font-size:11px;max-width:420px">'+origen+'</td>'+'</tr>'}).join("")+'</tbody></table></div>':'<p style="font-size:12px;color:#94a3b8;margin:0">No hay materias primas pendientes: ningún producto sin cálculo guardado tiene carta de proceso.</p>')+'</div>'
+   +'<td style="color:#64748b;font-size:11px;max-width:420px">'+origen+chapaUI+'</td>'+'</tr>'}).join("")+'</tbody></table></div>':'<p style="font-size:12px;color:#94a3b8;margin:0">No hay materias primas pendientes: ningún producto sin cálculo guardado tiene carta de proceso.</p>')+'</div>'
  +'<div class="cards" style="margin-bottom:10px"><div class="card"><div class="card-label">Productos en el Excel</div><div class="card-val">'+filas.length+'</div><div class="card-sub">con producción en '+PERIODO_TXT+(armar.excluidos?' · sin '+armar.excluidos+' instrumentales y partes de caja/instrumental, que por ahora no se costean':'')+'</div></div>'
  +'<div class="card"><div class="card-label">Con costo</div><div class="card-val">'+con+'</div><div class="card-sub">'+(filas.length-con)+' en blanco (el motivo está en la tabla)</div></div>'
  +'<div class="card"><div class="card-label">Piezas producidas</div><div class="card-val">'+piezas.toLocaleString("es-AR")+'</div><div class="card-sub">suma de los 12 meses</div></div></div>'
@@ -2494,6 +2510,7 @@ function render(){var box=document.getElementById("expPanel");if(!box)return;var
 window.expSet=function(k,v){S[k]=v;render()};
 window.expPrecio=function(cod,k,v){var p=PRECIOS[cod];if(!(p&&p.precio>0)){var e=precioEfectivo(cod);p=PRECIOS[cod]={precio:e?e.precio:0,unidad:e?e.unidad:"kg",moneda:e?e.moneda:"usd"}}if(k==="precio")p.precio=parseFloat(v)||0;else p[k]=v;if(!(p.precio>0))delete PRECIOS[cod];guardarPrecios();render()};
 window.expAuto=function(cod){delete PRECIOS[cod];guardarPrecios();render()};
+window.expChapa=function(cod,k,v){var d=PRECIOS["chapa:"+cod]||(PRECIOS["chapa:"+cod]={});d[k]=parseFloat(v)||0;guardarPrecios();render()};
 function precioEfectivo(cod){var m=PRECIOS[cod];if(m&&m.precio>0)return{origen:"manual",precio:m.precio,unidad:m.unidad||"kg",moneda:m.moneda||"usd"};var a=precioAuto(cod);if(a.ok)return{origen:"oc",precio:a.precio,unidad:a.unidad,moneda:a.moneda,oc:a};return null}
 window.expCancelar=function(){cancelar=true};
 /* ---------- calculo masivo: corre en una copia oculta de la calculadora (iframe) ---------- */
