@@ -2436,13 +2436,23 @@ function cartaDe(cod,desc){var d=DB_CARTAS_PLANOS[cod],origen="carta propia";
   if(f){d=Object.assign({},f,d||{});origen=f._deNombre?"carta del mismo producto en otra medida ("+f._codFamilia+")"+(f._mpMaestro?", materia prima según el MAESTRO: "+f.mp:(f._mpAjustada?", materia prima ajustada de "+f._mpOriginal+" a "+f.mp:"")):"carta de familia "+(f._codFamilia||"")}}
  if(!d||(!(d.pasos&&d.pasos.length)&&!d.maq))return null;return{d:d,origen:origen,mp:d.mp||""}}
 /* ---------- armado de filas ---------- */
+/* ---------- ensambles: el costo es el de los componentes que lleva (BOM del MAESTRO) + su armado si tiene carta ---------- */
+function esEns(cod){var b=ENSAMBLES_MAESTRO[cod];return!!(b&&b.length)}
+function ensamblar(m){var d=m.ownD||0,c=m.ownC||0,falt=[];(m.comps||[]).forEach(function(x){var dd=x.d,cc=x.c;if(dd==null){var p=PRECIOS["comp:"+x.cod];if(p&&p.precio>0){dd=p.precio*(p.moneda==="ars"?1/tc():1);cc=0}}if(dd==null){falt.push(x.cod);return}d+=x.uso*dd;c+=x.uso*(cc||0)});return{directo:d,cif:c,faltan:falt}}
+function faltantesComp(){var out={};if(!MAS||!MAS.items)return[];Object.keys(MAS.items).forEach(function(k){var m=MAS.items[k];if(!m.ensamble)return;(m.comps||[]).forEach(function(x){if(x.d!=null)return;var o=out[x.cod]||(out[x.cod]={cod:x.cod,desc:x.desc,n:0});o.n++})});return Object.keys(out).map(function(k){return out[k]}).sort(function(a,b){return b.n-a.n})}
+function compSection(){if(!MAS||!MAS.items)return"";var enss=Object.keys(MAS.items).filter(function(k){return MAS.items[k].ensamble}).length;if(!enss)return"";var l=faltantesComp();
+ var h='<div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:12px"><p style="font-weight:700;color:#1e3a8a;margin:0 0 4px;font-size:13px">🔩 Ensambles: componentes</p><p style="font-size:12px;color:#64748b;margin:0 0 8px">El costo de un ensamble (tutores, cabezales, etc.) es la <b>suma del costo de los componentes que lleva</b>, según el BOM del MAESTRO, más su armado si tiene carta propia. Cada componente toma su cálculo guardado o el que se calculó acá. Los componentes comprados o sin carta no se pueden calcular: cargales abajo el costo unitario y los ensambles se actualizan solos.</p>';
+ if(!l.length)h+='<p style="font-size:12px;color:#047857;margin:0">Los componentes de los '+enss+' ensambles tienen todos costo.</p>';
+ else h+='<div style="overflow:auto;max-height:260px"><table style="width:100%;font-size:12px"><thead><tr><th>Código</th><th>Componente</th><th style="text-align:right">Ensambles que lo usan</th><th>Costo unitario (USD)</th></tr></thead><tbody>'+l.map(function(o){var p=PRECIOS["comp:"+o.cod];return'<tr><td><b>'+esc(o.cod)+'</b></td><td>'+esc(o.desc)+'</td><td style="text-align:right">'+o.n+'</td><td><input type="number" min="0" step="0.01" class="table-input" style="width:100px" value="'+(p&&p.precio>0?p.precio:"")+'" placeholder="—" onchange="expCompPrecio(\''+o.cod+'\',this.value)"></td></tr>'}).join("")+'</tbody></table></div>';
+ return h+'</div>'}
+window.expCompPrecio=function(cod,v){var n=parseFloat(v)||0;if(n>0)PRECIOS["comp:"+cod]={precio:n,moneda:"usd"};else delete PRECIOS["comp:"+cod];guardarPrecios();render()};
 function armar(){var guard=costosGuardados(),desc=descripciones(),mon=S.moneda==="ARS"?tc():1,filas=[];armar.excluidos=0;
  Object.keys(OF_CANTIDAD_POR_CODIGO_ANIO).forEach(function(cod){var q=(OF_CANTIDAD_POR_CODIGO_ANIO[cod]||{})[PERIODO]||0;if(!q)return;if(esInstrumental(cod)){armar.excluidos++;return}
   var g=guard[cod],m=MAS&&MAS.items&&MAS.items[cod],f={cod:cod,desc:desc[cod]||(g&&g.nombre)||"",qty:q,directo:null,cif:null,origen:"",nota:"",fecha:"",m:null};
   if(g&&!g.sinDesglose){f.directo=g.directo*mon;f.cif=g.cif*mon;f.origen="Guardado";f.fecha=g.fecha}
-  else if(m){f.m=m;
-   if(m.estado==="ok"||(m.estado==="sin_precio"&&S.mpFalta==="sin"&&m.directo!=null)){f.directo=m.directo*mon;f.cif=m.cif*mon;f.origen=(m.estado==="ok"?"Calculado":"Calculado sin materia prima (incompleto)")+(m.carta&&/otra medida/.test(m.carta)?" · "+m.carta:"")}
-   else f.nota=m.estado==="sin_carta"?" · sin carta de proceso":" · sin precio de materia prima";
+  else if(m){if(m.ensamble){var t=ensamblar(m);m=Object.assign({},m,{directo:t.directo,cif:t.cif,faltan:t.faltan,estado:t.faltan.length?"sin_precio":"ok"})}f.m=m;
+   if(m.estado==="ok"||(m.estado==="sin_precio"&&S.mpFalta==="sin"&&m.directo!=null)){f.directo=m.directo*mon;f.cif=m.cif*mon;f.origen=(m.ensamble?(m.estado==="ok"?"Ensamble: costo de sus componentes":"Ensamble incompleto (faltan componentes)"):(m.estado==="ok"?"Calculado":"Calculado sin materia prima (incompleto)"))+(m.carta&&/otra medida/.test(m.carta)?" · "+m.carta:"")}
+   else f.nota=m.ensamble?" · ensamble: faltan "+m.faltan.length+" componentes sin costo ("+m.faltan.slice(0,4).join(", ")+(m.faltan.length>4?"…":"")+")":(m.estado==="sin_carta"?" · sin carta de proceso":" · sin precio de materia prima");
    if(g&&g.sinDesglose&&f.directo===null)f.nota+=" · costo final guardado "+fmt(g.final*mon,4)+" (sin desglose)"}
   else if(g&&g.sinDesglose){f.nota=" · solo costo final "+fmt(g.final*mon,4)+", sin desglose"}
   if(f.directo===null&&!S.sinCosto)return;filas.push(f)});
@@ -2450,7 +2460,7 @@ function armar(){var guard=costosGuardados(),desc=descripciones(),mon=S.moneda==
 /* ---------- materias primas que usan los productos sin calculo guardado ---------- */
 function mpUsados(){var desc=descripciones(),guard=costosGuardados(),mp={};
  Object.keys(OF_CANTIDAD_POR_CODIGO_ANIO).forEach(function(cod){var q=(OF_CANTIDAD_POR_CODIGO_ANIO[cod]||{})[PERIODO]||0;if(!q||esInstrumental(cod))return;if(guard[cod]&&!guard[cod].sinDesglose)return;
-  var c=cartaDe(cod,desc[cod]||"");if(!c||!c.mp)return;var o=mp[c.mp]||(mp[c.mp]={cod:c.mp,n:0});o.n++});
+  if(esEns(cod))return;var c=cartaDe(cod,desc[cod]||"");if(!c||!c.mp)return;var o=mp[c.mp]||(mp[c.mp]={cod:c.mp,n:0});o.n++});
  var arr=Object.keys(mp).map(function(k){return mp[k]});arr.sort(function(a,b){return b.n-a.n});return arr}
 /* Precio automatico: el de la OC MAS NUEVA del mismo material y diametro (barras redondas). Las OC mas viejas no se tienen en cuenta:
    si llega una OC nueva del mismo material, pasa a ser la que vale. El precio por unidad de una OC no siempre es por metro (a veces es por kg),
@@ -2503,7 +2513,7 @@ function hintOC(cod){try{var d=descMP(cod),re=MATS[String(cod).slice(0,2)],dia=n
 function descMP(c){try{var x=DB_MP_REAL.find(function(r){return r.c===c});return x?x.d:""}catch(e){return""}}
 /* ---------- pantalla ---------- */
 function activo(){var t=document.getElementById("tab-exportar");return t&&t.classList.contains("active")}
-function resumenMas(M){var c={ok:0,sin_carta:0,sin_precio:0};Object.keys(M.items||{}).forEach(function(k){c[M.items[k].estado]=(c[M.items[k].estado]||0)+1});return c.ok+" calculados, "+c.sin_precio+" sin precio de materia prima, "+c.sin_carta+" sin carta de proceso"}
+function resumenMas(M){var c={ok:0,sin_carta:0,sin_precio:0};Object.keys(M.items||{}).forEach(function(k){if(M.items[k].extra)return;c[M.items[k].estado]=(c[M.items[k].estado]||0)+1});return c.ok+" calculados, "+c.sin_precio+" sin precio de materia prima, "+c.sin_carta+" sin carta de proceso"}
 function render(){var box=document.getElementById("expPanel");if(!box)return;var filas=armar(),con=filas.filter(function(f){return f.directo!==null}).length,piezas=filas.reduce(function(a,f){return a+f.qty},0),sufijo=" ("+S.moneda+")";
  var mpl=mpUsados();
  var h='<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">'
@@ -2526,7 +2536,7 @@ function render(){var box=document.getElementById("expPanel");if(!box)return;var
    +'<td><select style="padding:4px" onchange="expPrecio(\''+o.cod+'\',\'unidad\',this.value)">'+[["kg","por kg"],["m","por metro"],["barra","por barra de 3 m"]].map(function(u){return'<option value="'+u[0]+'"'+(un===u[0]?" selected":"")+'>'+u[1]+'</option>'}).join("")+'</select></td>'
    +'<td><select style="padding:4px" onchange="expPrecio(\''+o.cod+'\',\'moneda\',this.value)"><option value="usd"'+(mo==="usd"?" selected":"")+'>USD</option><option value="ars"'+(mo==="ars"?" selected":"")+'>ARS</option></select></td>'
    +'<td style="color:#64748b;font-size:11px;max-width:420px">'+origen+chapaUI+'</td>'+'</tr>'}).join("")+'</tbody></table></div>':'<p style="font-size:12px;color:#94a3b8;margin:0">No hay materias primas pendientes: ningún producto sin cálculo guardado tiene carta de proceso.</p>')+'</div>'
- +'<div class="cards" style="margin-bottom:10px"><div class="card"><div class="card-label">Productos en el Excel</div><div class="card-val">'+filas.length+'</div><div class="card-sub">con producción en '+PERIODO_TXT+(armar.excluidos?' · sin '+armar.excluidos+' instrumentales y partes de caja/instrumental, que por ahora no se costean':'')+'</div></div>'
+ +compSection()+'<div class="cards" style="margin-bottom:10px"><div class="card"><div class="card-label">Productos en el Excel</div><div class="card-val">'+filas.length+'</div><div class="card-sub">con producción en '+PERIODO_TXT+(armar.excluidos?' · sin '+armar.excluidos+' instrumentales y partes de caja/instrumental, que por ahora no se costean':'')+'</div></div>'
  +'<div class="card"><div class="card-label">Con costo</div><div class="card-val">'+con+'</div><div class="card-sub">'+(filas.length-con)+' en blanco (el motivo está en la tabla)</div></div>'
  +'<div class="card"><div class="card-label">Piezas producidas</div><div class="card-val">'+piezas.toLocaleString("es-AR")+'</div><div class="card-sub">suma de los 12 meses</div></div></div>'
  +'<div style="overflow:auto;max-height:420px;border:1px solid #e2e8f0;border-radius:12px"><table style="width:100%;font-size:12px"><thead><tr><th>Producto</th><th style="text-align:right">Cantidad producida</th><th style="text-align:right">Costo directo unitario'+sufijo+'</th><th style="text-align:right">Costo indirecto de fábrica unitario'+sufijo+'</th><th>Origen del costo</th></tr></thead><tbody>'
@@ -2564,34 +2574,57 @@ window.expCalcular=async function(){if(corriendo)return;corriendo=true;cancelar=
   if(!(await esperar(function(){return w.seleccionarItem&&w.calcularTodo&&w.mpSeleccionarCodigo&&w.document.getElementById("prodCostoMetro")&&w.eval("typeof DB_MAQUINAS!==\"undefined\"&&typeof DB_CARTAS_PLANOS!==\"undefined\"")},20000)))throw new Error("La calculadora auxiliar no terminó de iniciar.");
   await sleep(1500);
   var $=function(id){return w.document.getElementById(id)},cmCache={},items={},cont={ok:0,sin_carta:0,sin_precio:0},t0=Date.now(),tcAct=tc();
-  $("globalTc").value=tcAct;
-  for(var i=0;i<cola.length;i++){
-   if(cancelar){resumenRun="Cálculo cancelado: se procesaron "+i+" de "+cola.length+" productos (no se guardó nada).";throw new Error("__cancelado")}
-   var it=cola[i],c=cartaDe(it.cod,it.desc),rec={nombre:it.desc};
-   if(i%10===0){setProg("Calculando "+i+" de "+cola.length+" productos…");await sleep(0);$("globalTc").value=tcAct}
-   if(!c){rec.estado="sin_carta";items[it.cod]=rec;cont.sin_carta++;continue}
-   rec.carta=c.origen;rec.mp=c.mp;
-   /* precio de la materia prima (una vez por codigo) */
-   var cmr=null;
-   if(c.mp){if(!(c.mp in cmCache))cmCache[c.mp]=costoMetroMP(w,c.mp,PRECIOS[c.mp]);cmr=cmCache[c.mp]}
-   rec.precioMP=cmr?cmr.fuente:"la carta no indica la materia prima";
-   try{
-    w.seleccionarItem(it.cod,it.desc);
-    if(!w.document.querySelectorAll("#operaciones-container .maq-block").length){rec.estado="sin_carta";items[it.cod]=rec;cont.sin_carta++;continue}
-    /* lote: promedio historico de las OF cerradas; si no hay, cantidad anual / 2 */
-    var lh=LOTES_PROMEDIO_OF[it.cod],lote;if(lh&&lh[0]>0){lote=lh[0];rec.loteFuente="promedio de OF cerradas"}else{lote=Math.max(1,Math.round(it.q/2));rec.loteFuente="estimado: cantidad anual ÷ 2"}
-    rec.lote=lote;w.sincronizarLote(lote);
-    $("prodCostoMetro").value=(cmr&&cmr.cm)?cmr.cm:0;
-    w.calcularTodo();
-    var fin=parseUsd($("final_indirectos_usd").innerText),ind=parseFloat($("globalIndirectos").value)||0,dtot=fin/(1+ind/100);
-    rec.directo=dtot;rec.cif=fin-dtot;
-    /* cuantas operaciones usan tiempo real medido, y cuantas son de terceros */
-    var nOps=0,nReal=0,nTerc=0;w.document.querySelectorAll('#operaciones-container [id$="_maq"]').forEach(function(s){nOps++;if(s.value==="terceros")nTerc++;else if(w._tiempoRealParaMaquina&&w._tiempoRealParaMaquina(it.cod,s.value))nReal++});
-    rec.ops=nOps;rec.opsReal=nReal;rec.terceros=nTerc;
-    rec.estado=(cmr&&cmr.cm)?"ok":"sin_precio";
-    if(rec.estado==="ok")cont.ok++;else cont.sin_precio++;
-   }catch(e){rec.estado="sin_carta";rec.error=String(e.message||e);cont.sin_carta++}
-   items[it.cod]=rec}
+   $("globalTc").value=tcAct;
+   /* ensambles: su costo es el de sus componentes; los componentes que no estan en la cola (no se produjeron en el periodo) tambien se costean */
+   var enCola={},colaN=[],colaE=[];
+   cola.forEach(function(x){enCola[x.cod]=1;(esEns(x.cod)?colaE:colaN).push(x)});
+   var visJ={};colaE.slice().forEach(function(x){(function j(cod){if(visJ[cod])return;visJ[cod]=1;(ENSAMBLES_MAESTRO[cod]||[]).forEach(function(b){var k=b.cod;j(k);if(enCola[k]||(guard[k]&&!guard[k].sinDesglose))return;enCola[k]=1;(esEns(k)?colaE:colaN).push({cod:k,desc:desc[k]||b.desc||"",q:0,extra:true})})})(x.cod)});
+   var prof=function(cod,vis){vis=vis||{};if(vis[cod])return 0;vis[cod]=1;var m=0;(ENSAMBLES_MAESTRO[cod]||[]).forEach(function(b){if(esEns(b.cod))m=Math.max(m,prof(b.cod,vis))});return m+1};
+   colaE.sort(function(a,b){return prof(a.cod)-prof(b.cod)});
+   var totalCola=colaN.length+colaE.length,hechos=0;
+   var loteDe=function(it,rec){var lh=LOTES_PROMEDIO_OF[it.cod],lote;if(lh&&lh[0]>0){lote=lh[0];rec.loteFuente="promedio de OF cerradas"}else if(it.extra){lote=20;rec.loteFuente="sin dato (componente de ensamble que no se produjo en el periodo): 20 piezas"}else{lote=Math.max(1,Math.round(it.q/2));rec.loteFuente="estimado: cantidad anual ÷ 2"}rec.lote=lote;return lote};
+   var costoComp=function(cod){var g=guard[cod];if(g&&!g.sinDesglose)return{d:g.directo,c:g.cif,src:"cálculo guardado"};var r=items[cod];if(r&&r.estado==="ok"&&r.directo!=null)return{d:r.directo,c:r.cif,src:"calculado"};return null};
+   var procesar=function(it){var c=cartaDe(it.cod,it.desc),rec={nombre:it.desc};if(it.extra)rec.extra=true;
+    if(!c){rec.estado="sin_carta";items[it.cod]=rec;if(!it.extra)cont.sin_carta++;return}
+    rec.carta=c.origen;rec.mp=c.mp;
+    /* precio de la materia prima (una vez por codigo) */
+    var cmr=null;
+    if(c.mp){if(!(c.mp in cmCache))cmCache[c.mp]=costoMetroMP(w,c.mp,PRECIOS[c.mp]);cmr=cmCache[c.mp]}
+    rec.precioMP=cmr?cmr.fuente:"la carta no indica la materia prima";
+    try{
+     w.seleccionarItem(it.cod,it.desc);
+     if(!w.document.querySelectorAll("#operaciones-container .maq-block").length){rec.estado="sin_carta";items[it.cod]=rec;if(!it.extra)cont.sin_carta++;return}
+     /* lote: promedio historico de las OF cerradas; si no hay, cantidad anual / 2 */
+     var lote=loteDe(it,rec);w.sincronizarLote(lote);
+     $("prodCostoMetro").value=(cmr&&cmr.cm)?cmr.cm:0;
+     w.calcularTodo();
+     var fin=parseUsd($("final_indirectos_usd").innerText),ind=parseFloat($("globalIndirectos").value)||0,dtot=fin/(1+ind/100);
+     rec.directo=dtot;rec.cif=fin-dtot;
+     /* cuantas operaciones usan tiempo real medido, y cuantas son de terceros */
+     var nOps=0,nReal=0,nTerc=0;w.document.querySelectorAll('#operaciones-container [id$="_maq"]').forEach(function(s){nOps++;if(s.value==="terceros")nTerc++;else if(w._tiempoRealParaMaquina&&w._tiempoRealParaMaquina(it.cod,s.value))nReal++});
+     rec.ops=nOps;rec.opsReal=nReal;rec.terceros=nTerc;
+     rec.estado=(cmr&&cmr.cm)?"ok":"sin_precio";
+     if(!it.extra){if(rec.estado==="ok")cont.ok++;else cont.sin_precio++}
+    }catch(e){rec.estado="sin_carta";rec.error=String(e.message||e);if(!it.extra)cont.sin_carta++}
+    items[it.cod]=rec};
+   var procesarEns=function(it){var rec={nombre:it.desc,ensamble:true},bom=ENSAMBLES_MAESTRO[it.cod],c=cartaDe(it.cod,it.desc),ownD=0,ownC=0;if(it.extra)rec.extra=true;
+    rec.carta="sin carta de armado (solo componentes)";rec.mp="componentes";rec.precioMP="costo de los componentes del ensamble (BOM del MAESTRO)";
+    if(c){try{w.seleccionarItem(it.cod,it.desc);if(w.document.querySelectorAll("#operaciones-container .maq-block").length){var lote=loteDe(it,rec);w.sincronizarLote(lote);$("prodCostoMetro").value=0;w.calcularTodo();
+      var fin=parseUsd($("final_indirectos_usd").innerText),ind=parseFloat($("globalIndirectos").value)||0;ownD=fin/(1+ind/100);ownC=fin-ownD;rec.carta=c.origen+" (armado)";
+      var nOps=0,nReal=0,nTerc=0;w.document.querySelectorAll('#operaciones-container [id$="_maq"]').forEach(function(s){nOps++;if(s.value==="terceros")nTerc++;else if(w._tiempoRealParaMaquina&&w._tiempoRealParaMaquina(it.cod,s.value))nReal++});rec.ops=nOps;rec.opsReal=nReal;rec.terceros=nTerc}}catch(e){rec.error=String(e.message||e)}}
+    rec.ownD=ownD;rec.ownC=ownC;
+    rec.comps=bom.map(function(b){var k=costoComp(b.cod);return{cod:b.cod,desc:b.desc||"",uso:parseFloat(b.uso)||1,d:k?k.d:null,c:k?k.c:null,src:k?k.src:null}});
+    var t=ensamblar(rec);rec.directo=t.directo;rec.cif=t.cif;rec.faltan=t.faltan;rec.estado=t.faltan.length?"sin_precio":"ok";
+    if(!it.extra){if(rec.estado==="ok")cont.ok++;else cont.sin_precio++}
+    items[it.cod]=rec};
+   for(var i=0;i<colaN.length;i++){
+    if(cancelar){resumenRun="Cálculo cancelado: se procesaron "+hechos+" de "+totalCola+" productos (no se guardó nada).";throw new Error("__cancelado")}
+    if(hechos%10===0){setProg("Calculando "+hechos+" de "+totalCola+" productos…");await sleep(0);$("globalTc").value=tcAct}
+    procesar(colaN[i]);hechos++}
+   setProg("Calculando ensambles (suma de sus componentes)…");await sleep(0);
+   for(var e2=0;e2<colaE.length;e2++){
+    if(cancelar){resumenRun="Cálculo cancelado: se procesaron "+hechos+" de "+totalCola+" productos (no se guardó nada).";throw new Error("__cancelado")}
+    procesarEns(colaE[e2]);hechos++}
   var d=new Date(),p2=function(n){return String(n).padStart(2,"0")};
   MAS={fecha:p2(d.getDate())+"/"+p2(d.getMonth()+1)+"/"+d.getFullYear(),tc:tcAct,base:(function(){try{var c=JSON.parse(localStorage.getItem("biotrom_calcpp_base_horas")||"null");return c?c.modo+(c.modo==="piso"?" "+c.piso+" %":""):"teorica"}catch(e){return""}})(),items:items};guardarMas();
   resumenRun="Listo en "+Math.round((Date.now()-t0)/1000)+" s: "+resumenMas(MAS)+".";
@@ -2600,10 +2633,10 @@ window.expCalcular=async function(){if(corriendo)return;corriendo=true;cancelar=
 /* ---------- Excel ---------- */
 function nombreArchivo(){var d=new Date(),p=function(n){return String(n).padStart(2,"0")};return"BIOTROM_Costos_por_producto_anual_"+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())}
 function datos(){var m=S.moneda,filas=armar();
- var enc=["Producto (código + descripción)","Cantidad producida - 12 meses (sep 2025 a ago 2026)","Costo directo unitario ("+m+")","Costo indirecto de fábrica unitario ("+m+")"];
+ var enc=["Producto (código + descripción)","Cantidad producida - "+PERIODO_TXT,"Costo directo unitario ("+m+")","Costo indirecto de fábrica unitario ("+m+")"];
  var rows=filas.map(function(f){return[f.cod+" - "+f.desc,f.qty,f.directo===null?null:Math.round(f.directo*1e4)/1e4,f.cif===null?null:Math.round(f.cif*1e4)/1e4]});
  var enc2=["Producto","Origen del costo","Carta de proceso","Materia prima (código)","Precio de materia prima","Lote usado (piezas)","Origen del lote","Operaciones","Con tiempo real medido","Operaciones de terceros (sin costo)","Observaciones"];
- var rows2=filas.map(function(f){var x=f.m||{};var obs=(f.nota||"").replace(/^ · /,"");
+ var rows2=filas.map(function(f){var x=f.m||{};var obs=(f.nota||"").replace(/^ · /,"");if(x.ensamble&&x.comps)obs+=(obs?" | ":"")+"Componentes: "+x.comps.map(function(k){return k.cod+" x"+k.uso+(k.d==null?" (sin costo)":" = USD "+fmt(k.d+(k.c||0),2))}).join("; ");
   return[f.cod+" - "+f.desc,f.origen||"Sin costo",x.carta||"",x.mp||"",x.precioMP||"",x.lote||"",x.loteFuente||"",x.ops||"",x.opsReal==null?"":x.opsReal,x.terceros==null?"":x.terceros,obs]});
  return{enc:enc,rows:rows,enc2:enc2,rows2:rows2}}
 function bajarCSV(d){var q=function(v){v=v===null?"":String(v).replace(".",",");return'"'+v.replace(/"/g,'""')+'"'};var t="﻿"+[d.enc].concat(d.rows).map(function(r){return r.map(q).join(";")}).join("\r\n");
