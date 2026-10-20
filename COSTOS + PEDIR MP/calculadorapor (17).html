@@ -657,9 +657,9 @@ function _ajustarMPaMedida(mp,tituloOrigen,descProd){try{var cat=DB_MP_REAL,src=
  var need=dProd+(dBarra-dPieza),pre=mp.slice(0,3),c=cat.filter(function(x){return x.c.indexOf(pre)===0&&/BARRA\s*Ø/i.test(x.d)&&!/CUADR|HEX|ROSCAD/i.test(x.d)}).map(function(x){return{c:x.c,d:parseFloat(familiaDiam(x.d))}}).filter(function(x){return x.d>0});
  var mayores=c.filter(function(x){return x.d>=need-0.01}).sort(function(a,b){return a.d-b.d});if(mayores.length)return mayores[0].c;c.sort(function(a,b){return b.d-a.d});return c.length?c[0].c:mp}catch(e){return mp}}
 function resolverCartaPorNombre(desc,codigo){const s=_sigNombre(desc);if(!s)return null;
- if(!_nombreCartaIdx){_nombreCartaIdx={};Object.entries(DB_CARTAS_PLANOS).forEach(function(kv){var d=kv[1];if(!d.titulo||!(d.maq||(d.pasos&&d.pasos.length)))return;var k=_sigNombre(d.titulo);if(!k)return;(_nombreCartaIdx[k]=_nombreCartaIdx[k]||[]).push({c:kv[0],d:d,n:_numsNombre(d.titulo),ti:/TITANIO|\(T\)/i.test(d.titulo)})})}
+ if(!_nombreCartaIdx){_nombreCartaIdx={};Object.entries(DB_CARTAS_PLANOS).forEach(function(kv){var d=kv[1];if(!d.titulo||!(d.maq||(d.pasos&&d.pasos.length)))return;var k=_sigNombre(d.titulo);if(!k)return;(_nombreCartaIdx[k]=_nombreCartaIdx[k]||[]).push({c:kv[0],d:d,n:_numsNombre(d.titulo),ti:(/^(21|22)/.test(d.mp||"")?true:(d.mp?false:(/TITANIO|\(T\)/i.test(d.titulo)?true:null)))})})}
  const cs=_nombreCartaIdx[s];if(!cs)return null;const n=_numsNombre(desc),esTi=_esDescTitanio(desc);let best=null,bd=1e9;
- cs.forEach(function(x){if(x.c===codigo)return;var dist=0;for(var i=0;i<Math.max(n.length,x.n.length);i++){var a=n[i]||0,b=x.n[i]||0;dist+=Math.abs(a-b)/(Math.max(a,b)||1)}if(x.ti!==esTi)dist+=5;if(dist<bd){bd=dist;best=x}});
+ cs.forEach(function(x){if(x.c===codigo)return;var dist=0;for(var i=0;i<Math.max(n.length,x.n.length);i++){var a=n[i]||0,b=x.n[i]||0;dist+=Math.abs(a-b)/(Math.max(a,b)||1)}if(x.ti!==null&&x.ti!==esTi)return;if(x.ti===null)dist+=2;if(dist<bd){bd=dist;best=x}});
  if(!best)return null;const r=Object.assign({},best.d,{_deNombre:true,_codFamilia:best.c});
  if(r.mp){const nuevo=_ajustarMPaMedida(r.mp,best.d.titulo,desc);if(nuevo!==r.mp){r._mpOriginal=r.mp;r.mp=nuevo;r._mpAjustada=true}}
  return r}
