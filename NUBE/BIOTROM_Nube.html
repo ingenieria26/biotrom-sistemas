@@ -68,6 +68,10 @@
   <a class="volver" href="../BIOTROM_Inicio.html">← Inicio</a>
 </header>
 
+<div id="nb-aviso" style="display:none;background:#fef2f2;border:1px solid #fca5a5;color:#991b1b;border-radius:10px;padding:12px 14px;margin:14px auto;max-width:1100px;font-size:.78rem;line-height:1.5">
+  <strong>⚠ La base de datos de Firebase está bloqueada por cuota (error 402 «Payment Required»).</strong><br>
+  Mientras tanto la Nube muestra y abre lo que está guardado en esta PC, pero <b>no se puede subir ni borrar nada de la nube</b>. Se resuelve en la consola de Firebase (plan Blaze, o borrando datos) y se rehabilita sola.
+</div>
 <div class="wrap">
 
   <div class="info">
@@ -111,6 +115,16 @@
     <div id="status"></div>
   </div>
 
+<div class="card" id="nb-dup" style="display:none">
+    <h2>🧹 Archivos repetidos</h2>
+    <p class="sub" id="nb-dup-sub"></p>
+    <div id="nb-dup-lista"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn er" id="nb-dup-borrar" onclick="nbEliminarDuplicados()">🗑 Eliminar los marcados (de la nube y de esta PC)</button>
+      <button class="btn" onclick="document.getElementById('nb-dup').style.display='none'">Cerrar</button>
+    </div>
+  </div>
+
   <div class="card">
     <h2>📚 Todo lo que hay guardado</h2>
     <p class="sub">De cualquier PC, se haya bajado acá o no.</p>
@@ -120,6 +134,7 @@
         <option value="">Todos los tipos</option>
       </select>
       <button class="btn" onclick="nbCargarTodo()">↻ Actualizar</button>
+      <button class="btn" onclick="nbBuscarDuplicados()" title="Busca archivos con exactamente el mismo contenido (del tipo elegido, o plano) entre los guardados en esta PC">🧹 Buscar repetidos</button>
       <button class="btn" onclick="nbResincronizar()" title="Vuelve a subir a la nube todo lo que esta computadora tiene guardado localmente — usar si algo que subiste no aparece en otras PCs">☁ Re-subir todo lo local</button>
     </div>
     <div id="nb-sel-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px">
@@ -140,6 +155,7 @@ let nbItems = [];
 async function nbCargarTodo(){
   document.getElementById('nb-tabla-wrap').innerHTML = '<div class="empty">Cargando…</div>';
   nbItems = await BiotromPDF.listarTodoGlobal();
+  if (BiotromPDF.cuotaAgotada()) nbAvisoCuota();
   const tipos = Array.from(new Set(nbItems.map(i => i.tipo))).sort();
   document.getElementById('nb-tipos-list').innerHTML = tipos.map(t => `<option value="${nbEsc(t)}">`).join('');
   const selectTipo = document.getElementById('nb-filtro-tipo');
@@ -335,12 +351,73 @@ const codigoManual = (document.getElementById('nb-codigo').value || '').trim();
 }
 
 async function nbResincronizar(){
+  const prueba = await BiotromPDF.probarNube();
+  if (!prueba.ok){
+    if (prueba.status === 402) nbAvisoCuota();
+    nbStatus(`La nube no responde (${prueba.status || 'sin conexión'}): no se re-sube nada.`, true);
+    return;
+  }
   nbStatus('Re-subiendo a la nube todo lo guardado en esta computadora… (0%)');
   const r = await BiotromPDF.sincronizarTodo((p) => {
     const pct = Math.round((p.hechos / p.total) * 100);
     nbStatus(`Re-subiendo… ${p.hechos}/${p.total} (${pct}%) — ✓ ${p.subidos} subido(s), ${p.saltados} saltado(s)`);
   });
   nbStatus(r.total ? `✓ Listo: ${r.subidos}/${r.total} subido(s)` + (r.saltados ? ` — ${r.saltados} se saltearon (muy pesados o con error, ver consola)` : '') : 'No hay nada guardado localmente en esta PC.');
+  nbCargarTodo();
+}
+
+function nbAvisoCuota(){ document.getElementById('nb-aviso').style.display = 'block'; }
+window.addEventListener('biotrom-nube-cuota', nbAvisoCuota);
+
+let nbDupGrupos = [];
+async function nbBuscarDuplicados(){
+  const tipo = document.getElementById('nb-filtro-tipo').value || 'plano';
+  nbStatus(`Buscando repetidos en "${tipo}": se compara el contenido de cada archivo guardado en esta PC…`);
+  let grupos;
+  try { grupos = await BiotromPDF.duplicadosLocales(tipo, p => nbStatus(`Comparando… ${p.hechos}/${p.total}`)); }
+  catch (e){ nbStatus('No se pudo comparar: ' + e.message, true); return; }
+  // en cada grupo se conserva el que tiene el codigo en el nombre del archivo; si empatan, el mas viejo
+  nbDupGrupos = grupos.map(g => g.slice().sort((a, b) => {
+    const ka = String(a.nombreArchivo).toUpperCase().startsWith(String(a.codigo).toUpperCase()) ? 0 : 1;
+    const kb = String(b.nombreArchivo).toUpperCase().startsWith(String(b.codigo).toUpperCase()) ? 0 : 1;
+    return ka - kb || String(a.guardado).localeCompare(String(b.guardado));
+  })).sort((a, b) => b.length - a.length);
+  const sobran = nbDupGrupos.reduce((s, g) => s + g.length - 1, 0);
+  const box = document.getElementById('nb-dup');
+  document.getElementById('nb-dup-sub').innerHTML = nbDupGrupos.length
+    ? `En <b>${nbEsc(tipo)}</b> hay <b>${nbDupGrupos.length}</b> grupo(s) de archivos con <b>exactamente el mismo contenido</b>: sobran <b>${sobran}</b>. Se conserva uno por grupo y el resto queda marcado para borrar; destildá los que quieras mantener. Ojo: si el mismo dibujo está con dos códigos distintos, cada código puede estar enlazado desde otras pantallas. Solo se compara lo que está guardado en esta PC (los que figuran «✓ en esta PC»).`
+    : `No encontré archivos repetidos en <b>${nbEsc(tipo)}</b> entre los que están guardados en esta PC.`;
+  document.getElementById('nb-dup-lista').innerHTML = nbDupGrupos.map((g, gi) =>
+    `<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:.74rem">
+      <div style="color:var(--text-dim);margin-bottom:4px">Mismo contenido · ${g.length} archivos · ${Math.round(g[0].tamanoBytes / 1024)} KB</div>` +
+      g.map((it, ii) => ii === 0
+        ? `<div style="padding:2px 0">✔ <b>${nbEsc(it.codigo)}</b> — ${nbEsc(it.nombreArchivo)} <span style="color:var(--green,#047857)">(se conserva)</span></div>`
+        : `<label style="display:flex;gap:6px;align-items:center;padding:2px 0"><input type="checkbox" class="nb-dup-cb" checked data-g="${gi}" data-i="${ii}"> 🗑 <b>${nbEsc(it.codigo)}</b> — ${nbEsc(it.nombreArchivo)}</label>`).join('') + '</div>').join('');
+  document.getElementById('nb-dup-borrar').style.display = nbDupGrupos.length ? '' : 'none';
+  box.style.display = 'block';
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  nbStatus(nbDupGrupos.length ? `${sobran} archivo(s) repetido(s) encontrados.` : 'Sin repetidos.');
+}
+
+async function nbEliminarDuplicados(){
+  const marcados = Array.from(document.querySelectorAll('.nb-dup-cb:checked')).map(cb => nbDupGrupos[+cb.dataset.g][+cb.dataset.i]);
+  if (!marcados.length){ nbStatus('No hay nada marcado para eliminar.', true); return; }
+  nbStatus('Verificando que la nube responda antes de borrar…');
+  const prueba = await BiotromPDF.probarNube();
+  if (!prueba.ok){
+    if (prueba.status === 402) nbAvisoCuota();
+    nbStatus(`La nube no responde (${prueba.status || 'sin conexión'}): no se borró nada, para no dejar la nube y esta PC desparejas.`, true);
+    return;
+  }
+  if (!confirm(`¿Eliminar ${marcados.length} archivo(s) repetido(s)? Se borran de esta PC y de la nube (para todas las PCs). Se conserva uno por cada grupo. No se puede deshacer.`)) return;
+  let n = 0;
+  for (const it of marcados){
+    nbStatus(`Eliminando… ${n}/${marcados.length}`);
+    await BiotromPDF.eliminar(it.codigo, it.tipo);
+    n++;
+  }
+  document.getElementById('nb-dup').style.display = 'none';
+  nbStatus(`✓ ${n} archivo(s) repetido(s) eliminado(s).`);
   nbCargarTodo();
 }
 

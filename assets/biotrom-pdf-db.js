@@ -36,8 +36,18 @@ window.BiotromPDF = (() => {
   const MAX_SUBIDA_BYTES = 5 * 1024 * 1024; // 5 MB por archivo, deja margen bajo los límites de Firebase
   let _dbPromise = null;
 
+  // Firebase responde 402 (Payment Required) cuando la base se pasa de la cuota gratuita y la deshabilita:
+  // se registra una vez y se avisa por evento, para que las pantallas dejen de insistir y lo expliquen.
+  let _cuotaAgotada = false;
   function _fetch(url, opts) {
-    return (window.BiotromAuth ? BiotromAuth.fetch(url, opts) : fetch(url, opts));
+    const p = (window.BiotromAuth ? BiotromAuth.fetch(url, opts) : fetch(url, opts));
+    return p.then(r => {
+      if (r && r.status === 402 && !_cuotaAgotada) {
+        _cuotaAgotada = true;
+        try { window.dispatchEvent(new CustomEvent("biotrom-nube-cuota")); } catch (e) {}
+      }
+      return r;
+    });
   }
 
   // Con archivos grandes o mala conexión, un pedido puede quedar "colgado"
@@ -318,6 +328,7 @@ window.BiotromPDF = (() => {
     let subidos = 0, saltados = 0, hechos = 0;
     await _pool(items, 4, async (it) => {
       try {
+        if (_cuotaAgotada) throw new Error("cuota de Firebase agotada");
         const blob = await obtener(it.codigo, it.tipo);
         if (!blob) { saltados++; }
         else {
@@ -342,5 +353,38 @@ window.BiotromPDF = (() => {
     return Array.from(porClave.values());
   }
 
-  return { guardar, obtener, existe, abrir, listar, eliminar, mover, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo, listarTiposNube, listarTodoGlobal };
+  // ---- cuota de Firebase agotada (HTTP 402): se avisa una vez y se deja de insistir ----
+  function cuotaAgotada() { return _cuotaAgotada; }
+  async function probarNube() {
+    try { const res = await _fetchConTimeout(`${FB_BASE}.json?shallow=true`, {}, 15000); return { ok: res.ok, status: res.status }; }
+    catch (e) { return { ok: false, status: 0 }; }
+  }
+
+  // ---- duplicados: compara el CONTENIDO (SHA-256) de lo que esta guardado en esta PC, dentro de un mismo tipo ----
+  async function _hashBlob(blob) {
+    const h = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+    return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  async function duplicadosLocales(tipo, onProgress) {
+    const db = await _abrirDB();
+    const claves = await new Promise((res, rej) => { const r = db.transaction(STORE, "readonly").objectStore(STORE).getAllKeys(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); });
+    const porHash = new Map();
+    let hechos = 0;
+    await _pool(claves, 6, async (k) => {
+      try {
+        const rec = await new Promise((res, rej) => { const r = db.transaction(STORE, "readonly").objectStore(STORE).get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+        if (rec && rec.blob && (!tipo || rec.tipo === tipo)) {
+          const h = rec.tipo + ":" + rec.blob.size + ":" + await _hashBlob(rec.blob);
+          const arr = porHash.get(h) || [];
+          arr.push({ codigo: rec.codigo, tipo: rec.tipo, nombreArchivo: rec.nombreArchivo || "", guardado: rec.guardado || "", tamanoBytes: rec.blob.size });
+          porHash.set(h, arr);
+        }
+      } catch (e) { /* un registro ilegible no frena el resto */ }
+      hechos++;
+      if (onProgress && hechos % 50 === 0) { try { onProgress({ hechos, total: claves.length }); } catch (e) {} }
+    });
+    return Array.from(porHash.values()).filter(g => g.length > 1);
+  }
+
+  return { guardar, obtener, existe, abrir, listar, eliminar, mover, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo, listarTiposNube, listarTodoGlobal, cuotaAgotada, probarNube, duplicadosLocales };
 })();
