@@ -2647,7 +2647,7 @@ window.expCalcular=async function(){if(corriendo)return;corriendo=true;cancelar=
       var nOps=0,nReal=0,nTerc=0;w.document.querySelectorAll('#operaciones-container [id$="_maq"]').forEach(function(s){nOps++;if(s.value==="terceros")nTerc++;else if(w._tiempoRealParaMaquina&&w._tiempoRealParaMaquina(it.cod,s.value))nReal++});rec.ops=nOps;rec.opsReal=nReal;rec.terceros=nTerc}}catch(e){rec.error=String(e.message||e)}}
     rec.ownD=ownD;rec.ownC=ownC;
     rec.comps=bom.map(function(b){var k=costoComp(b.cod),motivo="";
-     if(!k){var r0=items[b.cod];motivo=r0?(r0.estado==="sin_precio"?"sin precio de la materia prima ("+(r0.mp||"?")+")":(r0.estado==="sin_carta"?"sin carta de proceso":"sin cálculo")):"sin carta de proceso";
+     if(!k){var r0=items[b.cod];motivo=r0?(r0.estado==="sin_precio"?(r0.mp?"sin precio de la materia prima ("+r0.mp+")":"la carta no indica la materia prima"):(r0.estado==="sin_carta"?"sin carta de proceso":"sin cálculo")):"sin carta de proceso";
       if(!r0||r0.estado==="sin_carta"){var oc=precioCompOC(b);if(oc){k={d:oc.usd,c:0,src:"pieza comprada, sin carta · "+oc.txt};motivo=""}}}
      return{cod:b.cod,desc:b.desc||"",uso:parseFloat(b.uso)||1,d:k?k.d:null,c:k?k.c:null,src:k?k.src:null,motivo:motivo}});
     var t=ensamblar(rec);rec.directo=t.directo;rec.cif=t.cif;rec.faltan=t.faltan;rec.estado=t.faltan.length?"sin_precio":"ok";
