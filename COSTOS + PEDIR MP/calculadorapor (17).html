@@ -2409,7 +2409,7 @@ pullCfg();pullPanel();
 var PERIODO="anual",PERIODO_TXT="12 meses (anual): órdenes cerradas del 07/10/2025 al 15/10/2026";
 var LS_MAS="biotrom_calcpp_costos_masivo",LS_PMP="biotrom_calcpp_precios_mp";
 var URL_PMP=FB_BASE_CALCPP+"/config_precios_mp.json";
-var S={moneda:"USD",sinCosto:true,mpFalta:"blanco"};
+var S={moneda:"USD",sinCosto:true,mpFalta:"blanco",dec:(function(){try{return localStorage.getItem("biotrom_calcpp_exp_dec")||"norm2"}catch(e){return"norm2"}})()};
 var PRECIOS={},MAS=null,corriendo=false,cancelar=false,progreso="",resumenRun="";
 function esc(t){return String(t==null?"":t).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
 function pn(s){return parseFloat(String(s||"").replace(/[^0-9.]/g,""))||0}
@@ -2449,6 +2449,10 @@ function precioCompOC(b){try{var qs=[b.mpDesc,b.desc].filter(function(x){return 
   if(best)return{usd:best.oc.moneda==="ars"?best.p/tc():best.p,oc:best.oc.numero,fecha:best.oc.fecha||"s/f",txt:"OC "+best.oc.numero+" ("+(best.oc.fecha||"s/f")+"): "+(best.oc.moneda==="ars"?"ARS ":"USD ")+fmt(best.p,2)+" por "+(best.it.unidad||"unidad")+" — "+best.it.descripcion}}
  }catch(e){}return null}
 /* ---------- ensambles: el costo es el de los componentes que lleva (BOM del MAESTRO) + su armado si tiene carta ---------- */
+/* costos con 2 decimales (redondeo normal o hacia arriba); al acercar el cursor se ve el valor completo con 4 decimales */
+function redArriba(v){return Math.ceil(Math.round(v*1e6)/1e4)/100}
+function fc(v){if(v==null||isNaN(v))return'<span style="color:#94a3b8">—</span>';var full=fmt(v,4);if(S.dec==="full")return full;
+ var d=S.dec==="ceil2"?fmt(redArriba(v),2):fmt(v,2);return'<span title="'+full+'" style="cursor:help;border-bottom:1px dotted #cbd5e1">'+d+'</span>'}
 /* ---------- productos discontinuos (MAESTRO): fuera de los costos, salvo los que se activan a mano ---------- */
 function discOn(cod){var p=PRECIOS["disc:"+cod];return!!(p&&p.on)}
 function esDisc(cod){return Object.prototype.hasOwnProperty.call(DISCONTINUOS_MAESTRO,cod)&&!discOn(cod)}
@@ -2480,7 +2484,7 @@ function compSection(){if(!MAS||!MAS.items)return"";var enss=Object.keys(MAS.ite
 var ABIERTOS={};
 window.expDetalle=function(cod){ABIERTOS[cod]=!ABIERTOS[cod];var e=document.getElementById("expDet_"+cod);if(e)e.style.display=ABIERTOS[cod]?"":"none"};
 var UNID_FAB={"min_pza":"min/pza","hs_lote":"hs/lote","min_lote":"min/lote"};
-function detalleHTML(f){var m=f.m;if(!m||(!m.det&&!m.ensamble))return"";var mon=S.moneda==="ARS"?tc():1,F=function(v){return fmt((v||0)*mon,4)},M=S.moneda,det=m.det,th='style="text-align:right;padding:2px 6px"',td='style="text-align:right;padding:2px 6px"';
+function detalleHTML(f){var m=f.m;if(!m||(!m.det&&!m.ensamble))return"";var mon=S.moneda==="ARS"?tc():1,F=function(v){return fc((v||0)*mon)},M=S.moneda,det=m.det,th='style="text-align:right;padding:2px 6px"',td='style="text-align:right;padding:2px 6px"';
  var h='<div style="padding:10px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;font-size:11.5px;color:#334155">';
  if(det){var cc=det.cartaCod?DB_CARTAS_PLANOS[det.cartaCod]:null;
   h+='<div style="margin-bottom:6px"><b>'+(m.ensamble?"Armado propio":"Carta usada")+':</b> '+esc(det.cartaOrigen||m.carta||"")+(cc&&cc.titulo?' — «'+esc(cc.titulo)+'»':"")+'</div>';
@@ -2568,6 +2572,7 @@ function render(){var box=document.getElementById("expPanel");if(!box)return;var
  var h='<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">'
  +'<div style="font-size:12px;color:#334155">Período de producción<div style="margin-top:4px;padding:7px 10px;border:1px solid #c7d2fe;background:#eef2ff;border-radius:8px;font-weight:700;color:#3730a3">'+PERIODO_TXT+'</div></div>'
  +'<label style="font-size:12px;color:#334155">Moneda de los costos<br><select id="expMoneda" onchange="expSet(\'moneda\',this.value)" style="padding:6px 8px"><option value="USD"'+(S.moneda==="USD"?" selected":"")+'>USD</option><option value="ARS"'+(S.moneda==="ARS"?" selected":"")+'>ARS (al tipo de cambio actual: '+fmt(tc(),0)+')</option></select></label>'
+ +'<label style="font-size:12px;color:#334155">Decimales de los costos<br><select id="expDec" onchange="expSet(\'dec\',this.value)" style="padding:6px 8px" title="Al acercar el cursor a un costo se ve el valor completo con 4 decimales"><option value="norm2"'+(S.dec==="norm2"?" selected":"")+'>2 decimales (redondeo normal)</option><option value="ceil2"'+(S.dec==="ceil2"?" selected":"")+'>2 decimales (redondear para arriba)</option><option value="full"'+(S.dec==="full"?" selected":"")+'>4 decimales (completo)</option></select></label>'
  +'<label style="font-size:12px;color:#334155;display:flex;gap:6px;align-items:center;padding-bottom:6px"><input type="checkbox" id="expSinCosto"'+(S.sinCosto?" checked":"")+' onchange="expSet(\'sinCosto\',this.checked)"> Incluir productos sin costo (quedan en blanco)</label>'
  +'<button type="button" class="btn-agregar-op" style="width:auto;margin:0;padding:9px 16px" onclick="expDescargar()">⬇ Descargar Excel</button></div>'
  +'<div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:12px;background:#f8fafc"><p style="font-weight:700;color:#1e3a8a;margin:0 0 4px;font-size:13px">⚙ Cálculo masivo de costos</p>'
@@ -2589,10 +2594,10 @@ function render(){var box=document.getElementById("expPanel");if(!box)return;var
  +'<div class="card"><div class="card-label">Con costo</div><div class="card-val">'+con+'</div><div class="card-sub">'+(filas.length-con)+' en blanco (el motivo está en la tabla)</div></div>'
  +'<div class="card"><div class="card-label">Piezas producidas</div><div class="card-val">'+piezas.toLocaleString("es-AR")+'</div><div class="card-sub">suma de los 12 meses</div></div></div>'
  +'<div style="overflow:auto;max-height:420px;border:1px solid #e2e8f0;border-radius:12px"><table style="width:100%;font-size:12px"><thead><tr><th>Producto</th><th style="text-align:right">Cantidad producida</th><th style="text-align:right">Costo directo unitario'+sufijo+'</th><th style="text-align:right">Costo indirecto de fábrica unitario'+sufijo+'</th><th>Origen del costo</th><th></th></tr></thead><tbody>'
- +(filas.length?filas.map(function(f){return'<tr><td><b>'+esc(f.cod)+'</b> — '+esc(f.desc)+'</td><td style="text-align:right">'+f.qty.toLocaleString("es-AR")+'</td><td style="text-align:right">'+(f.directo===null?'<span style="color:#94a3b8">—</span>':fmt(f.directo,4))+'</td><td style="text-align:right">'+(f.cif===null?'<span style="color:#94a3b8">—</span>':fmt(f.cif,4))+'</td><td style="color:#64748b">'+esc(f.origen)+(f.fecha&&f.origen==="Guardado"?" ("+esc(f.fecha)+")":"")+(f.nota?'<span style="color:#b45309">'+esc(f.nota)+'</span>':'')+'</td><td>'+(f.m&&(f.m.det||f.m.ensamble)?'<a href="#" onclick="expDetalle(\''+f.cod+'\');return false" style="color:#4338ca;white-space:nowrap">▸ detalle</a>':'')+'</td></tr>'+(f.m&&(f.m.det||f.m.ensamble)?'<tr id="expDet_'+f.cod+'" style="display:'+(ABIERTOS[f.cod]?'':'none')+'"><td colspan="6">'+detalleHTML(f)+'</td></tr>':'')}).join(""):'<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">No hay productos para mostrar con estas opciones.</td></tr>')
+ +(filas.length?filas.map(function(f){return'<tr><td><b>'+esc(f.cod)+'</b> — '+esc(f.desc)+'</td><td style="text-align:right">'+f.qty.toLocaleString("es-AR")+'</td><td style="text-align:right">'+fc(f.directo)+'</td><td style="text-align:right">'+fc(f.cif)+'</td><td style="color:#64748b">'+esc(f.origen)+(f.fecha&&f.origen==="Guardado"?" ("+esc(f.fecha)+")":"")+(f.nota?'<span style="color:#b45309">'+esc(f.nota)+'</span>':'')+'</td><td>'+(f.m&&(f.m.det||f.m.ensamble)?'<a href="#" onclick="expDetalle(\''+f.cod+'\');return false" style="color:#4338ca;white-space:nowrap">▸ detalle</a>':'')+'</td></tr>'+(f.m&&(f.m.det||f.m.ensamble)?'<tr id="expDet_'+f.cod+'" style="display:'+(ABIERTOS[f.cod]?'':'none')+'"><td colspan="6">'+detalleHTML(f)+'</td></tr>':'')}).join(""):'<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px">No hay productos para mostrar con estas opciones.</td></tr>')
  +'</tbody></table></div>';
  box.innerHTML=h}
-window.expSet=function(k,v){S[k]=v;render()};
+window.expSet=function(k,v){S[k]=v;if(k==="dec"){try{localStorage.setItem("biotrom_calcpp_exp_dec",v)}catch(e){}}render()};
 window.expPrecio=function(cod,k,v){var p=PRECIOS[cod];if(!(p&&p.precio>0)){var e=precioEfectivo(cod);p=PRECIOS[cod]={precio:e?e.precio:0,unidad:e?e.unidad:"kg",moneda:e?e.moneda:"usd"}}if(k==="precio")p.precio=parseFloat(v)||0;else p[k]=v;if(!(p.precio>0))delete PRECIOS[cod];guardarPrecios();render()};
 window.expAuto=function(cod){delete PRECIOS[cod];guardarPrecios();render()};
 window.expChapa=function(cod,k,v){var d=PRECIOS["chapa:"+cod]||(PRECIOS["chapa:"+cod]={});d[k]=parseFloat(v)||0;guardarPrecios();render()};
@@ -2692,7 +2697,7 @@ window.expCalcular=async function(){if(corriendo)return;corriendo=true;cancelar=
 function nombreArchivo(){var d=new Date(),p=function(n){return String(n).padStart(2,"0")};return"BIOTROM_Costos_por_producto_anual_"+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())}
 function datos(){var m=S.moneda,filas=armar();
  var enc=["Producto (código + descripción)","Cantidad producida - "+PERIODO_TXT,"Costo directo unitario ("+m+")","Costo indirecto de fábrica unitario ("+m+")"];
- var rows=filas.map(function(f){return[f.cod+" - "+f.desc,f.qty,f.directo===null?null:Math.round(f.directo*1e4)/1e4,f.cif===null?null:Math.round(f.cif*1e4)/1e4]});
+ var vx=function(v){return v===null?null:(S.dec==="ceil2"?redArriba(v):Math.round(v*1e4)/1e4)};var rows=filas.map(function(f){return[f.cod+" - "+f.desc,f.qty,vx(f.directo),vx(f.cif)]});
  var enc2=["Producto","Origen del costo","Carta de proceso","Materia prima (código)","Precio de materia prima","Lote usado (piezas)","Origen del lote","Operaciones","Con tiempo real medido","Operaciones de terceros (sin costo)","Observaciones"];
  var rows2=filas.map(function(f){var x=f.m||{};var obs=(f.nota||"").replace(/^ · /,"");if(x.ensamble&&x.comps)obs+=(obs?" | ":"")+"Componentes: "+x.comps.map(function(k){return k.cod+" x"+k.uso+(k.d==null?" (sin costo)":" = USD "+fmt(k.d+(k.c||0),2))}).join("; ");
   return[f.cod+" - "+f.desc,f.origen||"Sin costo",x.carta||"",x.mp||"",x.precioMP||"",x.lote||"",x.loteFuente||"",x.ops||"",x.opsReal==null?"":x.opsReal,x.terceros==null?"":x.terceros,obs]});
@@ -2703,7 +2708,7 @@ function cargarXLSX(cb){if(window.XLSX)return cb(true);var s=document.createElem
 window.expDescargar=function(){var d=datos();if(!d.rows.length){alert("No hay productos para exportar con estas opciones.");return}
  cargarXLSX(function(ok){if(!ok){alert("No se pudo cargar el generador de Excel (sin conexión a la carpeta de librerías). Se descarga en CSV, que Excel también abre.");bajarCSV(d);return}
   var ws=XLSX.utils.aoa_to_sheet([d.enc].concat(d.rows));ws["!cols"]=[{wch:70},{wch:30},{wch:26},{wch:34}];
-  for(var r=1;r<=d.rows.length;r++){var a=ws["B"+(r+1)];if(a)a.z="#,##0";["C","D"].forEach(function(c){var x=ws[c+(r+1)];if(x)x.z="#,##0.0000"})}
+  for(var r=1;r<=d.rows.length;r++){var a=ws["B"+(r+1)];if(a)a.z="#,##0";["C","D"].forEach(function(c){var x=ws[c+(r+1)];if(x)x.z=S.dec==="full"?"#,##0.0000":"#,##0.00"})}
   var ws2=XLSX.utils.aoa_to_sheet([d.enc2].concat(d.rows2));ws2["!cols"]=[{wch:70},{wch:34},{wch:26},{wch:16},{wch:22},{wch:14},{wch:26},{wch:12},{wch:14},{wch:18},{wch:60}];
   var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Costos por producto");XLSX.utils.book_append_sheet(wb,ws2,"Supuestos");
   XLSX.writeFile(wb,nombreArchivo()+".xlsx")})};
