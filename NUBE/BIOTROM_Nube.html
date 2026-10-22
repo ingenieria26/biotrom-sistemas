@@ -134,7 +134,7 @@
         <option value="">Todos los tipos</option>
       </select>
       <button class="btn" onclick="nbCargarTodo()">↻ Actualizar</button>
-      <button class="btn" onclick="nbBuscarDuplicados()" title="Busca archivos con exactamente el mismo contenido (del tipo elegido, o plano) entre los guardados en esta PC">🧹 Buscar repetidos</button>
+      <button class="btn" onclick="nbBuscarDuplicados()" title="Busca archivos con exactamente el mismo contenido, solo dentro del mismo tipo (carta con carta, plano con plano). Si elegís un tipo en el filtro, solo ese; si no, todos.">🧹 Buscar repetidos</button>
       <button class="btn" onclick="nbResincronizar()" title="Vuelve a subir a la nube todo lo que esta computadora tiene guardado localmente — usar si algo que subiste no aparece en otras PCs">☁ Re-subir todo lo local</button>
     </div>
     <div id="nb-sel-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px">
@@ -371,8 +371,9 @@ window.addEventListener('biotrom-nube-cuota', nbAvisoCuota);
 
 let nbDupGrupos = [];
 async function nbBuscarDuplicados(){
-  const tipo = document.getElementById('nb-filtro-tipo').value || 'plano';
-  nbStatus(`Buscando repetidos en "${tipo}": se compara el contenido de cada archivo guardado en esta PC…`);
+  const tipo = document.getElementById('nb-filtro-tipo').value;   // vacío = todos los tipos, cada uno por separado (una carta nunca se compara con un plano)
+  const etiqueta = tipo ? `"${tipo}"` : 'todos los tipos (cada tipo por separado)';
+  nbStatus(`Buscando repetidos en ${etiqueta}: se compara el contenido de cada archivo guardado en esta PC…`);
   let grupos;
   try { grupos = await BiotromPDF.duplicadosLocales(tipo, p => nbStatus(`Comparando… ${p.hechos}/${p.total}`)); }
   catch (e){ nbStatus('No se pudo comparar: ' + e.message, true); return; }
@@ -381,18 +382,24 @@ async function nbBuscarDuplicados(){
     const ka = String(a.nombreArchivo).toUpperCase().startsWith(String(a.codigo).toUpperCase()) ? 0 : 1;
     const kb = String(b.nombreArchivo).toUpperCase().startsWith(String(b.codigo).toUpperCase()) ? 0 : 1;
     return ka - kb || String(a.guardado).localeCompare(String(b.guardado));
-  })).sort((a, b) => b.length - a.length);
+  })).sort((a, b) => String(a[0].tipo).localeCompare(String(b[0].tipo)) || b.length - a.length);
   const sobran = nbDupGrupos.reduce((s, g) => s + g.length - 1, 0);
   const box = document.getElementById('nb-dup');
+  const porTipo = {};
+  nbDupGrupos.forEach(g => { const t = g[0].tipo; (porTipo[t] = porTipo[t] || { grupos: 0, sobran: 0 }); porTipo[t].grupos++; porTipo[t].sobran += g.length - 1; });
+  const resumen = Object.keys(porTipo).map(t => `<b>${nbEsc(t)}</b>: ${porTipo[t].grupos} grupo(s), sobran ${porTipo[t].sobran}`).join(' · ');
   document.getElementById('nb-dup-sub').innerHTML = nbDupGrupos.length
-    ? `En <b>${nbEsc(tipo)}</b> hay <b>${nbDupGrupos.length}</b> grupo(s) de archivos con <b>exactamente el mismo contenido</b>: sobran <b>${sobran}</b>. Se conserva uno por grupo y el resto queda marcado para borrar; destildá los que quieras mantener. Ojo: si el mismo dibujo está con dos códigos distintos, cada código puede estar enlazado desde otras pantallas. Solo se compara lo que está guardado en esta PC (los que figuran «✓ en esta PC»).`
-    : `No encontré archivos repetidos en <b>${nbEsc(tipo)}</b> entre los que están guardados en esta PC.`;
-  document.getElementById('nb-dup-lista').innerHTML = nbDupGrupos.map((g, gi) =>
-    `<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:.74rem">
+    ? `Archivos con <b>exactamente el mismo contenido</b>, comparados <b>solo dentro de su mismo tipo</b> (una carta nunca se cruza con un plano). ${resumen}. Se conserva uno por grupo y el resto queda marcado para borrar; destildá los que quieras mantener. Ojo: si el mismo dibujo está con dos códigos distintos, cada código puede estar enlazado desde otras pantallas. Solo se compara lo que está guardado en esta PC (los que figuran «✓ en esta PC»).`
+    : `No encontré archivos repetidos en ${nbEsc(etiqueta)} entre los que están guardados en esta PC.`;
+  let tipoActual = null;
+  document.getElementById('nb-dup-lista').innerHTML = nbDupGrupos.map((g, gi) => {
+    const cab = g[0].tipo !== tipoActual ? (tipoActual = g[0].tipo, `<h3 style="margin:14px 0 6px;font-size:.82rem">Tipo: <span class="chip" style="cursor:default">${nbEsc(tipoActual)}</span> — ${porTipo[tipoActual].grupos} grupo(s), sobran ${porTipo[tipoActual].sobran}</h3>`) : '';
+    return cab + `<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:.74rem">
       <div style="color:var(--text-dim);margin-bottom:4px">Mismo contenido · ${g.length} archivos · ${Math.round(g[0].tamanoBytes / 1024)} KB</div>` +
       g.map((it, ii) => ii === 0
         ? `<div style="padding:2px 0">✔ <b>${nbEsc(it.codigo)}</b> — ${nbEsc(it.nombreArchivo)} <span style="color:var(--green,#047857)">(se conserva)</span></div>`
-        : `<label style="display:flex;gap:6px;align-items:center;padding:2px 0"><input type="checkbox" class="nb-dup-cb" checked data-g="${gi}" data-i="${ii}"> 🗑 <b>${nbEsc(it.codigo)}</b> — ${nbEsc(it.nombreArchivo)}</label>`).join('') + '</div>').join('');
+        : `<label style="display:flex;gap:6px;align-items:center;padding:2px 0"><input type="checkbox" class="nb-dup-cb" checked data-g="${gi}" data-i="${ii}"> 🗑 <b>${nbEsc(it.codigo)}</b> — ${nbEsc(it.nombreArchivo)}</label>`).join('') + '</div>';
+  }).join('');
   document.getElementById('nb-dup-borrar').style.display = nbDupGrupos.length ? '' : 'none';
   box.style.display = 'block';
   box.scrollIntoView({ behavior: 'smooth', block: 'start' });
