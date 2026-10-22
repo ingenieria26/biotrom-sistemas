@@ -135,6 +135,7 @@
       </select>
       <button class="btn" onclick="nbCargarTodo()">↻ Actualizar</button>
       <button class="btn" onclick="nbBuscarDuplicados()" title="Busca archivos con exactamente el mismo contenido, solo dentro del mismo tipo (carta con carta, plano con plano). Si elegís un tipo en el filtro, solo ese; si no, todos.">🧹 Buscar repetidos</button>
+      <button class="btn er" onclick="nbVaciarNube()" title="Borra de la nube todo lo guardado (o solo el tipo elegido en el filtro) para volver a subirlo desde cero. No toca las copias de esta PC.">🗑 Vaciar la nube</button>
       <button class="btn" onclick="nbResincronizar()" title="Vuelve a subir a la nube todo lo que esta computadora tiene guardado localmente — usar si algo que subiste no aparece en otras PCs">☁ Re-subir todo lo local</button>
     </div>
     <div id="nb-sel-bar" style="display:none;align-items:center;gap:8px;flex-wrap:wrap;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:10px">
@@ -368,6 +369,55 @@ async function nbResincronizar(){
 
 function nbAvisoCuota(){ document.getElementById('nb-aviso').style.display = 'block'; }
 window.addEventListener('biotrom-nube-cuota', nbAvisoCuota);
+
+async function nbVaciarNube(){
+  const prueba = await BiotromPDF.probarNube();
+  if (!prueba.ok){
+    if (prueba.status === 402) nbAvisoCuota();
+    nbStatus(`La nube no responde (${prueba.status || 'sin conexión'}): no se borró nada.`, true);
+    return;
+  }
+  const tipoSel = document.getElementById('nb-filtro-tipo').value;
+  nbStatus('Contando lo que hay en la nube…');
+  await nbCargarTodo();
+  const tiposNube = (await BiotromPDF.listarTiposNube()).filter(t => !tipoSel || t === tipoSel);
+  if (!tiposNube.length){ nbStatus('No hay nada en la nube' + (tipoSel ? ` del tipo "${tipoSel}"` : '') + '.'); return; }
+  const enNube = nbItems.filter(i => tiposNube.includes(i.tipo));
+  const soloNube = enNube.filter(i => !i.enEstaPC);
+  const alcance = tipoSel ? `solo el tipo "${tipoSel}"` : `TODOS los tipos (${tiposNube.join(', ')})`;
+  let msg = `Vas a VACIAR la nube: se borra ${alcance} para todas las PCs.\n\nLas copias que ya están guardadas en ESTA PC no se tocan; después podés volver a subir con «Re-subir todo lo local» o arrastrando los archivos.`;
+  if (soloNube.length) msg += `\n\n⚠ ${soloNube.length} archivo(s) están SOLO en la nube (no en esta PC) y se perderían. Si seguís, primero los bajo a esta PC para que no se pierdan.`;
+  msg += `\n\n¿Seguir?`;
+  if (!confirm(msg)) return;
+  // 1) lo que solo esta en la nube se baja antes de borrar
+  const fallos = [];
+  for (let n = 0; n < soloNube.length; n++){
+    nbStatus(`Bajando a esta PC lo que solo estaba en la nube… ${n}/${soloNube.length}`);
+    const blob = await BiotromPDF.obtener(soloNube[n].codigo, soloNube[n].tipo);
+    if (!blob) fallos.push(soloNube[n]);
+  }
+  if (fallos.length){
+    nbStatus(`No se pudieron bajar ${fallos.length} archivo(s) (ej: ${fallos[0].codigo}). No se borró nada.`, true);
+    nbCargarTodo();
+    return;
+  }
+  // 2) confirmacion escrita
+  const t = prompt(`ÚLTIMA CONFIRMACIÓN. Se van a borrar de la nube ${enNube.length} archivo(s) (${alcance}).\n\nEscribí VACIAR para continuar:`);
+  if (!t || t.trim().toUpperCase() !== 'VACIAR'){
+    nbStatus('Cancelado: no se borró nada de la nube.' + (soloNube.length ? ' (Lo que faltaba en esta PC ya quedó bajado.)' : ''));
+    nbCargarTodo();
+    return;
+  }
+  // 3) borrar
+  nbStatus('Vaciando la nube…');
+  const r = await BiotromPDF.vaciarNube(tiposNube, p => nbStatus(`Vaciando la nube… ${p.hechos}/${p.total} (${p.tipo})`));
+  if (r.errores.length){
+    nbStatus(`✗ No se pudo borrar: ${r.errores.join(', ')}. Se borró: ${r.borrados.join(', ') || 'nada'}. Lo de esta PC sigue intacto.`, true);
+  } else {
+    nbStatus(`✓ Nube vaciada (${r.borrados.join(', ')}). Ahora podés volver a subir: «☁ Re-subir todo lo local» sube lo que hay en esta PC, o arrastrá los archivos.`);
+  }
+  nbCargarTodo();
+}
 
 let nbDupGrupos = [];
 async function nbBuscarDuplicados(){

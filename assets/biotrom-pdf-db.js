@@ -360,6 +360,19 @@ window.BiotromPDF = (() => {
     catch (e) { return { ok: false, status: 0 }; }
   }
 
+  // Borra de la nube TODO lo guardado de los tipos indicados (no toca las copias locales de esta PC).
+  async function vaciarNube(tipos, onProgress) {
+    const res = { borrados: [], errores: [] };
+    for (const t of tipos) {
+      try {
+        const r = await _fetchConTimeout(`${FB_BASE}/${t}.json`, { method: "DELETE" }, 120000);
+        (r.ok ? res.borrados : res.errores).push(t);
+      } catch (e) { res.errores.push(t); }
+      if (onProgress) { try { onProgress({ tipo: t, hechos: res.borrados.length + res.errores.length, total: tipos.length }); } catch (e) {} }
+    }
+    return res;
+  }
+
   // ---- duplicados: compara el CONTENIDO (SHA-256) de lo que esta guardado en esta PC, dentro de un mismo tipo ----
   async function _hashBlob(blob) {
     const h = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
@@ -386,5 +399,5 @@ window.BiotromPDF = (() => {
     return Array.from(porHash.values()).filter(g => g.length > 1);
   }
 
-  return { guardar, obtener, existe, abrir, listar, eliminar, mover, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo, listarTiposNube, listarTodoGlobal, cuotaAgotada, probarNube, duplicadosLocales };
+  return { guardar, obtener, existe, abrir, listar, eliminar, mover, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo, listarTiposNube, listarTodoGlobal, cuotaAgotada, probarNube, duplicadosLocales, vaciarNube };
 })();
