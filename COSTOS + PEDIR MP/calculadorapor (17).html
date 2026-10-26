@@ -1593,7 +1593,7 @@ function bomRestaurar(codigo){
     bomAplicar();bomGuardar();bomRefrescar();
 }
 function bomListaEnsambles(){
-    const dd={};getDBProd().concat(getDBComp()).forEach(x=>{if(x&&x.c)dd[x.c]=x.d});
+    const dd={};getDBProd().concat(getDBComp()).forEach(x=>{if(x&&x.c&&/[A-Za-zÁÉÍÓÚÑ]{3}/.test(String(x.d||"")))dd[x.c]=x.d});Object.keys(ENSAMBLES_ORIG).forEach(k=>ENSAMBLES_ORIG[k].forEach(c=>{if(!dd[c.cod]&&c.desc)dd[c.cod]=c.desc}));
     return Object.keys(ENSAMBLES_MAESTRO).sort().map(c=>({c:c,d:dd[c]||(typeof DESC_EXTRA!=="undefined"&&DESC_EXTRA[c])||(ENSAMBLES_MAESTRO[c][0]&&"")||""}));
 }
 function bomBuscable(){
