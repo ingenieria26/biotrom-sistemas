@@ -1,0 +1,480 @@
+// ══════════════════════════════════════════════════════════════════
+// BIOTROM · Base de datos local + sincronizada de PDFs (cartas y planos)
+// ══════════════════════════════════════════════════════════════════
+// Cada PDF se guarda DOS veces:
+//   1) En IndexedDB de esta computadora -- se abre al instante y sin
+//      internet una vez que ya se guardó/descargó una vez acá.
+//   2) En la misma base Firebase que ya usan Cartas/Planos, Máquinas e
+//      Historial de Costos (nodo aparte "pdfs_binarios"), como texto en
+//      base64 -- así cualquier otra PC que abra el mismo código lo puede
+//      bajar, aunque nunca se haya guardado ahí antes. Al bajarlo una vez,
+//      esa PC también lo deja guardado localmente para las próximas veces.
+//
+// No hace falta ninguna configuración nueva: usa el mismo BiotromAuth.fetch
+// (si el HTML que lo usa ya incluye biotrom-auth.js) o un fetch normal si no.
+//
+// Aviso de capacidad: el plan gratis de Firebase tiene un tope de almacenamiento
+// total (~1 GB). Los PDFs de más de 5 MB no se suben a la nube (quedan solo
+// locales, para no arriesgar ese tope) -- se avisa por consola cuando pasa.
+// Si con el tiempo se acumulan muchos cientos de planos, en algún momento va a
+// hacer falta revisar el uso de Firebase.
+//
+// Uso desde cualquier herramienta:
+//   <script src="../assets/biotrom-auth.js"></script>   (opcional, pero recomendado)
+//   <script src="../assets/biotrom-pdf-db.js"></script>
+//   await BiotromPDF.guardar('1AX00003', 'plano', archivoOBlob);   // guarda local + nube
+//   await BiotromPDF.abrir('1AX00003', 'plano');                   // busca local, si no está lo baja de la nube, y lo abre
+//   const blob = await BiotromPDF.obtener('1AX00003', 'plano');    // o lo tomás vos
+//
+// "tipo" es 'plano' o 'carta' (son dos casilleros separados, un mismo código
+// puede tener las dos cosas guardadas a la vez).
+window.BiotromPDF = (() => {
+  const DB_NAME = "biotrom_pdfs";
+  const DB_VERSION = 1;
+  const STORE = "archivos";
+  const FB_BASE = "http://localhost:8936/__nofb__/pdfs_binarios";
+  const MAX_SUBIDA_BYTES = 5 * 1024 * 1024; // 5 MB por archivo, deja margen bajo los límites de Firebase
+  let _dbPromise = null;
+
+  // Firebase responde 402 (Payment Required) cuando la base se pasa de la cuota gratuita y la deshabilita:
+  // se registra una vez y se avisa por evento, para que las pantallas dejen de insistir y lo expliquen.
+  let _cuotaAgotada = false;
+  function _fetch(url, opts) {
+    const p = (window.BiotromAuth ? BiotromAuth.fetch(url, opts) : fetch(url, opts));
+    return p.then(r => {
+      if (r && r.status === 402 && !_cuotaAgotada) {
+        _cuotaAgotada = true;
+        try { window.dispatchEvent(new CustomEvent("biotrom-nube-cuota")); } catch (e) {}
+      }
+      return r;
+    });
+  }
+
+  // Con archivos grandes o mala conexión, un pedido puede quedar "colgado"
+  // sin responder nunca -- eso frenaba sincronizarTodo() entero en el primer
+  // archivo problemático, sin ningún aviso. Con esto, a los 25s se corta solo
+  // y sigue con el próximo.
+  function _fetchConTimeout(url, opts, ms) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms || 25000);
+    return _fetch(url, Object.assign({}, opts, { signal: controller.signal }))
+      .finally(() => clearTimeout(timer));
+  }
+
+  // Corre "worker" sobre "items" con como máximo "limite" en simultáneo, en
+  // vez de esperar uno por uno -- con cientos de archivos, subirlos de a 4-6
+  // a la vez es mucho más rápido que uno por uno.
+  async function _pool(items, limite, worker) {
+    let i = 0;
+    async function trabajador() {
+      while (i < items.length) {
+        const idx = i++;
+        await worker(items[idx], idx);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limite, items.length) }, trabajador));
+  }
+
+  function _abrirDB() {
+    if (_dbPromise) return _dbPromise;
+    _dbPromise = new Promise((resolve, reject) => {
+      if (!window.indexedDB) { reject(new Error("Este navegador no soporta IndexedDB")); return; }
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(STORE)) {
+          db.createObjectStore(STORE, { keyPath: "id" });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return _dbPromise;
+  }
+
+  function _clave(codigo) {
+    return String(codigo || "").toUpperCase().trim().replace(/[.$#\[\]\/]/g, "_");
+  }
+  function _id(codigo, tipo) {
+    return (tipo || "plano") + ":" + _clave(codigo);
+  }
+
+  function _blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+  }
+  function _base64ToBlob(base64, mime) {
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], { type: mime || "application/pdf" });
+  }
+
+  async function _guardarLocal(codigo, tipo, blobOrFile, nombreArchivo, hash) {
+    const db = await _abrirDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, "readwrite");
+      tx.objectStore(STORE).put({
+        id: _id(codigo, tipo),
+        codigo: _clave(codigo),
+        tipo: tipo || "plano",
+        blob: blobOrFile,
+        nombreArchivo: nombreArchivo !== undefined ? nombreArchivo : (blobOrFile.name || ""),
+        guardado: new Date().toISOString(),
+        hash: hash || ""
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => reject(tx.error);
+    });
+  }
+
+  // Cada archivo se guarda en dos ramas separadas en Firebase:
+  //   .../<tipo>/<clave>/meta  -> liviano (nombre, tamaño, fecha) para listar rápido
+  //   .../<tipo>/<clave>/data  -> pesado (el archivo en base64), se pide aparte
+  // así se puede armar un listado de "qué hay subido" sin bajar todos los archivos.
+  async function _subirALaNube(codigo, tipo, blobOrFile, hash) {
+    try {
+      if (blobOrFile.size > MAX_SUBIDA_BYTES) {
+        console.warn(`BiotromPDF: "${codigo}" pesa ${(blobOrFile.size/1024/1024).toFixed(1)} MB, no se sube a la nube (queda solo en esta PC).`);
+        return false;
+      }
+      hash = hash || await _hashBlob(blobOrFile);
+      // si en la nube ya esta exactamente este archivo con este codigo, no se vuelve a subir (no ocupa lugar de nuevo)
+      try {
+        const rm = await _fetchConTimeout(`${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}/meta.json`, {}, 15000);
+        if (rm && rm.ok) { const mm = await rm.json(); if (mm && mm.hash === hash) return true; }
+      } catch (e) { /* si no se puede comprobar, se sube igual */ }
+      const base64 = await _blobToBase64(blobOrFile);
+      const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
+      // Sin keepalive: el navegador limita esos pedidos a 64 KB de cuerpo, y
+      // un PDF en base64 los supera fácil -- con keepalive el pedido fallaba
+      // en silencio para cualquier archivo que no fuera minúsculo.
+      const res = await _fetchConTimeout(path, {
+        method: "PUT",
+        body: JSON.stringify({
+          data: base64,
+          meta: { mime: blobOrFile.type || "application/pdf", nombreArchivo: blobOrFile.name || "", guardado: new Date().toISOString(), tamanoBytes: blobOrFile.size, hash: hash }
+        })
+      });
+      return res.ok;
+    } catch (e) { console.warn("BiotromPDF._subirALaNube:", e); return false; }
+  }
+
+  async function _bajarDeLaNube(codigo, tipo) {
+    try {
+      const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
+      const res = await _fetchConTimeout(path);
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!data || !data.data) return null;
+      const meta = data.meta || {};
+      const bytes = _base64ToBlob(data.data, meta.mime);
+      // Se reconstruye como File (no Blob suelto) para que .name sobreviva el
+      // viaje por la nube -- así el código que lo usa (mostrar nombre, sacar
+      // extensión, etc.) funciona igual venga del disco local o de Firebase.
+      const blob = meta.nombreArchivo
+        ? new File([bytes], meta.nombreArchivo, { type: meta.mime || "application/octet-stream" })
+        : bytes;
+      await _guardarLocal(codigo, tipo, blob, meta.nombreArchivo || "", meta.hash || "");
+      return blob;
+    } catch (e) { console.warn("BiotromPDF._bajarDeLaNube:", e); return null; }
+  }
+
+  // Metadatos de un archivo puntual SIN bajar el contenido pesado.
+  async function metadatosNube(codigo, tipo) {
+    try {
+      const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}/meta.json`;
+      const res = await _fetch(path);
+      if (!res.ok) return null;
+      const meta = await res.json();
+      return meta ? { codigo: _clave(codigo), tipo: tipo || "plano", nombreArchivo: meta.nombreArchivo || "", guardado: meta.guardado || "", tamanoBytes: meta.tamanoBytes || 0, hash: meta.hash || "" } : null;
+    } catch (e) { console.warn("BiotromPDF.metadatosNube:", e); return null; }
+  }
+
+  // Lista TODO lo que hay subido a la nube para un "tipo" (de cualquier PC,
+  // se haya bajado acá o no) sin descargar ningún archivo pesado -- primero
+  // pide solo las claves (shallow) y después el meta liviano de cada una.
+  async function listarNube(tipo) {
+    try {
+      const path = `${FB_BASE}/${tipo || "plano"}.json?shallow=true`;
+      const res = await _fetch(path);
+      if (!res.ok) return [];
+      const claves = await res.json();
+      if (!claves) return [];
+      const items = await Promise.all(Object.keys(claves).map(cod => metadatosNube(cod, tipo)));
+      return items.filter(Boolean);
+    } catch (e) { console.warn("BiotromPDF.listarNube:", e); return []; }
+  }
+
+  // Qué "tipos" (categorías) hay cargados en la nube en este momento, de
+  // cualquier herramienta -- para armar un panel único que muestre todo.
+  async function listarTiposNube() {
+    try {
+      const res = await _fetch(`${FB_BASE}.json?shallow=true`);
+      if (!res.ok) return [];
+      const tipos = await res.json();
+      return tipos ? Object.keys(tipos) : [];
+    } catch (e) { console.warn("BiotromPDF.listarTiposNube:", e); return []; }
+  }
+
+  // Todo lo que hay guardado (nube + local) de TODOS los tipos a la vez.
+  // Combina los tipos que ya llegaron a la nube CON los que solo están en
+  // esta PC todavía (la subida a la nube es en 2do plano, así que un guardado
+  // recién hecho puede no estar en la nube todavía si se consulta al toque).
+  async function listarTodoGlobal() {
+    const [tiposNube, locales] = await Promise.all([listarTiposNube(), listar()]);
+    const tipos = Array.from(new Set([...tiposNube, ...locales.map(i => i.tipo)]));
+    const listas = await Promise.all(tipos.map(t => listarTodo(t)));
+    return listas.flat();
+  }
+
+  async function guardar(codigo, tipo, blobOrFile) {
+    if (!codigo || !blobOrFile) return false;
+    try {
+      const hash = await _hashBlob(blobOrFile);
+      await _guardarLocal(codigo, tipo, blobOrFile, undefined, hash);
+      _subirALaNube(codigo, tipo, blobOrFile, hash); // en segundo plano, no bloquea el guardado local
+      return true;
+    } catch (e) { console.warn("BiotromPDF.guardar:", e); return false; }
+  }
+
+  async function obtener(codigo, tipo) {
+    if (!codigo) return null;
+    try {
+      const db = await _abrirDB();
+      const local = await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readonly");
+        const req = tx.objectStore(STORE).get(_id(codigo, tipo));
+        req.onsuccess = () => resolve(req.result ? req.result.blob : null);
+        req.onerror = () => reject(req.error);
+      });
+      if (local) return local;
+    } catch (e) { console.warn("BiotromPDF.obtener (local):", e); }
+    return await _bajarDeLaNube(codigo, tipo);
+  }
+
+  async function existe(codigo, tipo) {
+    return !!(await obtener(codigo, tipo));
+  }
+
+  async function abrir(codigo, tipo) {
+    const blob = await obtener(codigo, tipo);
+    if (!blob) return false;
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return true;
+  }
+
+  async function listar() {
+    try {
+      const db = await _abrirDB();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readonly");
+        const req = tx.objectStore(STORE).getAll();
+        req.onsuccess = () => resolve((req.result || []).map(r => ({
+          codigo: r.codigo, tipo: r.tipo, nombreArchivo: r.nombreArchivo,
+          guardado: r.guardado, tamanoBytes: r.blob ? r.blob.size : 0, hash: r.hash || ""
+        })));
+        req.onerror = () => reject(req.error);
+      });
+    } catch (e) { console.warn("BiotromPDF.listar:", e); return []; }
+  }
+
+  // Borra local Y la copia en la nube -- si no, borrar en una PC no sacaría
+  // el archivo que otra PC ya bajó/subió, y volvería a aparecer solo.
+  async function eliminar(codigo, tipo) {
+    let localOk = false;
+    try {
+      const db = await _abrirDB();
+      localOk = await new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE, "readwrite");
+        tx.objectStore(STORE).delete(_id(codigo, tipo));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (e) { console.warn("BiotromPDF.eliminar (local):", e); }
+    let nubeOk = false;
+    try {
+      const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
+      const res = await _fetch(path, { method: "DELETE" });
+      nubeOk = res.ok;
+    } catch (e) { console.warn("BiotromPDF.eliminar (nube):", e); }
+    return localOk || nubeOk;
+  }
+
+  // Recategoriza un archivo ya guardado (ej: se subió como "plano" pero en
+  // realidad es "controlprod"). Baja/toma el archivo, lo guarda bajo el tipo
+  // nuevo y borra la entrada vieja. El código no cambia.
+  async function mover(codigo, tipoViejo, tipoNuevo) {
+    if (!codigo || !tipoNuevo || tipoViejo === tipoNuevo) return false;
+    const blob = await obtener(codigo, tipoViejo);
+    if (!blob) return false;
+    const ok = await guardar(codigo, tipoNuevo, blob);
+    if (ok) await eliminar(codigo, tipoViejo);
+    return ok;
+  }
+
+  async function estadisticas() {
+    const items = await listar();
+    const totalBytes = items.reduce((s, i) => s + (i.tamanoBytes || 0), 0);
+    return { cantidad: items.length, totalMB: +(totalBytes / 1024 / 1024).toFixed(1) };
+  }
+
+  // Sube a la nube todo lo que ya está guardado en esta PC (útil para lo que
+  // se guardó localmente antes de que existiera esta sincronización, o para
+  // forzar una subida manual). No vuelve a bajar nada, solo empuja lo local.
+  // Sube de a 4 en simultáneo (más rápido que uno por uno con cientos de
+  // archivos) y avisa el avance por "onProgress" para que la pantalla no
+  // parezca colgada durante los minutos que puede tardar con muchos archivos.
+  async function sincronizarTodo(onProgress) {
+    const items = await listar();
+    let subidos = 0, saltados = 0, hechos = 0;
+    await _pool(items, 4, async (it) => {
+      try {
+        if (_cuotaAgotada) throw new Error("cuota de Firebase agotada");
+        const blob = await obtener(it.codigo, it.tipo);
+        if (!blob) { saltados++; }
+        else {
+          const ok = await _subirALaNube(it.codigo, it.tipo, blob);
+          if (ok) subidos++; else saltados++;
+        }
+      } catch (e) { saltados++; }
+      hechos++;
+      if (onProgress) { try { onProgress({ hechos, total: items.length, subidos, saltados }); } catch (e) {} }
+    });
+    return { subidos, saltados, total: items.length };
+  }
+
+  // Combina lo local con lo que hay en la nube (sin descargar los archivos
+  // pesados) -- para pantallas de "historial" que necesitan ver todo lo que
+  // se subió desde cualquier PC, no solo lo que ya se vio en esta.
+  async function listarTodo(tipo) {
+    const [locales, nube] = await Promise.all([listar(), listarNube(tipo)]);
+    const porClave = new Map();
+    nube.forEach(it => porClave.set(it.codigo + ":" + it.tipo, { ...it, enEstaPC: false }));
+    locales.filter(it => !tipo || it.tipo === tipo).forEach(it => porClave.set(it.codigo + ":" + it.tipo, { ...it, enEstaPC: true }));
+    return Array.from(porClave.values());
+  }
+
+  // ---- cuota de Firebase agotada (HTTP 402): se avisa una vez y se deja de insistir ----
+  function cuotaAgotada() { return _cuotaAgotada; }
+  async function probarNube() {
+    try { const res = await _fetchConTimeout(`${FB_BASE}.json?shallow=true`, {}, 15000); return { ok: res.ok, status: res.status }; }
+    catch (e) { return { ok: false, status: 0 }; }
+  }
+
+  // Borra de la nube TODO lo guardado de los tipos indicados (no toca las copias locales de esta PC).
+  async function vaciarNube(tipos, onProgress) {
+    const res = { borrados: [], errores: [] };
+    for (const t of tipos) {
+      try {
+        const r = await _fetchConTimeout(`${FB_BASE}/${t}.json`, { method: "DELETE" }, 120000);
+        (r.ok ? res.borrados : res.errores).push(t);
+      } catch (e) { res.errores.push(t); }
+      if (onProgress) { try { onProgress({ tipo: t, hechos: res.borrados.length + res.errores.length, total: tipos.length }); } catch (e) {} }
+    }
+    return res;
+  }
+
+  // ---- duplicados: compara el CONTENIDO (SHA-256) de lo que esta guardado en esta PC, dentro de un mismo tipo ----
+  async function _hashBlob(blob) {
+    const h = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+    return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, "0")).join("");
+  }
+  async function duplicadosLocales(tipo, onProgress) {
+    const db = await _abrirDB();
+    const claves = await new Promise((res, rej) => { const r = db.transaction(STORE, "readonly").objectStore(STORE).getAllKeys(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); });
+    const porHash = new Map();
+    let hechos = 0;
+    await _pool(claves, 6, async (k) => {
+      try {
+        const rec = await new Promise((res, rej) => { const r = db.transaction(STORE, "readonly").objectStore(STORE).get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+        if (rec && rec.blob && (!tipo || rec.tipo === tipo)) {
+          const h = rec.tipo + ":" + rec.blob.size + ":" + await _hashBlob(rec.blob);
+          const arr = porHash.get(h) || [];
+          arr.push({ codigo: rec.codigo, tipo: rec.tipo, nombreArchivo: rec.nombreArchivo || "", guardado: rec.guardado || "", tamanoBytes: rec.blob.size });
+          porHash.set(h, arr);
+        }
+      } catch (e) { /* un registro ilegible no frena el resto */ }
+      hechos++;
+      if (onProgress && hechos % 50 === 0) { try { onProgress({ hechos, total: claves.length }); } catch (e) {} }
+    });
+    return Array.from(porHash.values()).filter(g => g.length > 1);
+  }
+
+  // ---- Subidas sin repetidos: se guarda el hash (SHA-256) de cada archivo para compararlos sin bajarlos ----
+  function _normNombre(n) {
+    n = String(n || "").toLowerCase();
+    try { n = n.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {}
+    return n.replace(/\.[a-z0-9]{2,4}$/, "").replace(/\(\s*\d+\s*\)|\bcopia\b|\bcopy\b/g, "").replace(/[^a-z0-9]/g, "");
+  }
+  // completa el hash de lo guardado en esta PC que todavia no lo tiene (una sola vez; queda guardado)
+  async function asegurarHashesLocales(onProgress) {
+    const db = await _abrirDB();
+    const claves = await new Promise((res, rej) => { const r = db.transaction(STORE, "readonly").objectStore(STORE).getAllKeys(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); });
+    let hechos = 0;
+    await _pool(claves, 4, async (k) => {
+      try {
+        const rec = await new Promise((res, rej) => { const r = db.transaction(STORE, "readonly").objectStore(STORE).get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+        if (rec && rec.blob && !rec.hash) {
+          rec.hash = await _hashBlob(rec.blob);
+          await new Promise((res, rej) => { const tx = db.transaction(STORE, "readwrite"); tx.objectStore(STORE).put(rec); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+        }
+      } catch (e) {}
+      hechos++;
+      if (onProgress && hechos % 100 === 0) { try { onProgress({ hechos, total: claves.length }); } catch (e) {} }
+    });
+  }
+  // Compara los archivos que se quieren subir con lo que ya hay (mismo tipo). Cada uno queda como:
+  //   igual     : ya esta guardado exactamente igual con ese codigo            -> no se guarda
+  //   repetido  : el mismo contenido ya esta con OTRO codigo (o repetido en el lote) -> no se guarda
+  //   reemplazo : el codigo ya existe pero con contenido distinto               -> pide confirmacion
+  //   parecido  : otro codigo con el mismo nombre de archivo                    -> pide confirmacion
+  //   nuevo     : no hay nada parecido                                          -> se guarda
+  async function analizarSubida(items, tipo, onProgress, existentesPre) {
+    const existentes = existentesPre ? existentesPre.map(e => Object.assign({}, e)) : await listarTodo(tipo);
+    if (existentesPre) {
+      // lo guardado en esta PC ya tiene su hash: se completa lo que el listado traia sin hash
+      const loc = new Map((await listar()).filter(l => l.tipo === (tipo || "plano")).map(l => [l.codigo, l.hash]));
+      existentes.forEach(e => { if (!e.hash && loc.get(e.codigo)) e.hash = loc.get(e.codigo); });
+    }
+    const porHash = new Map(), porCodigo = new Map(), porNombre = new Map();
+    existentes.forEach(e => {
+      if (e.hash) { const a = porHash.get(e.hash) || []; a.push(e); porHash.set(e.hash, a); }
+      porCodigo.set(e.codigo, e);
+      const nn = _normNombre(e.nombreArchivo || e.codigo);
+      if (nn) { const a = porNombre.get(nn) || []; a.push(e); porNombre.set(nn, a); }
+    });
+    const vistos = new Map();
+    const out = [];
+    let hechos = 0;
+    for (const it of items) {
+      const clave = _clave(it.codigo);
+      const hash = await _hashBlob(it.file);
+      const r = { codigo: clave, file: it.file, hash, estado: "nuevo", existente: null };
+      const mismo = porCodigo.get(clave);
+      if (mismo && mismo.hash && mismo.hash === hash) { r.estado = "igual"; r.existente = mismo; }
+      else if (mismo && !mismo.hash && mismo.tamanoBytes === it.file.size) { r.estado = "igual"; r.existente = mismo; }
+      else if (porHash.has(hash)) { r.estado = "repetido"; r.existente = porHash.get(hash)[0]; }
+      else if (vistos.has(hash)) { r.estado = "repetido"; r.existente = { codigo: vistos.get(hash), nombreArchivo: "(otro archivo de esta misma subida)", enLote: true }; }
+      else if (mismo) { r.estado = "reemplazo"; r.existente = mismo; }
+      else {
+        const nn = _normNombre(it.file.name);
+        const otros = nn ? (porNombre.get(nn) || []).filter(e => e.codigo !== clave) : [];
+        if (otros.length) { r.estado = "parecido"; r.existente = otros[0]; }
+      }
+      if (!vistos.has(hash)) vistos.set(hash, clave);
+      out.push(r);
+      hechos++;
+      if (onProgress && hechos % 25 === 0) { try { onProgress({ hechos, total: items.length }); } catch (e) {} }
+    }
+    return out;
+  }
+
+  return { guardar, obtener, existe, abrir, listar, eliminar, mover, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo, listarTiposNube, listarTodoGlobal, cuotaAgotada, probarNube, duplicadosLocales, vaciarNube, analizarSubida, asegurarHashesLocales };
+})();

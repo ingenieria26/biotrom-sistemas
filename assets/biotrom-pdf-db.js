@@ -114,7 +114,7 @@ window.BiotromPDF = (() => {
     return new Blob([bytes], { type: mime || "application/pdf" });
   }
 
-  async function _guardarLocal(codigo, tipo, blobOrFile, nombreArchivo) {
+  async function _guardarLocal(codigo, tipo, blobOrFile, nombreArchivo, hash) {
     const db = await _abrirDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, "readwrite");
@@ -124,7 +124,8 @@ window.BiotromPDF = (() => {
         tipo: tipo || "plano",
         blob: blobOrFile,
         nombreArchivo: nombreArchivo !== undefined ? nombreArchivo : (blobOrFile.name || ""),
-        guardado: new Date().toISOString()
+        guardado: new Date().toISOString(),
+        hash: hash || ""
       });
       tx.oncomplete = () => resolve(true);
       tx.onerror = () => reject(tx.error);
@@ -135,12 +136,18 @@ window.BiotromPDF = (() => {
   //   .../<tipo>/<clave>/meta  -> liviano (nombre, tamaño, fecha) para listar rápido
   //   .../<tipo>/<clave>/data  -> pesado (el archivo en base64), se pide aparte
   // así se puede armar un listado de "qué hay subido" sin bajar todos los archivos.
-  async function _subirALaNube(codigo, tipo, blobOrFile) {
+  async function _subirALaNube(codigo, tipo, blobOrFile, hash) {
     try {
       if (blobOrFile.size > MAX_SUBIDA_BYTES) {
         console.warn(`BiotromPDF: "${codigo}" pesa ${(blobOrFile.size/1024/1024).toFixed(1)} MB, no se sube a la nube (queda solo en esta PC).`);
         return false;
       }
+      hash = hash || await _hashBlob(blobOrFile);
+      // si en la nube ya esta exactamente este archivo con este codigo, no se vuelve a subir (no ocupa lugar de nuevo)
+      try {
+        const rm = await _fetchConTimeout(`${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}/meta.json`, {}, 15000);
+        if (rm && rm.ok) { const mm = await rm.json(); if (mm && mm.hash === hash) return true; }
+      } catch (e) { /* si no se puede comprobar, se sube igual */ }
       const base64 = await _blobToBase64(blobOrFile);
       const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
       // Sin keepalive: el navegador limita esos pedidos a 64 KB de cuerpo, y
@@ -150,7 +157,7 @@ window.BiotromPDF = (() => {
         method: "PUT",
         body: JSON.stringify({
           data: base64,
-          meta: { mime: blobOrFile.type || "application/pdf", nombreArchivo: blobOrFile.name || "", guardado: new Date().toISOString(), tamanoBytes: blobOrFile.size }
+          meta: { mime: blobOrFile.type || "application/pdf", nombreArchivo: blobOrFile.name || "", guardado: new Date().toISOString(), tamanoBytes: blobOrFile.size, hash: hash }
         })
       });
       return res.ok;
@@ -172,7 +179,7 @@ window.BiotromPDF = (() => {
       const blob = meta.nombreArchivo
         ? new File([bytes], meta.nombreArchivo, { type: meta.mime || "application/octet-stream" })
         : bytes;
-      await _guardarLocal(codigo, tipo, blob, meta.nombreArchivo || "");
+      await _guardarLocal(codigo, tipo, blob, meta.nombreArchivo || "", meta.hash || "");
       return blob;
     } catch (e) { console.warn("BiotromPDF._bajarDeLaNube:", e); return null; }
   }
@@ -184,7 +191,7 @@ window.BiotromPDF = (() => {
       const res = await _fetch(path);
       if (!res.ok) return null;
       const meta = await res.json();
-      return meta ? { codigo: _clave(codigo), tipo: tipo || "plano", nombreArchivo: meta.nombreArchivo || "", guardado: meta.guardado || "", tamanoBytes: meta.tamanoBytes || 0 } : null;
+      return meta ? { codigo: _clave(codigo), tipo: tipo || "plano", nombreArchivo: meta.nombreArchivo || "", guardado: meta.guardado || "", tamanoBytes: meta.tamanoBytes || 0, hash: meta.hash || "" } : null;
     } catch (e) { console.warn("BiotromPDF.metadatosNube:", e); return null; }
   }
 
@@ -228,8 +235,9 @@ window.BiotromPDF = (() => {
   async function guardar(codigo, tipo, blobOrFile) {
     if (!codigo || !blobOrFile) return false;
     try {
-      await _guardarLocal(codigo, tipo, blobOrFile);
-      _subirALaNube(codigo, tipo, blobOrFile); // en segundo plano, no bloquea el guardado local
+      const hash = await _hashBlob(blobOrFile);
+      await _guardarLocal(codigo, tipo, blobOrFile, undefined, hash);
+      _subirALaNube(codigo, tipo, blobOrFile, hash); // en segundo plano, no bloquea el guardado local
       return true;
     } catch (e) { console.warn("BiotromPDF.guardar:", e); return false; }
   }
@@ -270,7 +278,7 @@ window.BiotromPDF = (() => {
         const req = tx.objectStore(STORE).getAll();
         req.onsuccess = () => resolve((req.result || []).map(r => ({
           codigo: r.codigo, tipo: r.tipo, nombreArchivo: r.nombreArchivo,
-          guardado: r.guardado, tamanoBytes: r.blob ? r.blob.size : 0
+          guardado: r.guardado, tamanoBytes: r.blob ? r.blob.size : 0, hash: r.hash || ""
         })));
         req.onerror = () => reject(req.error);
       });
@@ -399,5 +407,74 @@ window.BiotromPDF = (() => {
     return Array.from(porHash.values()).filter(g => g.length > 1);
   }
 
-  return { guardar, obtener, existe, abrir, listar, eliminar, mover, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo, listarTiposNube, listarTodoGlobal, cuotaAgotada, probarNube, duplicadosLocales, vaciarNube };
+  // ---- Subidas sin repetidos: se guarda el hash (SHA-256) de cada archivo para compararlos sin bajarlos ----
+  function _normNombre(n) {
+    n = String(n || "").toLowerCase();
+    try { n = n.normalize("NFD").replace(/[\u0300-\u036f]/g, ""); } catch (e) {}
+    return n.replace(/\.[a-z0-9]{2,4}$/, "").replace(/\(\s*\d+\s*\)|\bcopia\b|\bcopy\b/g, "").replace(/[^a-z0-9]/g, "");
+  }
+  // completa el hash de lo guardado en esta PC que todavia no lo tiene (una sola vez; queda guardado)
+  async function asegurarHashesLocales(onProgress) {
+    const db = await _abrirDB();
+    const claves = await new Promise((res, rej) => { const r = db.transaction(STORE, "readonly").objectStore(STORE).getAllKeys(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); });
+    let hechos = 0;
+    await _pool(claves, 4, async (k) => {
+      try {
+        const rec = await new Promise((res, rej) => { const r = db.transaction(STORE, "readonly").objectStore(STORE).get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+        if (rec && rec.blob && !rec.hash) {
+          rec.hash = await _hashBlob(rec.blob);
+          await new Promise((res, rej) => { const tx = db.transaction(STORE, "readwrite"); tx.objectStore(STORE).put(rec); tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); });
+        }
+      } catch (e) {}
+      hechos++;
+      if (onProgress && hechos % 100 === 0) { try { onProgress({ hechos, total: claves.length }); } catch (e) {} }
+    });
+  }
+  // Compara los archivos que se quieren subir con lo que ya hay (mismo tipo). Cada uno queda como:
+  //   igual     : ya esta guardado exactamente igual con ese codigo            -> no se guarda
+  //   repetido  : el mismo contenido ya esta con OTRO codigo (o repetido en el lote) -> no se guarda
+  //   reemplazo : el codigo ya existe pero con contenido distinto               -> pide confirmacion
+  //   parecido  : otro codigo con el mismo nombre de archivo                    -> pide confirmacion
+  //   nuevo     : no hay nada parecido                                          -> se guarda
+  async function analizarSubida(items, tipo, onProgress, existentesPre) {
+    const existentes = existentesPre ? existentesPre.map(e => Object.assign({}, e)) : await listarTodo(tipo);
+    if (existentesPre) {
+      // lo guardado en esta PC ya tiene su hash: se completa lo que el listado traia sin hash
+      const loc = new Map((await listar()).filter(l => l.tipo === (tipo || "plano")).map(l => [l.codigo, l.hash]));
+      existentes.forEach(e => { if (!e.hash && loc.get(e.codigo)) e.hash = loc.get(e.codigo); });
+    }
+    const porHash = new Map(), porCodigo = new Map(), porNombre = new Map();
+    existentes.forEach(e => {
+      if (e.hash) { const a = porHash.get(e.hash) || []; a.push(e); porHash.set(e.hash, a); }
+      porCodigo.set(e.codigo, e);
+      const nn = _normNombre(e.nombreArchivo || e.codigo);
+      if (nn) { const a = porNombre.get(nn) || []; a.push(e); porNombre.set(nn, a); }
+    });
+    const vistos = new Map();
+    const out = [];
+    let hechos = 0;
+    for (const it of items) {
+      const clave = _clave(it.codigo);
+      const hash = await _hashBlob(it.file);
+      const r = { codigo: clave, file: it.file, hash, estado: "nuevo", existente: null };
+      const mismo = porCodigo.get(clave);
+      if (mismo && mismo.hash && mismo.hash === hash) { r.estado = "igual"; r.existente = mismo; }
+      else if (mismo && !mismo.hash && mismo.tamanoBytes === it.file.size) { r.estado = "igual"; r.existente = mismo; }
+      else if (porHash.has(hash)) { r.estado = "repetido"; r.existente = porHash.get(hash)[0]; }
+      else if (vistos.has(hash)) { r.estado = "repetido"; r.existente = { codigo: vistos.get(hash), nombreArchivo: "(otro archivo de esta misma subida)", enLote: true }; }
+      else if (mismo) { r.estado = "reemplazo"; r.existente = mismo; }
+      else {
+        const nn = _normNombre(it.file.name);
+        const otros = nn ? (porNombre.get(nn) || []).filter(e => e.codigo !== clave) : [];
+        if (otros.length) { r.estado = "parecido"; r.existente = otros[0]; }
+      }
+      if (!vistos.has(hash)) vistos.set(hash, clave);
+      out.push(r);
+      hechos++;
+      if (onProgress && hechos % 25 === 0) { try { onProgress({ hechos, total: items.length }); } catch (e) {} }
+    }
+    return out;
+  }
+
+  return { guardar, obtener, existe, abrir, listar, eliminar, mover, estadisticas, sincronizarTodo, listarNube, metadatosNube, listarTodo, listarTiposNube, listarTodoGlobal, cuotaAgotada, probarNube, duplicadosLocales, vaciarNube, analizarSubida, asegurarHashesLocales };
 })();

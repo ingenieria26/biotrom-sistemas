@@ -112,10 +112,21 @@
     </div>
     <input type="file" id="nb-input" multiple style="display:none" onchange="nbUpload(this.files)">
     <input type="file" id="nb-input-folder" webkitdirectory multiple style="display:none" onchange="nbUpload(this.files)">
+    <div id="nb-medidor" style="font-size:.72rem;margin-top:8px"></div>
     <div id="status"></div>
   </div>
 
-<div class="card" id="nb-dup" style="display:none">
+<div class="card" id="nb-rev" style="display:none">
+    <h2>🔎 Revisá antes de subir</h2>
+    <p class="sub" id="nb-rev-sub"></p>
+    <div id="nb-rev-lista"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn" id="nb-rev-ok" onclick="nbAplicarRevision()">✔ Aplicar lo elegido</button>
+      <button class="btn" onclick="nbCancelarRevision()">Cancelar (no subir nada)</button>
+    </div>
+  </div>
+
+  <div class="card" id="nb-dup" style="display:none">
     <h2>🧹 Archivos repetidos</h2>
     <p class="sub" id="nb-dup-sub"></p>
     <div id="nb-dup-lista"></div>
@@ -167,6 +178,7 @@ async function nbCargarTodo(){
   }).join('');
   if (tipos.includes(tipoElegido)) selectTipo.value = tipoElegido;
   nbRenderTabla();
+  nbMedidor();
 }
 
 let nbSeleccion = new Set();
@@ -330,24 +342,84 @@ async function nbCollectEntries(entries){
   return files;
 }
 
+/* ---------- subida sin repetidos ---------- */
+const NB_LIMITE_MB = 1000;   // plan gratuito de Firebase: 1 GB guardado
+function nbMedidor(){
+  const el = document.getElementById('nb-medidor'); if (!el) return;
+  const bytes = nbItems.reduce((s, i) => s + (i.tamanoBytes || 0), 0) * 1.37;   // base64 ocupa ~37% mas
+  const mb = bytes / 1048576, pct = Math.round(mb / NB_LIMITE_MB * 100);
+  el.innerHTML = `Espacio estimado en la nube: <b>${mb.toLocaleString('es-AR', {maximumFractionDigits: 0})} MB</b> de ~${NB_LIMITE_MB} MB (${pct} %)`;
+  el.style.color = pct >= 90 ? 'var(--red)' : (pct >= 70 ? '#b45309' : 'var(--text-dim)');
+}
+let nbPlan = null;
+function nbKB(b){ return b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB'; }
 async function nbUpload(files){
   const arr = Array.from(files || []);
   if (!arr.length) return;
   const tipo = (document.getElementById('nb-tipo').value || '').trim();
   if (!tipo){ nbStatus('Poné un Tipo antes de subir.', true); return; }
-const codigoManual = (document.getElementById('nb-codigo').value || '').trim();
+  const codigoManual = (document.getElementById('nb-codigo').value || '').trim();
   const usarCodigoManual = arr.length === 1 && !!codigoManual;
-
-  nbStatus(`Guardando ${arr.length} archivo(s)…`);
-  let ok = 0, error = 0;
-  for (const file of arr){
-    const codigo = usarCodigoManual ? codigoManual : file.name.replace(/\.[^.]+$/, '');
-    const guardado = await BiotromPDF.guardar(codigo, tipo, file);
-    if (guardado) ok++; else error++;
+  nbStatus(`Analizando ${arr.length} archivo(s): se compara el contenido con lo que ya está guardado…`);
+  let plan;
+  try {
+    await BiotromPDF.asegurarHashesLocales(p => nbStatus(`Preparando la comparación… ${p.hechos}/${p.total}`));
+    plan = await BiotromPDF.analizarSubida(arr.map(f => ({ file: f, codigo: usarCodigoManual ? codigoManual : f.name.replace(/\.[^.]+$/, '') })), tipo, p => nbStatus(`Analizando… ${p.hechos}/${p.total}`), nbItems.filter(i => i.tipo === tipo));
+  } catch (e){ nbStatus('No se pudo analizar la subida: ' + e.message, true); return; }
+  nbPlan = { tipo, nuevos: plan.filter(x => x.estado === 'nuevo'), omitidos: plan.filter(x => x.estado === 'igual' || x.estado === 'repetido'), dudas: plan.filter(x => x.estado === 'reemplazo' || x.estado === 'parecido') };
+  document.getElementById('nb-input').value = ''; document.getElementById('nb-input-folder').value = ''; document.getElementById('nb-codigo').value = '';
+  if (!nbPlan.dudas.length){ await nbEjecutar([]); return; }
+  nbMostrarRevision();
+}
+function nbMostrarRevision(){
+  const p = nbPlan, box = document.getElementById('nb-rev');
+  const omit = p.omitidos.slice(0, 12).map(x => `<div style="font-size:.72rem;padding:1px 0">⏭ <b>${nbEsc(x.codigo)}</b> — ${nbEsc(x.file.name)} <span style="color:var(--text-dim)">→ ${x.estado === 'igual' ? 'ya está guardado igual' : 'mismo contenido que <b>' + nbEsc(x.existente.codigo) + '</b>'}</span></div>`).join('') + (p.omitidos.length > 12 ? `<div style="font-size:.72rem;color:var(--text-dim)">… y ${p.omitidos.length - 12} más</div>` : '');
+  document.getElementById('nb-rev-sub').innerHTML = `<b>${p.nuevos.length}</b> archivo(s) nuevo(s) se suben tal cual. <b>${p.omitidos.length}</b> <b>no se guardan</b> porque ya hay uno con exactamente el mismo contenido (así no se ocupa lugar de más). ` + (p.dudas.length ? `<b>${p.dudas.length}</b> se parecen a algo que ya está guardado: elegí qué hacer con cada uno. <b style="color:var(--red)">«Reemplazar» borra el anterior DEFINITIVAMENTE de la nube y de esta PC.</b>` : '');
+  const filas = p.dudas.map((x, i) => `<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:8px;font-size:.74rem">
+      <div><b>${x.estado === 'reemplazo' ? '🔁 Mismo código, contenido distinto' : '≈ Mismo nombre de archivo, otro código'}</b></div>
+      <div style="margin-top:3px">Nuevo: <b>${nbEsc(x.codigo)}</b> — ${nbEsc(x.file.name)} <span style="color:var(--text-dim)">(${nbKB(x.file.size)})</span></div>
+      <div>Ya guardado: <b>${nbEsc(x.existente.codigo)}</b> — ${nbEsc(x.existente.nombreArchivo || '')} <span style="color:var(--text-dim)">(${nbKB(x.existente.tamanoBytes || 0)} · ${nbEsc(String(x.existente.guardado || '').slice(0, 10))})</span></div>
+      <div style="margin-top:6px"><select id="nb-rev-acc-${i}" style="padding:5px 8px;font-size:.74rem">
+        <option value="omitir" selected>No subir el nuevo (dejar el que ya está)</option>
+        <option value="reemplazar">Reemplazar: borrar DEFINITIVAMENTE el que ya está y subir el nuevo</option>
+        <option value="ambos">Subir igual y conservar los dos</option>
+      </select></div></div>`).join('');
+  document.getElementById('nb-rev-lista').innerHTML = (p.omitidos.length ? `<div style="margin-bottom:10px">${omit}</div>` : '') + filas;
+  box.style.display = 'block'; box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  nbStatus('Revisá lo que se parece a algo ya guardado y apretá «Aplicar».');
+}
+function nbCancelarRevision(){ nbPlan = null; document.getElementById('nb-rev').style.display = 'none'; nbStatus('Cancelado: no se subió nada.'); }
+async function nbAplicarRevision(){
+  const p = nbPlan; if (!p) return;
+  const acciones = p.dudas.map((x, i) => (document.getElementById('nb-rev-acc-' + i) || {}).value || 'omitir');
+  const aReemplazar = p.dudas.filter((x, i) => acciones[i] === 'reemplazar');
+  if (aReemplazar.length){
+    const prueba = await BiotromPDF.probarNube();
+    if (!prueba.ok){ if (prueba.status === 402) nbAvisoCuota(); nbStatus(`La nube no responde (${prueba.status || 'sin conexión'}): no se reemplazó nada. Probá de nuevo cuando responda.`, true); return; }
+    if (!confirm(`Vas a BORRAR DEFINITIVAMENTE ${aReemplazar.length} archivo(s) de la nube y de esta PC para poner los nuevos en su lugar:\n\n` + aReemplazar.slice(0, 8).map(x => '• ' + x.existente.codigo + ' — ' + (x.existente.nombreArchivo || '')).join('\n') + (aReemplazar.length > 8 ? `\n… y ${aReemplazar.length - 8} más` : '') + '\n\nNo se puede deshacer. ¿Seguir?')) return;
   }
-  nbStatus(`✓ ${ok} guardado(s)` + (error ? ` — ${error} con error` : ''));
-  document.getElementById('nb-input').value = '';
-  document.getElementById('nb-codigo').value = '';
+  document.getElementById('nb-rev').style.display = 'none';
+  await nbEjecutar(acciones);
+}
+async function nbEjecutar(acciones){
+  const p = nbPlan; nbPlan = null; if (!p) return;
+  const subir = p.nuevos.slice();
+  let reemplazados = 0, omitidosPorUsuario = 0;
+  // espacio: avisa si la subida acerca la nube al limite
+  const nuevoBytes = subir.concat(p.dudas.filter((x, i) => acciones[i] === 'reemplazar' || acciones[i] === 'ambos')).reduce((s, x) => s + x.file.size, 0) * 1.37;
+  const usado = nbItems.reduce((s, i) => s + (i.tamanoBytes || 0), 0) * 1.37;
+  if ((usado + nuevoBytes) / 1048576 > NB_LIMITE_MB * 0.9 && !confirm(`Con esta subida la nube llegaría a ~${Math.round((usado + nuevoBytes) / 1048576)} MB de ~${NB_LIMITE_MB} MB (más del 90 %). Si se llena, Firebase bloquea TODAS las herramientas. ¿Subir igual?`)){ nbStatus('Subida cancelada para no llenar la nube.', true); return; }
+  for (let i = 0; i < p.dudas.length; i++){
+    const x = p.dudas[i], a = acciones[i] || 'omitir';
+    if (a === 'reemplazar'){ await BiotromPDF.eliminar(x.existente.codigo, p.tipo); reemplazados++; subir.push(x); }
+    else if (a === 'ambos') subir.push(x);
+    else omitidosPorUsuario++;
+  }
+  nbStatus(`Guardando ${subir.length} archivo(s)…`);
+  let ok = 0, error = 0;
+  for (const it of subir){ const g = await BiotromPDF.guardar(it.codigo, p.tipo, it.file); if (g) ok++; else error++; }
+  const ahorro = p.omitidos.reduce((s, x) => s + x.file.size, 0);
+  nbStatus(`✓ ${ok} guardado(s)` + (reemplazados ? ` (${reemplazados} reemplazando al anterior)` : '') + (p.omitidos.length ? ` · ${p.omitidos.length} no se guardaron por estar repetidos (${nbKB(ahorro)} que no se ocuparon)` : '') + (omitidosPorUsuario ? ` · ${omitidosPorUsuario} omitido(s) por parecerse a uno ya guardado` : '') + (error ? ` — ${error} con error` : ''));
   nbCargarTodo();
 }
 
