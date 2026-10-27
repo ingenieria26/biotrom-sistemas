@@ -2635,11 +2635,11 @@ function mpUsados(){var desc=descripciones(),guard=costosGuardados(),mp={};
 /* Precio automatico: el de la OC MAS NUEVA del mismo material y diametro (barras redondas). Las OC mas viejas no se tienen en cuenta:
    si llega una OC nueva del mismo material, pasa a ser la que vale. El precio por unidad de una OC no siempre es por metro (a veces es por kg),
    asi que se prueba cada interpretacion y se descarta la que da un precio por kg fuera de lo razonable para ese material. */
-var MATS2={"21":/TITANIO\s*ALEADO|TI\.?\s*ALEADO|GR\.?\s*5/,"22":/TITANIO\s*PURO|TI\.?\s*PURO|GRADO\s*[1-4]/,"11":/316/,"12":/F\s?138/,"61":/304/,"62":/316/,"63":/420(?!\s*B)/,"66":/420\s*B/,"82":/302/,"83":/455/,"84":/465/,"85":/N\s?360/,"31":/CROMO\s*COBALTO|CR\s*CO/,"42":/UHMWPE|POLIETILENO/,"43":/PEEK/,"44":/TEFLON|PTFE/,"46":/\bPOM\b|DELRIN|ACETAL/,"51":/ALUMINIO|\bAL\b\.?/,"52":/6061|6063|ALUMINIO|\bAL\b\.?/,"60":/NITINOL/};
+var MATS2={"21":/TITANIO\s*ALEADO|TI\.?\s*ALEADO|TI\s*-?\s*6\s*AL|F\s?136|GR\.?\s*5\b/,"22":/TITANIO\s*PURO|TI\.?\s*PURO|GRADO\s*[1-4]\b|GR\.?\s*[1-4]\b|F\s?67\b/,"11":/316(?!\s*L?\s*VM)/,"12":/F\s?138|ISO\s*5832[-\s]*1|316\s*L?\s*VM/,"61":/304/,"62":/316/,"63":/420(?!\s*B)/,"66":/420\s*B/,"82":/302/,"83":/455/,"84":/465/,"85":/N\s?360/,"31":/CROMO\s*COBALTO|CR\s*CO/,"42":/UHMW|POLIETILENO|PE[\s-]*1000/,"43":/PEEK/,"44":/TEFLON|PTFE/,"46":/\bPOM\b|DELRIN|ACETAL/,"51":/ALUMINIO|\bAL\b\.?/,"52":/6061|6063|ALUMINIO|\bAL\b\.?/,"60":/NITINOL/};
 var BANDA={"21":[30,200],"22":[25,200],"11":[3,20],"12":[3,60],"61":[2.5,20],"62":[2.5,20],"63":[2.5,25],"66":[2.5,25],"82":[2.5,40],"83":[2.5,40],"84":[2.5,40],"85":[2.5,40],"31":[30,400],"42":[3,80],"43":[40,500],"44":[8,200],"46":[3,60],"51":[2.5,25],"52":[2.5,25],"60":[50,800]};
 /* precio de una OC: con coma, la coma es el decimal (57,37 / 1.234,50); sin coma, el punto es el decimal (57.3700) */
 function numP(s){s=String(s==null?"":s).trim();if(s.indexOf(",")>=0)s=s.replace(/\./g,"").replace(",",".");var v=parseFloat(s);return isNaN(v)?0:v}
-function numD2(s){var m=/Ø\s*([\d][\d.,\s]*)/.exec(s||"");if(!m)return null;var v=parseFloat(m[1].replace(/\s/g,"").replace(",","."));return isNaN(v)?null:v}
+function numD2(s){var m=/(?:Ø|⌀|DI[ÁA]M(?:ETRO)?\.?)\s*([\d][\d.,\s]*)/i.exec(s||"");if(!m)return null;var v=parseFloat(m[1].replace(/\s/g,"").replace(",","."));return isNaN(v)?null:v}
 function fechaOC(f){var m=/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/.exec(String(f||""));if(!m)return null;var y=+m[3];if(y<100)y+=2000;return new Date(y,+m[2]-1,+m[1])}
 /* Pendiente de ln(precio) contra ln(diametro^2) entre los items del mismo material de UNA OC: ~1 = precios por metro (crecen con la seccion);
    ~0 = precio por kilo (iguales para todos los diametros). Sirve para saber la unidad cuando la OC no la indica. */
@@ -2654,12 +2654,32 @@ function precioChapa(cod,d,re){var em=/CHAPA\s*([\d][\d.,]*)/i.exec(d||"");if(!e
  var dm=PRECIOS["chapa:"+cod]||{},w=+dm.ancho||0,l=+dm.largo||0,base={chapa:true,precioChapa:c.p,esp:esp,moneda:c.oc.moneda==="ars"?"ars":"usd",oc:c.oc.numero,fecha:c.oc.fecha||"",dias:dias,desc:c.it.descripcion,saltadas:0};
  if(!(w>0&&l>0))return Object.assign(base,{ok:false,faltanMedidas:true});
  var kgCh=w*l*esp*mpDetectarDensidad(cod,d)/1e6;return Object.assign(base,{ok:true,precio:c.p/kgCh,unidad:"kg",kg:c.p/kgCh,kgChapa:kgCh,ancho:w,largo:l,metodo:"precio por chapa entera ÷ "+fmt(kgCh,1)+" kg ("+w+" × "+l+" × "+esp+" mm)"})}
-function precioAuto(cod){var d=descMP(cod),pf=String(cod).slice(0,2),re=MATS2[pf],band=BANDA[pf],dia=numD2(d);
+/* Forma y medidas de una materia prima, tanto del catalogo ("304 CAÑO Ø 11 X 1,5") como de una OC ("INOX 304 Ø 11.00 mm X espesor 1.5 mm pared").
+   Devuelve {f:"R"|"H"|"Q"|"P"|"C", d:[medidas]} o null si no se puede (tornillos, roscadas, resortes, chapas, bloques). */
+function _n1(s,rx){var m=rx.exec(s);return m?parseFloat(m[1].replace(",",".")):null}
+var _NUM="(\\d+(?:[.,]\\d+)?)";
+function formaMP(txt){var u=String(txt||"").toUpperCase();
+ if(/TORN|ARANDELA|TUERCA|ROSCAD|RESORTE|MICRO|BULON|CHAPA/.test(u))return null;
+ var pl=/PLANCH/.test(u);
+ if(!pl&&/CA[ÑN]O|TUBO|PARED|ESPESOR/.test(u)){var D=numD2(u);if(D==null)D=_n1(u,new RegExp("(?:CA[ÑN]O|TUBO)\\s*[Ø⌀]?\\s*"+_NUM));
+  var e=_n1(u,new RegExp("ESPESOR\\s*(?:DE\\s*)?"+_NUM))||_n1(u,new RegExp(_NUM+"\\s*(?:MM)?\\s*(?:DE\\s*)?PARED"))||_n1(u,new RegExp("PARED\\s*(?:DE\\s*)?"+_NUM))||_n1(u,new RegExp("[Ø⌀]\\s*\\d+(?:[.,]\\d+)?\\s*(?:MM)?\\s*[X×]\\s*"+_NUM));
+  return(D>0&&e>0&&e<D/2)?{f:"C",d:[D,e]}:null}
+ if(pl){var t=u.slice(u.indexOf("PLANCH")),m=new RegExp(_NUM+"\\s*[X×]\\s*"+_NUM).exec(t);if(!m)return null;var a=parseFloat(m[1].replace(",",".")),b=parseFloat(m[2].replace(",","."));if(!(a>0&&b>0)||a>150||b>150)return null;return{f:"P",d:[Math.min(a,b),Math.max(a,b)]}}
+ var h=_n1(u,new RegExp("HEX\\w*\\.?\\s*[Ø⌀]?\\s*"+_NUM));if(h>0)return{f:"H",d:[h]};
+ var q=_n1(u,new RegExp("CUAD\\w*\\.?\\s*[Ø⌀]?\\s*"+_NUM));if(q>0)return{f:"Q",d:[q]};
+ var r=numD2(u);if(r==null&&/BARRA|REDONDA/.test(u))r=_n1(u,new RegExp(_NUM+"\\s*MM"));
+ return r>0?{f:"R",d:[r]}:null}
+function areaMP(fm){var x=fm.d;return fm.f==="R"?Math.PI*x[0]*x[0]/4:fm.f==="H"?Math.sqrt(3)/2*x[0]*x[0]:fm.f==="Q"?x[0]*x[0]:fm.f==="P"?x[0]*x[1]:Math.PI/4*(x[0]*x[0]-Math.pow(x[0]-2*x[1],2))}
+function mismaFormaMP(a,b){if(!a||!b||a.f!==b.f||a.d.length!==b.d.length)return false;for(var i=0;i<a.d.length;i++)if(Math.abs(a.d[i]-b.d[i])>0.05)return false;return true}
+function bandaForma(band,f){return f==="C"?[band[0],band[1]*3]:(f==="R"?band:[band[0],band[1]*1.5])}
+/* Items de OC que corresponden a esa materia prima (mismo material, misma forma y mismas medidas), del mas nuevo al mas viejo */
+function candidatosMP(cod,d,re,fm){var cand=[];if(!re||!fm)return cand;
+ Object.values(_cargarOrdenesCompra()).forEach(function(oc){(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u))return;if(clasificarItemOC(oc,it)!=="mp")return;if(!mismaFormaMP(fm,formaMP(it.descripcion)))return;var p=numP(it.precioUnitario);if(!(p>0))return;cand.push({oc:oc,it:it,p:p,u:u})})});
+ cand.sort(function(a,b){return _esOcMasReciente(a.oc,b.oc)?-1:_esOcMasReciente(b.oc,a.oc)?1:0});return cand}
+function precioAuto(cod){var d=descMP(cod),pf=String(cod).slice(0,2),re=MATS2[pf],band=BANDA[pf],fm=formaMP(d);
  if(re&&/CHAPA/i.test(d)&&!/PLANCH/i.test(d)){var pc=precioChapa(cod,d,re);return pc||{ok:false}}
- if(!re||!band||dia==null||/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|ROSCAD|RESORTE|MICRO|TORNILLO/i.test(d))return{ok:false};
- var dens=mpDetectarDensidad(cod,d),kgm=Math.PI*Math.pow(dia/2,2)*dens/1000,centro=Math.sqrt(band[0]*band[1]),cand=[];
- Object.values(_cargarOrdenesCompra()).forEach(function(oc){(oc.items||[]).forEach(function(it){var u=String(it.descripcion||"").toUpperCase();if(!re.test(u))return;if(clasificarItemOC(oc,it)!=="mp")return;if(/HEX|CUADR|CAÑO|TUBO|PLANCH|CHAPA|TORN|ARANDELA|TUERCA|ROSCAD/.test(u))return;var x=numD2(it.descripcion);if(x==null||Math.abs(x-dia)>0.05)return;var p=numP(it.precioUnitario);if(!(p>0))return;cand.push({oc:oc,it:it,p:p,u:u})})});
- cand.sort(function(a,b){return _esOcMasReciente(a.oc,b.oc)?-1:_esOcMasReciente(b.oc,a.oc)?1:0});
+ if(!re||!band||!fm)return{ok:false};band=bandaForma(band,fm.f);
+ var dens=mpDetectarDensidad(cod,d),kgm=areaMP(fm)*dens/1000,centro=Math.sqrt(band[0]*band[1]),cand=candidatosMP(cod,d,re,fm);
  for(var i=0;i<cand.length;i++){var c=cand[i],un=String(c.it.unidad||"").toUpperCase().replace(/\./g,"").trim(),opts,metodo="",forz=null;
   /* 1) la descripcion o la unidad dicen "kg"; 2) la relacion precio/diametro dentro de la OC; 3) la columna de unidad (casi nunca viene); 4) el precio habitual del material */
   if(c.oc.precioPor==="kg"){forz="kg";metodo="el encabezado de la OC dice precio por kg"}
