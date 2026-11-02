@@ -289,7 +289,7 @@ td.cant-cell.verif input{background:var(--amber-dim)}
 
 <script>
 // ── CONFIG ────────────────────────────────────────────────────────────
-const FB_URL = 'https://biotrom-carga-maquina-default-rtdb.firebaseio.com';
+const FB_URL = 'https://iniciobt2-default-rtdb.firebaseio.com';
 const FB_BASE = '/controlprod';
 const CARGA_PATH  = '/carga/ofs';  // mismas OFs que ve "Carga de Máquina"
 const ORDEN_PATH  = '/carga/orden'; // orden manual (drag&drop) de esa misma cola
@@ -538,6 +538,7 @@ function persist(){
 
 function startPolling(){
   pollTimer = setInterval(()=>{
+    if(document.visibilityState!=='visible') return; // pestaña oculta: no gastar descargas
     const active = document.activeElement;
     if(active && (active.tagName==='INPUT' || active.tagName==='SELECT')) return;
     fbGet(fbPath(weekMonday,currentMachine)).then(remote=>{
@@ -1443,7 +1444,7 @@ renderMachineChips();
 loadSheet();
 initDragHandlers();
 loadCargaOfs();
-setInterval(loadCargaOfs, 60000); // refresca la lista de OFs de Carga de Máquina
+((u,f)=>{try{let p=0;const es=new EventSource(u);es.addEventListener("put",()=>{if(p++)f()});es.addEventListener("patch",()=>f())}catch(e){}setInterval(()=>{if(document.visibilityState==="visible")f()},6e5)})(FB_URL + CARGA_PATH + ".json",loadCargaOfs); // refresca la lista de OFs de Carga de Máquina cuando cambia
 </script>
 <style id="bt-theme">/* ===== CONTROL DE PRODUCCION · tema corporativo (solo estilos) ===== */
 :root{--bg:#f8fafc;--surface2:#f1f5f9;--border:#e2e8f0;--border2:#cbd5e1;--text:#334155;--muted:#64748b;--accent:#4f46e5;--accent-dim:rgba(79,70,229,.09);--blue:#4f46e5;--hyundai:#4f46e5;--shadow:0 1px 2px rgba(15,23,42,.04),0 6px 16px rgba(15,23,42,.06)}

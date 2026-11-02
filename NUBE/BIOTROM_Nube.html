@@ -395,7 +395,7 @@ async function nbAplicarRevision(){
   const aReemplazar = p.dudas.filter((x, i) => acciones[i] === 'reemplazar');
   if (aReemplazar.length){
     const prueba = await BiotromPDF.probarNube();
-    if (!prueba.ok){ if (prueba.status === 402) nbAvisoCuota(); nbStatus(`La nube no responde (${prueba.status || 'sin conexión'}): no se reemplazó nada. Probá de nuevo cuando responda.`, true); return; }
+    if (!prueba.ok && !prueba.desactivada){ if (prueba.status === 402) nbAvisoCuota(); nbStatus(`La nube no responde (${prueba.status || 'sin conexión'}): no se reemplazó nada. Probá de nuevo cuando responda.`, true); return; }
     if (!confirm(`Vas a BORRAR DEFINITIVAMENTE ${aReemplazar.length} archivo(s) de la nube y de esta PC para poner los nuevos en su lugar:\n\n` + aReemplazar.slice(0, 8).map(x => '• ' + x.existente.codigo + ' — ' + (x.existente.nombreArchivo || '')).join('\n') + (aReemplazar.length > 8 ? `\n… y ${aReemplazar.length - 8} más` : '') + '\n\nNo se puede deshacer. ¿Seguir?')) return;
   }
   document.getElementById('nb-rev').style.display = 'none';
@@ -425,11 +425,12 @@ async function nbEjecutar(acciones){
 
 async function nbResincronizar(){
   const prueba = await BiotromPDF.probarNube();
-  if (!prueba.ok){
+  if (!prueba.ok && !prueba.desactivada){
     if (prueba.status === 402) nbAvisoCuota();
     nbStatus(`La nube no responde (${prueba.status || 'sin conexión'}): no se re-sube nada.`, true);
     return;
   }
+  if (prueba.desactivada){ nbStatus('Los PDF ya no se suben a Firebase (llenaban la base). Quedan guardados en cada PC; planos y cartas se ven desde el sitio publicado.', true); return; }
   nbStatus('Re-subiendo a la nube todo lo guardado en esta computadora… (0%)');
   const r = await BiotromPDF.sincronizarTodo((p) => {
     const pct = Math.round((p.hechos / p.total) * 100);
@@ -444,7 +445,7 @@ window.addEventListener('biotrom-nube-cuota', nbAvisoCuota);
 
 async function nbVaciarNube(){
   const prueba = await BiotromPDF.probarNube();
-  if (!prueba.ok){
+  if (!prueba.ok && !prueba.desactivada){
     if (prueba.status === 402) nbAvisoCuota();
     nbStatus(`La nube no responde (${prueba.status || 'sin conexión'}): no se borró nada.`, true);
     return;
@@ -533,7 +534,7 @@ async function nbEliminarDuplicados(){
   if (!marcados.length){ nbStatus('No hay nada marcado para eliminar.', true); return; }
   nbStatus('Verificando que la nube responda antes de borrar…');
   const prueba = await BiotromPDF.probarNube();
-  if (!prueba.ok){
+  if (!prueba.ok && !prueba.desactivada){
     if (prueba.status === 402) nbAvisoCuota();
     nbStatus(`La nube no responde (${prueba.status || 'sin conexión'}): no se borró nada, para no dejar la nube y esta PC desparejas.`, true);
     return;

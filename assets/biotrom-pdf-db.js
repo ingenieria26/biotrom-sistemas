@@ -32,8 +32,15 @@ window.BiotromPDF = (() => {
   const DB_NAME = "biotrom_pdfs";
   const DB_VERSION = 1;
   const STORE = "archivos";
-  const FB_BASE = "https://biotrom-carga-maquina-default-rtdb.firebaseio.com/pdfs_binarios";
+  const FB_BASE = "https://iniciobt2-default-rtdb.firebaseio.com/pdfs_binarios";
   const MAX_SUBIDA_BYTES = 5 * 1024 * 1024; // 5 MB por archivo, deja margen bajo los límites de Firebase
+  // Desde nov-2026 los PDF NO se guardan más en Firebase: en base64 llenaron el 1 GB del plan gratis y
+  // bloquearon la base vieja (biotrom-carga-maquina). Las reglas de la base nueva ni siquiera dejan
+  // escribir en "pdfs_binarios". Planos y cartas se leen del sitio publicado (PLANOS Y CARTAS/pdfs/...);
+  // el resto queda guardado solo en cada PC (IndexedDB).
+  const NUBE_ACTIVA = false;
+  const SITIO = (() => { try { return new URL("../", document.currentScript.src).href; } catch (e) { return ""; } })();
+  const CARPETA_SITIO = { plano: "PLANOS Y CARTAS/pdfs/planos/", carta: "PLANOS Y CARTAS/pdfs/cartas/" };
   let _dbPromise = null;
 
   // Firebase responde 402 (Payment Required) cuando la base se pasa de la cuota gratuita y la deshabilita:
@@ -137,6 +144,7 @@ window.BiotromPDF = (() => {
   //   .../<tipo>/<clave>/data  -> pesado (el archivo en base64), se pide aparte
   // así se puede armar un listado de "qué hay subido" sin bajar todos los archivos.
   async function _subirALaNube(codigo, tipo, blobOrFile, hash) {
+    if (!NUBE_ACTIVA) return false;
     try {
       if (blobOrFile.size > MAX_SUBIDA_BYTES) {
         console.warn(`BiotromPDF: "${codigo}" pesa ${(blobOrFile.size/1024/1024).toFixed(1)} MB, no se sube a la nube (queda solo en esta PC).`);
@@ -164,7 +172,21 @@ window.BiotromPDF = (() => {
     } catch (e) { console.warn("BiotromPDF._subirALaNube:", e); return false; }
   }
 
+  // Planos y cartas publicados en el sitio (los sube el paquete "para la nube" de Cartas y Planos)
+  async function _bajarDelSitio(codigo, tipo) {
+    const carpeta = CARPETA_SITIO[tipo || "plano"];
+    if (!carpeta || !SITIO) return null;
+    try {
+      const res = await fetch(SITIO + carpeta + encodeURIComponent(_clave(codigo)) + ".pdf");
+      if (!res.ok) return null;
+      const blob = new File([await res.blob()], _clave(codigo) + ".pdf", { type: "application/pdf" });
+      await _guardarLocal(codigo, tipo, blob, blob.name, "");
+      return blob;
+    } catch (e) { return null; }
+  }
+
   async function _bajarDeLaNube(codigo, tipo) {
+    if (!NUBE_ACTIVA) return await _bajarDelSitio(codigo, tipo);
     try {
       const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
       const res = await _fetchConTimeout(path);
@@ -186,6 +208,7 @@ window.BiotromPDF = (() => {
 
   // Metadatos de un archivo puntual SIN bajar el contenido pesado.
   async function metadatosNube(codigo, tipo) {
+    if (!NUBE_ACTIVA) return null;
     try {
       const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}/meta.json`;
       const res = await _fetch(path);
@@ -199,6 +222,7 @@ window.BiotromPDF = (() => {
   // se haya bajado acá o no) sin descargar ningún archivo pesado -- primero
   // pide solo las claves (shallow) y después el meta liviano de cada una.
   async function listarNube(tipo) {
+    if (!NUBE_ACTIVA) return [];
     try {
       const path = `${FB_BASE}/${tipo || "plano"}.json?shallow=true`;
       const res = await _fetch(path);
@@ -213,6 +237,7 @@ window.BiotromPDF = (() => {
   // Qué "tipos" (categorías) hay cargados en la nube en este momento, de
   // cualquier herramienta -- para armar un panel único que muestre todo.
   async function listarTiposNube() {
+    if (!NUBE_ACTIVA) return [];
     try {
       const res = await _fetch(`${FB_BASE}.json?shallow=true`);
       if (!res.ok) return [];
@@ -299,7 +324,7 @@ window.BiotromPDF = (() => {
       });
     } catch (e) { console.warn("BiotromPDF.eliminar (local):", e); }
     let nubeOk = false;
-    try {
+    if (NUBE_ACTIVA) try {
       const path = `${FB_BASE}/${tipo || "plano"}/${_clave(codigo)}.json`;
       const res = await _fetch(path, { method: "DELETE" });
       nubeOk = res.ok;
@@ -364,6 +389,7 @@ window.BiotromPDF = (() => {
   // ---- cuota de Firebase agotada (HTTP 402): se avisa una vez y se deja de insistir ----
   function cuotaAgotada() { return _cuotaAgotada; }
   async function probarNube() {
+    if (!NUBE_ACTIVA) return { ok: false, status: 0, desactivada: true };
     try { const res = await _fetchConTimeout(`${FB_BASE}.json?shallow=true`, {}, 15000); return { ok: res.ok, status: res.status }; }
     catch (e) { return { ok: false, status: 0 }; }
   }
@@ -371,6 +397,7 @@ window.BiotromPDF = (() => {
   // Borra de la nube TODO lo guardado de los tipos indicados (no toca las copias locales de esta PC).
   async function vaciarNube(tipos, onProgress) {
     const res = { borrados: [], errores: [] };
+    if (!NUBE_ACTIVA) return res;
     for (const t of tipos) {
       try {
         const r = await _fetchConTimeout(`${FB_BASE}/${t}.json`, { method: "DELETE" }, 120000);
