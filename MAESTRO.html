@@ -1690,10 +1690,10 @@ function render(){var root=document.getElementById("cajasBody");if(!root)return;
  if(!list.length)h+='<div style="padding:24px;text-align:center;color:var(--text2,#777)">'+(D.fams.length?"Ninguna familia coincide con la búsqueda.":"Todavía no hay familias. Subí el archivo de cajas o creá una familia nueva.")+'</div>';
  list.forEach(function(f){var n=effN(f),pt=0,w=0;f.it.forEach(function(a){if(String(a[2]).toUpperCase()==="PT")pt++;else w++});var open=abiertas[f.i]||(q&&list.length<=8);
   var dif=f.o!==null&&f.o!==f.b;
-  h+='<details class="cj-card" data-id="'+esc(f.i)+'"'+(open?' open':'')+'><summary><span class="cj-cod">'+esc(f.n||"(sin nombre)")+'</span><span class="cj-meta">'+pt+' prod. terminados · '+w+' instrumental</span>'
-   +'<span class="cj-ncajas"><label>Cajas</label><input type="number" min="0" class="cj-n'+(dif?" cj-dif":"")+'" data-id="'+esc(f.i)+'" value="'+n+'" title="Cantidad de cajas de esta familia">'
+  h+='<div class="cj-wrap"><details class="cj-card" data-id="'+esc(f.i)+'"'+(open?' open':'')+'><summary><span class="cj-cod">'+esc(f.n||"(sin nombre)")+'</span><span class="cj-meta">'+pt+' prod. terminados · '+w+' instrumental</span></summary><div class="cj-body">'+(open?bodyHtml(f):"")+'</div></details>'
+   +'<div class="cj-ctrl"><span class="cj-ncajas"><label for="cjn_'+esc(f.i)+'">Cajas</label><input id="cjn_'+esc(f.i)+'" type="number" min="0" class="cj-n'+(dif?" cj-dif":"")+'" data-id="'+esc(f.i)+'" value="'+n+'" title="Cantidad de cajas de esta familia">'
    +(dif?'<span class="cj-real">(lista: '+f.b+') <a href="#" class="cj-nreset" data-id="'+esc(f.i)+'">volver</a></span>':'<span class="cj-real">(lista: '+f.b+')</span>')+'</span>'
-   +'<button class="cj-del" data-id="'+esc(f.i)+'" title="Eliminar familia">🗑</button></summary><div class="cj-body">'+(open?bodyHtml(f):"")+'</div></details>'});
+   +'<button class="cj-del" data-id="'+esc(f.i)+'" title="Eliminar familia" aria-label="Eliminar familia">🗑</button></div></div>'});
  if(keys.length){h+='<details class="cj-sum"><summary class="cj-sumtitle">Resumen por producto terminado ('+keys.length+')</summary><div class="cj-sumbody"></div></details>'}
  root.innerHTML=h;window.scrollTo(0,y);
  if(focusSel){var el=root.querySelector(focusSel);if(el)el.focus();focusSel=null}}
@@ -1768,6 +1768,7 @@ function wire(){var tab=document.getElementById("tab-cajas");if(!tab||tab._wired
 
 var st=document.createElement("style");st.textContent=".cj-banner{margin:0 0 12px;padding:8px 12px;border-radius:6px;background:#fff8e1;border:1px solid #ffe082;font-size:12px;color:#5d4037}.cj-banner.cj-ok{background:#e8f5e9;border-color:#a5d6a7;color:#1b5e20}"
  +".cj-seg{display:inline-flex}.cj-seg button{padding:5px 12px;border:1px solid var(--cyan,#1565c0);background:#fff;color:var(--cyan,#1565c0);font-size:11px;cursor:pointer}.cj-seg button:first-child{border-radius:14px 0 0 14px}.cj-seg button:last-child{border-radius:0 14px 14px 0}.cj-seg button.on{background:var(--cyan,#1565c0);color:#fff;font-weight:700}"
+ +".cj-wrap{position:relative;margin:0 0 8px}.cj-wrap>.cj-card{margin:0!important}.cj-ctrl{position:absolute;top:5px;right:14px;display:flex;gap:12px;align-items:center;font-size:13px}.cj-wrap>.cj-card>summary{padding-right:330px!important}"
  +".cj-card{background:var(--surface,#fff);border:1px solid var(--border,#dde3eb);border-radius:8px;margin:0 0 8px;overflow:hidden}.cj-card>summary{cursor:pointer;padding:9px 14px;display:flex;gap:12px;align-items:center;list-style:none;font-size:13px}.cj-card>summary::-webkit-details-marker{display:none}.cj-card>summary::before{content:'\\25B6';font-size:10px;color:var(--text2,#5a6a7a);transition:transform .15s}.cj-card[open]>summary::before{transform:rotate(90deg)}"
  +".cj-cod{font-weight:700;color:var(--cyan,#1565c0);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cj-meta{font-size:11px;color:var(--text2,#5a6a7a);white-space:nowrap}.cj-ncajas{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text2,#5a6a7a);white-space:nowrap}.cj-ncajas input{width:64px;padding:3px 6px;border:1px solid var(--border,#c8d0da);border-radius:4px;font-size:13px;font-weight:700;text-align:right}.cj-ncajas input.cj-dif{border-color:#e65100;background:#fff3e0}.cj-real{font-size:10px}.cj-real a{color:#1565c0}"
  +".cj-del{background:none;border:none;cursor:pointer;font-size:14px;opacity:.55}.cj-del:hover{opacity:1}"
@@ -2148,6 +2149,12 @@ html body.mx-simple .tab-panel table{border-collapse:collapse!important}
 html body.mx-simple .tab-panel table th{background:#eef1f5!important;color:#334155!important;border:1px solid #d5dae2!important;font-size:11.5px!important;padding:6px 8px!important;position:sticky;top:0;z-index:2}
 html body.mx-simple .tab-panel table td{border:1px solid #e1e5eb!important;padding:4px 8px!important;font-size:12.5px!important}
 html body.mx-simple .tab-panel table tbody tr:hover td{background:#fff8d6!important}
+/* filtros por columna (como en Excel) */
+html body.mx-simple tr.col-filters,html body.mx-simple #ppTable thead tr.col-filters{display:table-row!important}
+html body.mx-simple tr.mx-filtros th{position:static!important;background:#f8fafc!important;padding:3px 4px!important}
+tr.mx-filtros input{width:100%;min-width:48px;padding:3px 6px;border:1px solid #d5dae2;border-radius:5px;font:inherit;font-size:11.5px;font-weight:400;background:#fff;color:#1e293b}
+tr.mx-filtros input:focus{outline:none;border-color:#4f46e5;box-shadow:0 0 0 2px rgba(79,70,229,.15)}
+tr.mx-filtros input.on{border-color:#4f46e5;background:#eef2ff}
 </style>
 <script>
 /* ===================== VISTA SIMPLE ===================== */
@@ -2155,6 +2162,10 @@ html body.mx-simple .tab-panel table tbody tr:hover td{background:#fff8d6!import
 "use strict";
 var KEY="btmp2_vista",simple=(function(){try{return localStorage.getItem(KEY)!=="completa"}catch(e){return true}})();
 function $(id){return document.getElementById(id)}
+function abrirMenu(b,m){if(m.parentNode!==document.body)document.body.appendChild(m);var on=!m.classList.contains("on");
+  document.querySelectorAll(".mx-menu.on").forEach(function(x){x.classList.remove("on")});if(!on)return;
+  var r=b.getBoundingClientRect();m.style.position="fixed";m.style.top=(r.bottom+4)+"px";m.style.left=Math.max(8,Math.min(r.right-220,window.innerWidth-232))+"px";m.style.right="auto";m.classList.add("on")}
+window.addEventListener("scroll",function(){document.querySelectorAll(".mx-menu.on").forEach(function(x){x.classList.remove("on")})},true);
 function cambiarVista(){try{localStorage.setItem(KEY,simple?"completa":"simple")}catch(e){}location.reload()}
 function menuMas(){
   var nav=document.querySelector("nav");if(!nav||$("mxMas"))return;
@@ -2164,8 +2175,8 @@ function menuMas(){
   var it=[["codigos","Códigos"],["instrumentales","Instrumentales"],["cajas","Cajas"]];
   m.innerHTML=(simple?it.map(function(x){return'<button data-go="'+x[0]+'">'+x[1]+'</button>'}).join("")+"<hr>":"")+'<button data-vista="1">'+(simple?"Ver todo (vista completa)":"Volver a la vista simple")+"</button>";
   w.appendChild(b);w.appendChild(m);nav.appendChild(w);
-  b.onclick=function(e){e.stopPropagation();m.classList.toggle("on")};
-  m.onclick=function(e){var t=e.target.closest("button");if(!t)return;m.classList.remove("on");
+  b.onclick=function(e){e.stopPropagation();abrirMenu(b,m)};
+  m.onclick=function(e){e.stopPropagation();var t=e.target.closest("button");if(!t)return;m.classList.remove("on");
     if(t.dataset.vista){cambiarVista();return}
     var orig=document.querySelector('.nav-tab[data-tab="'+t.dataset.go+'"]');if(orig)orig.click()};
   document.addEventListener("click",function(){m.classList.remove("on")});
@@ -2189,7 +2200,7 @@ function plan(){
   var b=document.createElement("button");b.className="btn";b.type="button";b.textContent="Más acciones ▾";
   var m=document.createElement("div");m.className="mx-menu";w.appendChild(b);w.appendChild(m);
   tb._mxMenu=m;mover(tb);
-  tb.appendChild(w);b.onclick=function(e){e.stopPropagation();m.classList.toggle("on")};document.addEventListener("click",function(){m.classList.remove("on")});
+  tb.appendChild(w);b.onclick=function(e){e.stopPropagation();abrirMenu(b,m)};m.addEventListener("click",function(e){e.stopPropagation()});document.addEventListener("click",function(){m.classList.remove("on")});
   // de entrada, solo productos activos
   var f=$("ppFiltroEstado");if(f&&!f._mx){f._mx=1;if(f.value===""||/todos/i.test(f.options[f.selectedIndex].text)){var o=[].slice.call(f.options).find(function(o){return o.value==="Activo"||o.text==="Activo"});if(o){f.value=o.value;f.dispatchEvent(new Event("change",{bubbles:true}))}}}
 }
@@ -2197,6 +2208,25 @@ function plan(){
 function mover(tb){tb=tb||document.querySelector("#tab-maestropt .toolbar");if(!tb||!tb._mxMenu)return;var m=tb._mxMenu,vb=$("colVisBtn");
   [].slice.call(tb.querySelectorAll("button")).forEach(function(x){if(x._mxOk||m.contains(x)||x.parentNode.classList.contains("mx-mas")||/EXCEL/i.test(x.textContent)||x===vb)return;x._mxOk=1;
     var c=document.createElement("button");c.type="button";c.textContent=x.textContent.replace(/\s+/g," ").trim();c.onclick=function(){m.classList.remove("on");x.click()};m.appendChild(c);x.classList.add("mx-hide")})}
+function numero(t){t=String(t).trim();if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(t))t=t.replace(/\./g,"").replace(",",".");else t=t.replace(",",".");return parseFloat(t)}
+function filtrosColumna(table){
+  if(!table||table._mxF||!table.tHead||!table.tHead.rows.length||table.querySelector("tr.col-filters"))return;
+  var thead=table.tHead,hr=thead.rows[thead.rows.length-1];if(hr.cells.length<4)return;table._mxF=1;
+  var fr=document.createElement("tr");fr.className="mx-filtros";
+  [].forEach.call(hr.cells,function(th,i){var td=document.createElement("th");td.colSpan=th.colSpan||1;
+    if(th.textContent.trim()&&!th.querySelector("input")){var x=document.createElement("input");x.placeholder="filtrar…";x.title="Escribí para filtrar. Para números: >100, <5, =0";x.dataset.i=i;td.appendChild(x)}fr.appendChild(td)});
+  thead.appendChild(fr);
+  function aplicar(){var fs=[].map.call(fr.querySelectorAll("input"),function(x){x.classList.toggle("on",!!x.value.trim());return[+x.dataset.i,x.value.trim().toLowerCase()]}).filter(function(f){return f[1]});
+    [].forEach.call(table.tBodies,function(tb){[].forEach.call(tb.rows,function(r){
+      if(r.cells.length<hr.cells.length-1){r.style.display=fs.length?"none":"";return}   // filas de título de grupo
+      var ok=fs.every(function(f){var c=r.cells[f[0]];if(!c)return true;var tx=c.textContent.trim().toLowerCase(),m=f[1].match(/^(>=|<=|>|<|=)\s*(-?[\d.,]+)$/);
+        if(m){var nv=numero(tx),v=numero(m[2]);if(isNaN(nv))return false;return m[1]===">"?nv>v:m[1]==="<"?nv<v:m[1]===">="?nv>=v:m[1]==="<="?nv<=v:nv===v}
+        return tx.indexOf(f[1])>=0});
+      r.style.display=ok?"":"none"})})}
+  fr.addEventListener("input",aplicar);fr.addEventListener("click",function(e){e.stopPropagation()});
+  new MutationObserver(function(ms){if(ms.some(function(m){return m.type==="childList"})&&[].some.call(fr.querySelectorAll("input"),function(x){return x.value}))aplicar()}).observe(table,{childList:true,subtree:true});
+}
+function filtros(){document.querySelectorAll("#tab-pedirmp table,#tab-stkpt table,#tab-stockmp table,#tab-stkcomp table").forEach(filtrosColumna)}
 function pedir(){var bar=document.querySelector("#tab-pedirmp .mp-params-bar");if(!bar||bar._mx)return;bar._mx=1;bar.classList.add("mx-hide");
   var h=$("mp-horizonte-lbl");if(h)h.classList.add("mx-hide");resumen("mxResMP",bar)}
 // PARÁMETROS: proyección, seguridad, crecimiento y cajas (antes repetidos en Plan y PEDIR MP)
@@ -2216,7 +2246,11 @@ function parametros(){var body=$("paramBody");if(!body)return;var box=$("paramPl
     ids.forEach(function(id){var e=$(id);if(e){e.value=v;e.dispatchEvent(new Event("input",{bubbles:true}));e.dispatchEvent(new Event("change",{bubbles:true}))}});
     try{if(window.setMPParam)window.setMPParam(t,v)}catch(e){}
     ["mxResPlan","mxResMP"].forEach(function(r){var el=$(r);if(el)resumen(r,el)})}})}
-function aplicar(){if(simple){document.body.classList.add("mx-simple");plan();mover();pedir()}menuMas()}
+function etiquetas(){document.querySelectorAll("input:not([type=hidden]):not([aria-label]),select:not([aria-label]),textarea:not([aria-label])").forEach(function(x){
+  if(x.labels&&x.labels.length)return;var t=x.placeholder||x.title||x.name||"";
+  if(!t){var th=x.closest("th,td");if(th){var tr=th.parentElement,tb=th.closest("table");var i=[].indexOf.call(tr.children,th);var h=tb&&tb.tHead&&tb.tHead.rows[0];if(h&&h.cells[i])t=h.cells[i].textContent.trim()}}
+  if(!t&&x.type==="checkbox")t="Seleccionar";x.setAttribute("aria-label",t||"Campo")})}
+function aplicar(){if(simple){document.body.classList.add("mx-simple");plan();mover();pedir();filtros()}menuMas();etiquetas()}
 document.addEventListener("mx-eq",function(){["mxResPlan","mxResMP"].forEach(function(r){var el=$(r);if(el)resumen(r,el)})});
 setTimeout(aplicar,2500);setTimeout(aplicar,6000);
 var o=window.switchTab;if(typeof o==="function"){window.switchTab=function(id){o.apply(this,arguments);setTimeout(function(){aplicar();if(id==="parametros")parametros();if(id==="maestropt"&&$("mxResPlan"))resumen("mxResPlan",$("mxResPlan"));if(id==="pedirmp"&&$("mxResMP"))resumen("mxResMP",$("mxResMP"))},120)}}
