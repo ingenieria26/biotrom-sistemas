@@ -98,7 +98,7 @@
       'html[data-tema=dark] body{background-color:' + P.bg + '!important;color:' + P.t + '}',
       'html[data-tema=dark] input,html[data-tema=dark] select,html[data-tema=dark] textarea{background-color:' + P.s2 + ';color:' + P.t + ';border-color:' + P.b + '}',
       'html[data-tema=dark] ::placeholder{color:' + P.t2 + '!important}',
-      'html[data-tema=dark] img[src*="logo"]{background:#fff;border-radius:6px}'], n = { c: 0 };
+      'html[data-tema=dark] img[src*="logo"],html[data-tema=dark] img[alt*="BIOTROM" i],html[data-tema=dark] img[alt*="logo" i]{background:#fff;border-radius:8px;padding:3px 6px}'], n = { c: 0 };
     for (var i = 0; i < document.styleSheets.length; i++) {
       var sh = document.styleSheets[i]; if (sh.ownerNode && sh.ownerNode.id === 'bt-oscuro') continue;
       try { reglas(sh.cssRules, out, n); } catch (e) { }   // hojas de otros sitios (fuentes) no se pueden leer: se saltean
@@ -138,7 +138,7 @@
   var armada = false;
   function oscuroPropio(on) {
     if (on) {
-      if (!armada) { armarHoja(); armada = true; setTimeout(armarHoja, 1500); }   // segunda pasada: estilos que se agregan después de cargar (Tailwind, tablas)
+      if (!armada) { armarHoja(); armada = true; setTimeout(armarHoja, 500); setTimeout(armarHoja, 2500); }   // segunda pasada: estilos que se agregan después de cargar (Tailwind, tablas)
       inlineTodo(document.body); observar(true);
     } else { observar(false); inlineDeshacer(); }
   }
