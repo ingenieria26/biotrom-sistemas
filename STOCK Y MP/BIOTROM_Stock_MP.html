@@ -187,6 +187,7 @@ td.desc{white-space:normal;min-width:240px;color:var(--text2)}
 .box h4{font-size:14.5px;font-weight:800;margin-bottom:8px}
 .box p,.box li{color:var(--text2);font-size:13.5px}
 .box ul{padding-left:18px}
+.eqtag{display:none;margin-left:8px;font-size:10.5px;font-weight:700;color:#fff;background:var(--green);border-radius:20px;padding:2px 9px;vertical-align:2px;text-transform:uppercase;letter-spacing:.04em}.eqb.on{border:2px solid var(--green)}.eqb.on .eqtag{display:inline-block}
 .fx{font-family:'JetBrains Mono',monospace;background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin:8px 0;color:var(--acc2);font-size:13px;line-height:1.7}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface3);border:1px solid var(--acc-bd);padding:10px 16px;border-radius:12px;font-weight:600;transition:transform .25s;z-index:30}
 .toast.on{transform:translateX(-50%)}
@@ -271,17 +272,35 @@ td.desc{white-space:normal;min-width:240px;color:var(--text2)}
 
 <!-- ======================= COMO ======================= -->
 <section class="pane" id="p-como">
-  <h2>Cómo se calcula (opción 2: colchón según la clase)</h2>
-  <p class="lead">Es el mismo cálculo del documento <i>Cálculo de stock y compra de MP</i>. Todo producto activo pasa por estos pasos.</p>
+  <h2>Cómo se calcula</h2>
+  <p class="lead">Primero se arman los datos de cada producto (pasos 1 a 6, iguales para las 5 ecuaciones). Después cada ecuación calcula a su manera el mínimo, el punto de reposición, el máximo y qué fabricar. Al final, la compra de materia prima.</p>
   <div class="box"><h4>1 · Demanda mensual</h4><div class="fx">D = V ÷ 12 × (1 + g)</div><p>V es la venta anual: lo vendido en el período del archivo de ventas dividido por la cantidad de años. g es cuánto creció la venta del último año contra el anterior. No se cuentan servicios ni reventa (códigos que empiezan con Z y códigos solo numéricos).</p></div>
   <div class="box"><h4>2 · Clase</h4><div class="fx">A urgente = 80 % de la venta · B pronto = 15 % siguiente · C ok = 5 % final</div><p>Se ordenan los productos activos de mayor a menor venta y se van sumando.</p></div>
-  <div class="box"><h4>3 · Tiempo de fabricación</h4><div class="fx">L = días que tardaron sus OF (la del medio) ÷ 30,4<br>si tiene menos de 2 OF: L general sin terceros, o L con terceros si su carta tiene trabajo a terceros o esterilización<br>Lr = L × (1 + i)</div><p>Sale de las OF cerradas, de emisión a cierre. i es la demora extra por OF que se paran.</p></div>
-  <div class="box"><h4>4 · Seguridad</h4><div class="fx">SS = k × D × √Lr   (k: A 1,0 · B 0,7 · C 0,4)</div></div>
-  <div class="box"><h4>5 · Baúles</h4><div class="fx">C = piezas en los baúles · Pb = piezas para armar un baúl más</div></div>
-  <div class="box"><h4>6 · Lote</h4><div class="fx">Q = D × P<br>si la preparación es más del 10 % del mecanizado: Q = preparación ÷ (10 % × tiempo por pieza)<br>nunca más de Pmax meses de venta ni de 1.000 piezas</div><p>Los tiempos salen de la Calculadora de Costos: el real medido del producto si lo tiene, si no el std de la máquina.</p></div>
-  <div class="box"><h4>7 · Mínimo, punto de reposición y máximo</h4><div class="fx">Mínimo = C + Pb + SS<br>Punto de reposición = Mínimo + D × Lr<br>Máximo = Mínimo + Q</div></div>
-  <div class="box"><h4>8 · Qué fabricar y en qué orden</h4><div class="fx">Disponible = depósito + baúles + en proceso<br>si Disponible ≤ Punto de reposición → Fabricar = Máximo − Disponible<br>Cobertura = (depósito + en proceso − SS) ÷ D · si Cobertura &lt; Lr → CRÍTICO</div><p>Primero los críticos de clase A, después B y C; dentro de cada clase, la cobertura más baja.</p></div>
-  <div class="box"><h4>9 · Compra de materia prima (anual)</h4><div class="fx">Base = Σ (D × 12 + Pb) × consumo por pieza × (1 + rechazo)<br>Necesidad = Base + Base × nuevos + máx(Base × imprevistos ; 1 barra) + Base ÷ 12 × Lc<br>Comprar = Necesidad − Stock de MP</div></div>
+  <div class="box"><h4>3 · Tiempo de fabricación</h4><div class="fx">L = días que tardaron sus OF (la del medio) ÷ 30,4<br>si tiene menos de 2 OF: L general sin terceros, o L con terceros si su carta tiene trabajo a terceros o esterilización<br>Lr = L × (1 + i)</div><p>Sale de las OF cerradas, de emisión a cierre. i es la demora extra por OF que se paran. En las ecuaciones, L es este Lr.</p></div>
+  <div class="box"><h4>4 · Baúles</h4><div class="fx">C = piezas en los baúles · Pb = piezas para armar un baúl más</div></div>
+  <div class="box"><h4>5 · Lote</h4><div class="fx">Q = D × P<br>si la preparación es más del 10 % del mecanizado: Q = preparación ÷ (10 % × tiempo por pieza)<br>nunca más de Pmax meses de venta ni de 1.000 piezas</div><p>Los tiempos salen de la Calculadora de Costos: el real medido del producto si lo tiene, si no el std de la máquina.</p></div>
+  <div class="box"><h4>6 · Disponible y crítico (igual en las 5)</h4><div class="fx">Disponible = depósito + baúles + en proceso<br>Cobertura = (depósito + en proceso − colchón) ÷ D · si Cobertura &lt; L → CRÍTICO</div><p>El colchón es el de cada ecuación (SS, rojo, etc.). Orden: primero los críticos de clase A, después B y C; dentro de cada clase, la cobertura más baja.</p></div>
+
+  <h2 style="margin-top:26px">Las 5 ecuaciones</h2>
+  <p class="lead">La que está marcada es la elegida: con esa salen los resultados, el MAESTRO y la compra de MP.</p>
+  <div class="box eqb" data-eq="1"><h4>1 · Meses fijos <span class="eqtag">elegida</span></h4>
+    <div class="fx">Colchón = D × 1 mes<br>Mínimo = C + Pb + D<br>Punto de reposición = Mínimo + D × L<br>Máximo = Mínimo + D × 3<br>si Disponible ≤ Punto de reposición → Fabricar = Máximo − Disponible</div>
+    <p><b>A favor:</b> la más fácil de explicar, se puede hacer a mano. <b>En contra:</b> todos los productos tienen el mismo mes de colchón: sobra en lo que casi no se vende y falta en lo más vendido o lo que tarda mucho.</p></div>
+  <div class="box eqb" data-eq="2"><h4>2 · Por clase <span class="eqtag">elegida</span></h4>
+    <div class="fx">SS = k × D × √L   (k: A 1,0 · B 0,7 · C 0,4)<br>Mínimo = C + Pb + SS<br>Punto de reposición = Mínimo + D × L<br>Máximo = Mínimo + Q<br>si Disponible ≤ Punto de reposición → Fabricar = Máximo − Disponible</div>
+    <p><b>A favor:</b> más colchón en lo que más se vende, y el lote respeta la preparación de máquina. Estable mes a mes. <b>En contra:</b> no mira si la venta de un producto es pareja o despareja.</p></div>
+  <div class="box eqb" data-eq="3"><h4>3 · Nivel de servicio <span class="eqtag">elegida</span></h4>
+    <div class="fx">σ = cuánto varía la venta de un mes a otro (desvío de las ventas mensuales) × (1 + g)<br>SS = Z × σ × √L   (Z: A 1,65 = 95 % · B 1,28 = 90 % · C 0,84 = 80 %)<br>Mínimo = C + Pb + SS<br>Punto de reposición = Mínimo + D × L<br>Máximo = Mínimo + Q<br>si Disponible ≤ Punto de reposición → Fabricar = Máximo − Disponible</div>
+    <p><b>A favor:</b> la más precisa: el colchón sale de la variación real, con la probabilidad de no quedarse sin stock que se elige por clase. <b>En contra:</b> con pocas ventas el desvío es inestable y pide de más; hay que recalcularla seguido.</p></div>
+  <div class="box eqb" data-eq="4"><h4>4 · Zonas de color <span class="eqtag">elegida</span></h4>
+    <div class="fx">Rojo = D × L × 0,75<br>Mínimo = C + Pb + Rojo<br>Punto de reposición = Mínimo + D × L   (amarillo)<br>Máximo = Punto de reposición + máx(D × L × 0,5 ; D)   (verde)<br>si Disponible ≤ Punto de reposición → Fabricar = Máximo − Disponible</div>
+    <p><b>A favor:</b> el colchón crece con todo el tiempo de fabricación, sirve para lo que tarda mucho (terceros, esterilización). Se ve fácil con colores. <b>En contra:</b> hay que mirar los colores todos los días y lanza más OF, más chicas.</p></div>
+  <div class="box eqb" data-eq="5"><h4>5 · Revisión semanal <span class="eqtag">elegida</span></h4>
+    <div class="fx">SS = k × D × √L   (igual que la 2)<br>Objetivo = C + Pb + SS + D × (1 semana + L)<br>Mínimo = C + Pb + SS · Máximo = Objetivo<br>cada semana: si Objetivo − Disponible ≥ D (falta 1 mes o más) → Fabricar = Objetivo − Disponible</div>
+    <p><b>A favor:</b> programa parejo, se revisa todo el mismo día de la semana. <b>En contra:</b> muchas OF chicas = muchas preparaciones de máquina; no aprovecha el lote económico.</p></div>
+
+  <h2 style="margin-top:26px">Compra de materia prima</h2>
+  <div class="box"><h4>Compra anual</h4><div class="fx">Base = Σ (D × 12 + Pb) × consumo por pieza × (1 + rechazo)<br>Necesidad = Base + Base × nuevos + máx(Base × imprevistos ; 1 barra) + Base ÷ 12 × Lc<br>Comprar = Necesidad − Stock de MP</div><p>Usa la demanda, no la ecuación, así que da lo mismo con las 5.</p></div>
 </section>
 </div>
 
@@ -1025,7 +1044,7 @@ function renderElige() {
 }
 function renderRes() {
   if (!RES) return;
-  renderElige();
+  renderElige(); $$('.eqb').forEach(b => b.classList.toggle('on', +b.dataset.eq === +(DB.par.op || 2)));
   $('#res-empty').style.display = 'none'; $('#res-body').style.display = 'block';
   const R = RES.res, crit = R.filter(r => r.urg), fab = R.filter(r => r.fab > 0);
   const mpc = RES.mpres.filter(m => m.comp > 0);
