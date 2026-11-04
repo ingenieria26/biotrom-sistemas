@@ -200,6 +200,7 @@ td.desc{white-space:normal;min-width:240px;color:var(--text2)}
 @keyframes sp{to{transform:rotate(360deg)}}
 .empty{color:var(--text3);padding:30px;text-align:center}
 @media(max-width:700px){.grid{grid-template-columns:1fr}.hbar{grid-template-columns:120px 1fr 70px}}
+abbr.ab{text-decoration:underline dotted;text-decoration-color:var(--acc);text-underline-offset:3px;cursor:help;font-style:inherit}abbr.ab:focus-visible{outline:2px solid var(--acc);border-radius:3px}#abtip{position:fixed;z-index:9999;max-width:300px;padding:8px 11px;border-radius:9px;background:var(--surface3);color:var(--text);border:1px solid var(--acc-bd);box-shadow:0 8px 24px rgba(0,0,0,.28);font-size:12.5px;line-height:1.4;pointer-events:none;opacity:0;transition:opacity .12s;text-transform:none;letter-spacing:0;font-weight:400}#abtip.on{opacity:1}#abtip b{font-weight:800}#abtip span{display:block;color:var(--text2);margin-top:2px}.glo{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:6px 18px}.glo>div{display:flex;gap:10px;align-items:baseline;font-size:13px}.glo abbr{min-width:42px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--acc)}.glo span{color:var(--text2)}.glo span b{color:var(--text);font-weight:700}
 </style>
 <link rel="icon" type="image/png" href="../assets/logo_biotrom_web.png"></head>
 <body>
@@ -276,6 +277,7 @@ td.desc{white-space:normal;min-width:240px;color:var(--text2)}
 <section class="pane" id="p-como">
   <h2>Cómo se calcula</h2>
   <p class="lead">Primero se arman los datos de cada producto (pasos 1 a 6, iguales para las 5 ecuaciones). Después cada ecuación calcula a su manera el mínimo, el punto de reposición, el máximo y qué fabricar. Al final, la compra de materia prima.</p>
+  <div class="box no-ab"><h4>Qué quiere decir cada letra</h4><p style="margin:2px 0 10px">En las fórmulas, títulos y en el detalle de cada producto, las abreviaturas aparecen subrayadas con puntos: pasá el cursor por encima (o tocalas) y se explican.</p><div class="glo"><div><abbr class="ab" data-t="Demanda mensual" data-d="piezas que se venden por mes (venta anual ÷ 12, con el crecimiento)" tabindex="0">D</abbr><span><b>Demanda mensual</b> · piezas que se venden por mes (venta anual ÷ 12, con el crecimiento)</span></div><div><abbr class="ab" data-t="Venta anual" data-d="piezas vendidas por año, promedio del archivo de ventas" tabindex="0">V</abbr><span><b>Venta anual</b> · piezas vendidas por año, promedio del archivo de ventas</span></div><div><abbr class="ab" data-t="Crecimiento de la venta" data-d="% que creció la venta del último año contra el anterior" tabindex="0">g</abbr><span><b>Crecimiento de la venta</b> · % que creció la venta del último año contra el anterior</span></div><div><abbr class="ab" data-t="Tiempo de fabricación" data-d="meses que tarda una OF, de que se emite a que se cierra" tabindex="0">L</abbr><span><b>Tiempo de fabricación</b> · meses que tarda una OF, de que se emite a que se cierra</span></div><div><abbr class="ab" data-t="Tiempo de fabricación real" data-d="L más la demora por OF paradas (i)" tabindex="0">Lr</abbr><span><b>Tiempo de fabricación real</b> · L más la demora por OF paradas (i)</span></div><div><abbr class="ab" data-t="Demora por OF paradas" data-d="% que se alarga una OF cuando se la para para hacer otra" tabindex="0">i</abbr><span><b>Demora por OF paradas</b> · % que se alarga una OF cuando se la para para hacer otra</span></div><div><abbr class="ab" data-t="Piezas en los baúles" data-d="lo que está armado en baúles/cajas de instrumental" tabindex="0">C</abbr><span><b>Piezas en los baúles</b> · lo que está armado en baúles/cajas de instrumental</span></div><div><abbr class="ab" data-t="Piezas para un baúl más" data-d="lo que hace falta para armar un baúl adicional" tabindex="0">Pb</abbr><span><b>Piezas para un baúl más</b> · lo que hace falta para armar un baúl adicional</span></div><div><abbr class="ab" data-t="Stock de seguridad" data-d="colchón para cuando se vende más de lo normal o la OF se atrasa" tabindex="0">SS</abbr><span><b>Stock de seguridad</b> · colchón para cuando se vende más de lo normal o la OF se atrasa</span></div><div><abbr class="ab" data-t="Factor de seguridad" data-d="según la clase: A 1,0 · B 0,7 · C 0,4" tabindex="0">k</abbr><span><b>Factor de seguridad</b> · según la clase: A 1,0 · B 0,7 · C 0,4</span></div><div><abbr class="ab" data-t="Variación de la venta" data-d="cuánto cambia la venta de un mes a otro (desvío estándar)" tabindex="0">σ</abbr><span><b>Variación de la venta</b> · cuánto cambia la venta de un mes a otro (desvío estándar)</span></div><div><abbr class="ab" data-t="Nivel de servicio" data-d="A 1,65 = 95 % · B 1,28 = 90 % · C 0,84 = 80 % de las veces sin faltante" tabindex="0">Z</abbr><span><b>Nivel de servicio</b> · A 1,65 = 95 % · B 1,28 = 90 % · C 0,84 = 80 % de las veces sin faltante</span></div><div><abbr class="ab" data-t="Lote" data-d="piezas que se fabrican en cada OF" tabindex="0">Q</abbr><span><b>Lote</b> · piezas que se fabrican en cada OF</span></div><div><abbr class="ab" data-t="Meses de venta por OF" data-d="cuántos meses de venta cubre cada lote" tabindex="0">P</abbr><span><b>Meses de venta por OF</b> · cuántos meses de venta cubre cada lote</span></div><div><abbr class="ab" data-t="Máximo de meses por OF" data-d="tope del lote cuando se agranda por la preparación de máquina" tabindex="0">Pmax</abbr><span><b>Máximo de meses por OF</b> · tope del lote cuando se agranda por la preparación de máquina</span></div><div><abbr class="ab" data-t="Demora de compra de MP" data-d="meses que tarda en llegar la materia prima desde que se pide" tabindex="0">Lc</abbr><span><b>Demora de compra de MP</b> · meses que tarda en llegar la materia prima desde que se pide</span></div><div><abbr class="ab" data-t="Suma" data-d="se suman todos los productos que usan esa materia prima" tabindex="0">Σ</abbr><span><b>Suma</b> · se suman todos los productos que usan esa materia prima</span></div><div><abbr class="ab" data-t="Orden de fabricación" data-d="" tabindex="0">OF</abbr><span><b>Orden de fabricación</b></span></div><div><abbr class="ab" data-t="Materia prima" data-d="barras, chapas, caños, alambre" tabindex="0">MP</abbr><span><b>Materia prima</b> · barras, chapas, caños, alambre</span></div><div><abbr class="ab" data-t="Producto terminado" data-d="" tabindex="0">PT</abbr><span><b>Producto terminado</b></span></div><div><abbr class="ab" data-t="Consumo" data-d="materia prima que se gasta" tabindex="0">Cons.</abbr><span><b>Consumo</b> · materia prima que se gasta</span></div></div></div>
   <div class="box"><h4>1 · Demanda mensual</h4><div class="fx">D = V ÷ 12 × (1 + g)</div><p>V es la venta anual: lo vendido en el período del archivo de ventas dividido por la cantidad de años. g es cuánto creció la venta del último año contra el anterior. No se cuentan servicios ni reventa (códigos que empiezan con Z y códigos solo numéricos).</p></div>
   <div class="box"><h4>2 · Clase</h4><div class="fx">A urgente = 80 % de la venta · B pronto = 15 % siguiente · C ok = 5 % final</div><p>Se ordenan los productos activos de mayor a menor venta y se van sumando.</p></div>
   <div class="box"><h4>3 · Tiempo de fabricación</h4><div class="fx">L = días que tardaron sus OF (la del medio) ÷ 30,4<br>si tiene menos de 2 OF: L general sin terceros, o L con terceros si su carta tiene trabajo a terceros o esterilización<br>Lr = L × (1 + i)</div><p>Sale de las OF cerradas, de emisión a cierre. i es la demora extra por OF que se paran. En las ecuaciones, L es este Lr.</p></div>
@@ -1305,6 +1307,53 @@ renderCards(); renderParams();
   const listo = SOURCES.filter(s => s.tag === 'ob').every(s => DB[s.id]);
   if (listo) { try { calcular(); go('res'); } catch (e) { console.error(e); } }
   else $('#res-empty').innerHTML = 'Todavía no hay datos cargados. Andá a <b>Actualizar datos</b> y soltá los archivos.';
+})();
+</script>
+<script>
+const GLO = {'D':['Demanda mensual','piezas que se venden por mes (venta anual ÷ 12, con el crecimiento)'],'V':['Venta anual','piezas vendidas por año, promedio del archivo de ventas'],'g':['Crecimiento de la venta','% que creció la venta del último año contra el anterior'],'L':['Tiempo de fabricación','meses que tarda una OF, de que se emite a que se cierra'],'Lr':['Tiempo de fabricación real','L más la demora por OF paradas (i)'],'i':['Demora por OF paradas','% que se alarga una OF cuando se la para para hacer otra'],'C':['Piezas en los baúles','lo que está armado en baúles/cajas de instrumental'],'Pb':['Piezas para un baúl más','lo que hace falta para armar un baúl adicional'],'SS':['Stock de seguridad','colchón para cuando se vende más de lo normal o la OF se atrasa'],'k':['Factor de seguridad','según la clase: A 1,0 · B 0,7 · C 0,4'],'σ':['Variación de la venta','cuánto cambia la venta de un mes a otro (desvío estándar)'],'Z':['Nivel de servicio','A 1,65 = 95 % · B 1,28 = 90 % · C 0,84 = 80 % de las veces sin faltante'],'Q':['Lote','piezas que se fabrican en cada OF'],'P':['Meses de venta por OF','cuántos meses de venta cubre cada lote'],'Pmax':['Máximo de meses por OF','tope del lote cuando se agranda por la preparación de máquina'],'Lc':['Demora de compra de MP','meses que tarda en llegar la materia prima desde que se pide'],'Σ':['Suma','se suman todos los productos que usan esa materia prima'],'OF':['Orden de fabricación',''],'MP':['Materia prima','barras, chapas, caños, alambre'],'PT':['Producto terminado',''],'Cons.':['Consumo','materia prima que se gasta'],'A':['Clase A · urgente','los productos que hacen el 80 % de la venta'],'B':['Clase B · pronto','el 15 % siguiente de la venta']};
+// abreviaturas: se marcan solas en fórmulas, títulos y detalle; al pasar el cursor (o tocarlas) se explican
+const ABR_LARGA = /(^|[^\p{L}\d])(Pmax|Lc|Lr|Pb|SS|OFs?|MP|PT|Cons\.|σ|Σ)(?![\p{L}\d])/gu;
+const ABR_CORTA = /(^|[^\p{L}\d.])(Pmax|Lc|Lr|Pb|SS|OFs?|MP|PT|Cons\.|σ|Σ|D|V|g|L|i|C|Q|P|k|Z|A|B)(?![\p{L}\d])/gu;
+const ABR_ZONA = '.fx, th, .prm label, .cs .h, .cs .f, .glo';
+function abrev(root) {
+  if (!root || root.nodeType !== 1) return;
+  const tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => {
+    const e = n.parentElement; if (!e || e.closest('script,style,textarea,select,option,input,abbr,button,.no-ab,#drop,.mono,td.k')) return 2;
+    return /[A-Zgikσ]/.test(n.data) ? 1 : 2; } });
+  const L = []; while (tw.nextNode()) L.push(tw.currentNode);
+  for (const n of L) {
+    const corta = !!n.parentElement.closest(ABR_ZONA), re = corta ? ABR_CORTA : ABR_LARGA; re.lastIndex = 0;
+    const t = n.data; let m, last = 0, frag = null;
+    while ((m = re.exec(t))) {
+      let k = m[2]; if (k === 'OFs') k = 'OF';
+      const sig = t.slice(m.index + m[0].length), esCl = /^\s*\(?\s*(urgente|pronto|ok|\d)/i.test(sig) || /clase\s*$/i.test(t.slice(0, m.index + m[1].length));
+      // A / B / C sueltas solo cuando hablan de la clase (A urgente, C 0,4…); C sola = baúles
+      if ((k === 'A' || k === 'B') && !esCl) continue;
+      const clase = k === 'C' && esCl;
+      const [nom, det] = clase ? ['Clase C · ok', 'el 5 % final de la venta'] : GLO[k];
+      frag = frag || document.createDocumentFragment();
+      frag.append(t.slice(last, m.index + m[1].length));
+      const ab = document.createElement('abbr'); ab.className = 'ab'; ab.textContent = m[2];
+      ab.dataset.t = nom; ab.dataset.d = det; ab.setAttribute('aria-label', m[2] + ': ' + nom + (det ? ', ' + det : '')); ab.tabIndex = 0;
+      frag.append(ab); last = m.index + m[0].length;
+    }
+    if (frag) { frag.append(t.slice(last)); n.replaceWith(frag); }
+  }
+}
+(function () {
+  const tip = document.createElement('div'); tip.id = 'abtip'; tip.setAttribute('role', 'tooltip'); document.body.append(tip);
+  const ver = e => { const a = e.target.closest && e.target.closest('abbr.ab'); if (!a) { tip.classList.remove('on'); return; }
+    tip.innerHTML = `<b>${a.textContent}</b> = ${a.dataset.t}${a.dataset.d ? `<span>${a.dataset.d}</span>` : ''}`; tip.classList.add('on');
+    const r = a.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+    tip.style.top = (r.top - h - 8 < 4 ? r.bottom + 8 : r.top - h - 8) + 'px'; };
+  document.addEventListener('mouseover', ver); document.addEventListener('focusin', ver); document.addEventListener('click', ver);
+  document.addEventListener('scroll', () => tip.classList.remove('on'), true);
+  let pend = new Set(), raf = 0;
+  new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1 && n.id !== 'abtip' && !(n.tagName === 'ABBR')) pend.add(n);
+    if (pend.size && !raf) raf = setTimeout(() => { raf = 0; const L = [...pend]; pend = new Set(); L.forEach(n => n.isConnected && abrev(n)); }, 30); })
+    .observe(document.body, { childList: true, subtree: true });
+  abrev(document.body);
 })();
 </script>
 <script src="../assets/biotrom-tema.js"></script>
