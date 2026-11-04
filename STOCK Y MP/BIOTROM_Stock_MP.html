@@ -68,6 +68,16 @@ h2{font-size:19px;font-weight:800;margin-bottom:4px;letter-spacing:-.01em}
 .go{display:flex;gap:14px;align-items:center;margin-top:18px;flex-wrap:wrap}
 .go .btn.pri{padding:14px 28px;font-size:16px}
 .go a{color:var(--text2);cursor:pointer;font-size:13px}
+.elige{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:14px 16px;margin-bottom:14px}
+.elige .tt{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline;margin-bottom:10px}
+.elige .tt b{font-size:15px}.elige .tt span{color:var(--text3);font-size:12.5px}
+.ops{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.op{border:1px solid var(--border2);background:var(--surface2);border-radius:12px;padding:9px 11px;cursor:pointer;transition:all .15s}
+.op:hover{border-color:var(--acc-bd)}
+.op.on{border-color:var(--acc);background:var(--acc-bg);box-shadow:0 0 0 1px var(--acc) inset}
+.op b{display:block;font-size:13.5px}.op small{display:block;color:var(--text3);font-size:11.5px;margin-top:2px}
+.op .rk{float:right;font-size:10.5px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.04em}
+.info{color:var(--text3);font-size:12.5px;margin:-6px 0 14px}
 .eqleg{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:10px}
 .eqleg div{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:8px 10px;font-size:12.5px;line-height:1.4}
 .eqleg b{display:block;color:var(--text);margin-bottom:2px}.eqleg span{color:var(--text3)}
@@ -177,16 +187,16 @@ td.desc{white-space:normal;min-width:240px;color:var(--text2)}
   <div class="logo">S</div>
   <div>
     <h1>Stock mínimo, máximo y compra de MP</h1>
-    <p>Cargá los datos, revisá los parámetros y la herramienta calcula qué fabricar, cuánto y qué materia prima comprar.</p>
+    <p>Resultados con los datos de la fábrica: qué fabricar, cuánto y qué materia prima comprar. Elegí la ecuación que conviene.</p>
   </div>
   <a class="back" href="../BIOTROM_Inicio.html">← Inicio</a>
 </header>
 
 <div class="steps">
-  <div class="stp on" data-go="datos"><b>1</b>Datos</div>
-  <div class="stp" data-go="param"><b>2</b>Parámetros</div>
-  <div class="stp" data-go="res"><b>3</b>Resultados</div>
-  <div class="stp" data-go="como"><b>?</b>Cómo se calcula</div>
+  <div class="stp" data-go="res"><b>1</b>Resultados</div>
+  <div class="stp" data-go="como"><b>2</b>Cómo se calcula</div>
+  <div class="stp" data-go="param"><b>3</b>Parámetros</div>
+  <div class="stp on" data-go="datos"><b>4</b>Actualizar datos</div>
 </div>
 
 <!-- ======================= 1. DATOS ======================= -->
@@ -195,7 +205,7 @@ td.desc{white-space:normal;min-width:240px;color:var(--text2)}
     <div class="ic">⇪</div>
     <div><b>Soltá acá todos los archivos juntos</b>
     <span>Ventas, stock (MAESTRO.xlsx), baúles (INFO_CAJAS.html), OF cerradas, calculadora de costos… cada uno se reconoce solo.
-    Queda guardado en esta PC: la próxima vez cargás solo lo que cambió.</span></div>
+    Se guarda en la nube: todos ven los mismos resultados. La próxima vez cargás solo lo que cambió.</span></div>
   </label>
   <div class="chk" id="cards"></div>
   <div class="go">
@@ -220,8 +230,10 @@ td.desc{white-space:normal;min-width:240px;color:var(--text2)}
 
 <!-- ======================= 3. RESULTADOS ======================= -->
 <section class="pane" id="p-res">
-  <div id="res-empty" class="empty">Todavía no se calculó. Cargá los datos y tocá <b>Calcular</b>.</div>
+  <div id="res-empty" class="empty">Cargando los datos…</div>
   <div id="res-body" style="display:none">
+    <div class="info" id="res-info"></div>
+    <div class="elige" id="elige"></div>
     <div class="tiles" id="tiles"></div>
     <div class="tabs" id="tabs">
       <div class="tab on" data-t="fab">Qué fabricar</div>
@@ -268,7 +280,7 @@ td.desc{white-space:normal;min-width:240px;color:var(--text2)}
 const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
 const LS = 'biotrom_stockmp_v1';
 const fmt = (v, d = 0) => v == null || isNaN(v) ? '-' : Number(v).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
-const norm = s => String(s ?? '').trim().toUpperCase();
+const norm = s => String(s ?? '').trim().toUpperCase().replace(/\.+$/, '').replace(/[.$#\[\]\/]/g, '_');   // sin punto final (error de tipeo) ni caracteres que Firebase no acepta en claves
 const plain = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 const median = a => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
 const num = v => typeof v === 'number' && isFinite(v) ? v : (typeof v === 'string' && v.trim() !== '' && !isNaN(+v.replace(',', '.')) ? +v.replace(',', '.') : 0);
@@ -312,6 +324,41 @@ const lit = t => t ? Function('"use strict";return (' + t + ')')() : null;
 // ════════════════════════════════════════════════════════════════════
 let DB = { src: {}, par: {} };
 try { DB = Object.assign(DB, JSON.parse(localStorage.getItem(LS) || '{}')); } catch (e) { }
+// ---------- datos compartidos en Firebase (rama /stock_mp) ----------
+const NUBE = 'https://iniciobt2-default-rtdb.firebaseio.com/stock_mp';
+const NUBE_KEYS = ['ventas', 'stock', 'baules', 'of', 'mp', 'prod'];   // la calculadora de costos no se sube: se lee del sitio
+let _nubeOK = null;
+async function nubeSubir(keys) {
+  try {
+    // si un código mal tipeado ("4MX40210.") choca con el correcto, gana el correcto
+    const limpio = o => { if (Array.isArray(o)) return o.map(limpio); if (!o || typeof o !== 'object') return o; const r = {};
+      for (const [k, v] of Object.entries(o)) { const nk = String(k).replace(/\.+$/, '').replace(/[.$#\[\]\/]/g, '_') || '_'; if (nk in r && nk !== k) continue; r[nk] = limpio(v); } return r; };
+    const body = {}; keys.forEach(k => { body[k] = DB[k] === undefined ? null : limpio(DB[k]); });
+    body.src = Object.fromEntries(Object.entries(DB.src).filter(([k]) => k !== 'calc')); body.par = DB.par; body.at = Date.now();
+    const r = await fetch(NUBE + '.json', { method: 'PATCH', body: JSON.stringify(body) });
+    _nubeOK = r.ok; if (!r.ok) toast('No se pudo guardar en la nube (' + r.status + '). Quedó guardado solo en esta PC.');
+  } catch (e) { _nubeOK = false; toast('Sin conexión con la nube: quedó guardado solo en esta PC.'); }
+}
+async function nubeBajar() {
+  try {
+    const r = await fetch(NUBE + '.json'); if (!r.ok) { _nubeOK = false; return false; }
+    const d = await r.json(); _nubeOK = true; if (!d) return false;
+    NUBE_KEYS.forEach(k => { if (d[k] !== undefined) DB[k] = d[k]; });
+    DB.src = Object.assign({}, d.src || {}, DB.src.calc ? { calc: DB.src.calc } : {}); DB.par = d.par || {};
+    save(); return true;
+  } catch (e) { _nubeOK = false; return false; }
+}
+// la Calculadora de Costos se lee sola desde el sitio (misma carpeta de herramientas)
+async function calcAuto() {
+  try {
+    const r = await fetch('../COSTOS%20%2B%20PEDIR%20MP/calculadorapor%20(17).html', { cache: 'no-cache' });
+    if (!r.ok) return false;
+    const f = new File([await r.blob()], 'calculadorapor (17).html');
+    const x = await PARSERS.calc([f]); DB.calc = x.data;
+    DB.src.calc = { msg: x.msg + ' · se lee sola del sitio', file: 'Calculadora de Costos (automático)', at: Date.now() };
+    return true;
+  } catch (e) { return false; }
+}
 function save() { try { localStorage.setItem(LS, JSON.stringify(DB)); } catch (e) { toast('No se pudo guardar en el navegador (demasiados datos). Igual se puede calcular.'); } }
 
 // ════════════════════════════════════════════════════════════════════
@@ -374,7 +421,7 @@ function renderCards() {
   $('#ready-hint').textContent = faltan.length ? 'Falta: ' + faltan.join(', ') : 'Todo listo';
   $('#go-calc-d').disabled = !!faltan.length;
   $('#go-calc') && ($('#go-calc').disabled = !!faltan.length);
-  $$('.stp')[0].classList.toggle('ok', !faltan.length);
+  $('.stp[data-go=datos]').classList.toggle('ok', !faltan.length);
 }
 
 // ---------- reconocer de qué es cada archivo ----------
@@ -443,6 +490,7 @@ async function load(id, files) {
     DB.src[id] = { msg: r.msg, warn: !!r.warn, file: files.map(f => f.name).join(', '), at: Date.now() };
     if (r.extra) for (const [k, v] of Object.entries(r.extra)) { DB[k] = v.data; DB.src[k] = { msg: v.msg, file: files[0].name + ' (automático)', at: Date.now() }; }
     save(); toast('✓ ' + SOURCES.find(s => s.id === id).title);
+    if (id !== 'calc') nubeSubir([id, ...Object.keys(r.extra || {})]);
   } catch (e) {
     console.error(e);
     DB.src[id] = { msg: 'No se pudo leer: ' + e.message, warn: true, file: files[0].name, at: Date.now() };
@@ -783,7 +831,7 @@ function renderParams() {
   h += '</div>';
   if (AUTO._nof) h += `<p class="hint" style="margin-top:14px">OF usadas: ${fmt(AUTO._nof)} · la del medio tarda ${fmt(AUTO._med)} días y el promedio da ${fmt(AUTO._prom)} días · ${fmt(AUTO._n1)} pasan por terceros.</p>`;
   $('#params').innerHTML = h;
-  $$('#params input').forEach(i => i.onchange = () => { if (i.value === '') delete DB.par[i.dataset.p]; else DB.par[i.dataset.p] = i.value; save(); renderParams(); });
+  $$('#params input').forEach(i => i.onchange = () => { if (i.value === '') delete DB.par[i.dataset.p]; else DB.par[i.dataset.p] = i.value; save(); nubeSubir([]); renderParams(); });
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -858,6 +906,9 @@ function calcular() {
     r.cv = r.V > 0 ? r.sig / (r.V / 12) : 0;
     Object.assign(r, recomendar(r));
   }
+  // la ecuacion elegida por la empresa reemplaza minimo, maximo, a fabricar y critico
+  const ch = +(DB.par.op || 2);
+  if (ch !== 2) for (const r of res) { const o = r.op[ch - 1]; Object.assign(r, { mn: o.mn, pr: o.pr, mx: o.mx, fab: o.fab, urg: o.crit }); }
   const ord = { A: 0, B: 1, C: 2, '-': 3 };
   res.sort((a, b) => (b.urg - a.urg) || (ord[a.cls] - ord[b.cls]) || ((a.cob ?? 99) - (b.cob ?? 99)));
   // compra de MP
@@ -907,14 +958,36 @@ const OPW = [
   'Colchón proporcional a lo que tarda la OF. Bueno para lo que tarda mucho; pide mirar los colores a diario y lanza más OF.',
   'Se revisa todo cada semana. Programa parejo, pero muchas OF chicas = muchas preparaciones de máquina.',
 ];
+const OPF = [
+  'mínimo = C + Pb + D × 1 mes · reposición = mínimo + D × L · máximo = mínimo + D × 3',
+  'SS = k × D × √L · mínimo = C + Pb + SS · reposición = mínimo + D × L · máximo = mínimo + Q',
+  'SS = Z × σ × √L · mínimo = C + Pb + SS · reposición = mínimo + D × L · máximo = mínimo + Q',
+  'rojo = D × L × 0,75 · mínimo = C + Pb + rojo · reposición = mínimo + D × L · máximo = reposición + máx(D × L × 0,5 ; D)',
+  'objetivo = C + Pb + SS + D × (1 semana + L) · cada semana, si falta 1 mes o más: fabricar = objetivo − disponible',
+];
 let EQG = false;
 
 // ════════════════════════════════════════════════════════════════════
 //  Resultados
 // ════════════════════════════════════════════════════════════════════
 let TAB = 'fab', CL = '*', SORT = null;
+function renderElige() {
+  const ch = +(DB.par.op || 2), R = RES.res;
+  const cuenta = [0, 1, 2, 3, 4].map(i => R.filter(r => r.rec === i + 1).length);
+  const best = cuenta.indexOf(Math.max(...cuenta)) + 1;
+  const tot = [0, 1, 2, 3, 4].map(i => ({ c: R.filter(r => r.op[i].crit).length, f: R.reduce((a, r) => a + r.op[i].fab, 0) }));
+  $('#elige').innerHTML = `<div class="tt"><b>Ecuación elegida: ${OPN[ch - 1]}</b><span>Tocá otra para ver cómo cambian los resultados. La elección queda guardada para todos. Detalle de cada una en la pestaña Ecuaciones.</span></div>
+    <div class="ops">${OPN.map((o, i) => `<div class="op ${ch === i + 1 ? 'on' : ''}" data-op="${i + 1}">${best === i + 1 ? '<span class="rk">sugerida</span>' : ''}<b>${o}</b>
+      <small>${fmt(tot[i].c)} críticos · ${fmt(tot[i].f)} piezas</small><small>conviene en ${fmt(cuenta[i])} productos</small></div>`).join('')}</div>`;
+  $$('#elige [data-op]').forEach(b => b.onclick = async () => { DB.par.op = +b.dataset.op; save(); nubeSubir([]); busy('Calculando…'); await tick(); calcular(); busy(); });
+  const f = k => DB.src[k] ? new Date(DB.src[k].at).toLocaleDateString('es-AR') : '—';
+  const hasta = DB.ventas ? fromSerial(DB.ventas.fmax).toLocaleDateString('es-AR', { timeZone: 'UTC' }) : '—';
+  $('#res-info').innerHTML = `Datos: ventas hasta ${hasta} · stock cargado el ${f('stock')} · baúles ${f('baules')} · OF ${f('of')} · MP ${f('mp')}` +
+    (_nubeOK === false ? ' · <span style="color:var(--amber)">sin conexión con la nube: se muestran los datos guardados en esta PC</span>' : ' · sincronizado ☁');
+}
 function renderRes() {
   if (!RES) return;
+  renderElige();
   $('#res-empty').style.display = 'none'; $('#res-body').style.display = 'block';
   const R = RES.res, crit = R.filter(r => r.urg), fab = R.filter(r => r.fab > 0);
   const mpc = RES.mpres.filter(m => m.comp > 0);
@@ -924,7 +997,7 @@ function renderRes() {
     ['#fb923c', fmt(fab.reduce((a, r) => a + r.fab, 0)), 'piezas a fabricar ya', `${fmt(fab.length)} productos / OF`],
     ['#34d399', DB.mp ? fmt(mpc.reduce((a, m) => a + m.comp, 0) / 1000) + ' m' : '—', 'MP a comprar en el año', DB.mp ? `${fmt(mpc.length)} códigos · ${fmt(mpc.reduce((a, m) => a + m.barras, 0))} barras` : 'falta el stock de MP'],
   ].map(([c, v, l, s]) => `<div class="tile" style="--c:${c}"><div class="v">${v}</div><div class="l">${l}</div><div class="s">${s}</div></div>`).join('');
-  $$('.stp')[2].classList.add('ok');
+  $('.stp[data-go=res]').classList.add('ok');
   renderTable();
 }
 const COV = r => { if (r.cob == null) return '<span class="pill p-gry">sin venta</span>'; const x = r.cob / r.Lr; const c = r.urg ? '#f87171' : x < 2 ? '#fbbf24' : '#34d399';
@@ -1022,9 +1095,10 @@ function detalle(k) {
     ${cs('Seguridad (SS)', fmt(r.ss, 1), `${fmt(kk, 1)} × ${fmt(r.d, 1)} × √${fmt(r.Lr, 2)}`)}
     ${cs('Baúles', `${fmt(r.C)} + ${fmt(r.Pb)}`, 'C piezas en baúles + Pb para un baúl más')}
     ${cs('Lote (Q)', fmt(r.Q, 0), r.qset ? `preparación ${fmt(w.cs)} min ÷ (${par('fset')} % × ${fmt(w.cc, 1)} min/pieza), tope ${par('Pmax')} meses` : `${fmt(r.d, 1)} × ${par('P')} meses`, w ? `tiempos ${w.f === 'real' ? 'reales medidos' : 'std'} · ${w.n} pasos${w.terc ? ' · con terceros' : ''}` : 'sin carta ni tiempos en la calculadora')}
-    ${cs('Stock mínimo', fmt(r.mn), `${fmt(r.C)} + ${fmt(r.Pb)} + ${fmt(r.ss, 1)}`, '', 'hi')}
-    ${cs('Punto de reposición', fmt(r.pr), `mínimo + ${fmt(r.d, 1)} × ${fmt(r.Lr, 2)}`, '', 'hi')}
-    ${cs('Stock máximo', fmt(r.mx), `mínimo + ${fmt(r.Q, 0)}`, '', 'hi')}
+    ${(+(DB.par.op || 2)) !== 2 ? cs('Ecuación elegida', OPN[+DB.par.op - 1], OPF[+DB.par.op - 1], 'mínimo, reposición, máximo y a fabricar salen de esta fórmula', 'hi') : ''}
+    ${cs('Stock mínimo', fmt(r.mn), (+(DB.par.op || 2)) === 2 ? `${fmt(r.C)} + ${fmt(r.Pb)} + ${fmt(r.ss, 1)}` : '', '', 'hi')}
+    ${cs('Punto de reposición', fmt(r.pr), (+(DB.par.op || 2)) === 2 ? `mínimo + ${fmt(r.d, 1)} × ${fmt(r.Lr, 2)}` : '', '', 'hi')}
+    ${cs('Stock máximo', fmt(r.mx), (+(DB.par.op || 2)) === 2 ? `mínimo + ${fmt(r.Q, 0)}` : '', '', 'hi')}
     ${cs('Disponible hoy', fmt(r.disp), `${fmt(r.dpt)} depósito + ${fmt(r.C)} baúles + ${fmt(r.wip)} en proceso`)}
     ${r.cob != null ? cs('Cobertura', fmt(r.cob, 1) + ' meses', `(${fmt(r.dpt)} + ${fmt(r.wip)} − ${fmt(r.ss, 1)}) ÷ ${fmt(r.d, 1)}`, r.urg ? 'menos que lo que tarda la OF: se queda sin stock antes de que llegue' : '', r.urg ? 'red' : '') : ''}
     ${cs('A fabricar', fmt(r.fab), r.fab ? 'disponible ≤ punto de reposición → máximo − disponible' : 'disponible > punto de reposición: no se fabrica', '', r.fab ? 'red' : '')}
@@ -1063,8 +1137,8 @@ BD.ondrop = e => { e.preventDefault(); e.stopPropagation(); BD.classList.remove(
 $('#p-datos').ondragover = e => e.preventDefault();
 $('#p-datos').ondrop = e => { e.preventDefault(); cargarTodos([...e.dataTransfer.files]); };
 $('#go-calc').onclick = async () => { busy('Calculando…'); await tick(); try { calcular(); go('res'); } catch (e) { console.error(e); toast('Error al calcular: ' + e.message); } busy(); };
-$('#reset-par').onclick = () => { DB.par = {}; save(); renderParams(); };
-$('#clear-all').onclick = () => { if (confirm('¿Borrar todos los datos cargados y parámetros guardados en esta computadora?')) { DB = { src: {}, par: {} }; save(); RES = null; renderCards(); renderParams(); $('#res-empty').style.display = ''; $('#res-body').style.display = 'none'; } };
+$('#reset-par').onclick = () => { const op = DB.par.op; DB.par = op ? { op } : {}; save(); nubeSubir([]); renderParams(); };
+$('#clear-all').onclick = () => { if (confirm('¿Borrar los datos guardados en esta computadora? (Los de la nube no se borran: se vuelven a bajar al abrir.)')) { DB = { src: {}, par: {} }; save(); RES = null; renderCards(); renderParams(); $('#res-empty').style.display = ''; $('#res-body').style.display = 'none'; } };
 $$('.tab').forEach(t => t.onclick = () => { $$('.tab').forEach(x => x.classList.toggle('on', x === t)); TAB = t.dataset.t; SORT = null; renderTable(); });
 $$('.chip').forEach(c => c.onclick = () => { $$('.chip').forEach(x => x.classList.toggle('on', x === c)); CL = c.dataset.c; renderTable(); });
 $('#q').oninput = () => renderTable();
@@ -1075,6 +1149,15 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') $('#dx').cli
 window.BT = { load, PARSERS, calcular, par, get RES() { return RES; }, DB: () => DB };
 
 renderCards(); renderParams();
+(async function arrancar() {
+  busy('Cargando los datos de la fábrica…'); await tick();
+  await nubeBajar();
+  await calcAuto();
+  busy(); renderCards(); renderParams();
+  const listo = SOURCES.filter(s => s.tag === 'ob').every(s => DB[s.id]);
+  if (listo) { try { calcular(); go('res'); } catch (e) { console.error(e); } }
+  else $('#res-empty').innerHTML = 'Todavía no hay datos cargados. Andá a <b>Actualizar datos</b> y soltá los archivos.';
+})();
 </script>
 </body>
 </html>
