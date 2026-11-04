@@ -359,7 +359,26 @@ async function calcAuto() {
     return true;
   } catch (e) { return false; }
 }
-function save() { try { localStorage.setItem(LS, JSON.stringify(DB)); } catch (e) { toast('No se pudo guardar en el navegador (demasiados datos). Igual se puede calcular.'); } }
+// resultados de las 5 ecuaciones por producto -> nube (/stock_mp/res), los usa el MAESTRO (Plan y PEDIR MP)
+async function publicarRes() {
+  if (!RES || _nubeOK === false || !SOURCES.filter(s => s.tag === 'ob').every(s => DB[s.id])) return;
+  const k = [], v = [];
+  for (const r of RES.res) { k.push(r.k); v.push(r.op.map(o => [o.mn, o.pr, o.mx, o.fab, o.crit ? 1 : 0])); }
+  const txt = JSON.stringify([k, v]); let h = 0; for (let i = 0; i < txt.length; i++) h = (h * 31 + txt.charCodeAt(i)) | 0;
+  const firma = String(h) + ':' + txt.length;
+  try { if (localStorage.getItem('btsm_res_firma') === firma) return; } catch (e) { }
+  try {
+    const r = await fetch(NUBE + '/res.json', { method: 'PUT', body: JSON.stringify({ at: Date.now(), k, v }) });
+    if (r.ok) try { localStorage.setItem('btsm_res_firma', firma); } catch (e) { }
+  } catch (e) { }
+}
+// en el navegador se guarda solo lo chico si los datos están en la nube: el espacio (5 MB) se comparte con
+// todas las herramientas del sitio y el MAESTRO ocupa casi todo. Sin nube, se intenta guardar todo.
+function save() {
+  const chico = () => { const o = { src: DB.src, par: DB.par }; return JSON.stringify(o); };
+  try { localStorage.setItem(LS, _nubeOK ? chico() : JSON.stringify(DB)); }
+  catch (e) { try { localStorage.setItem(LS, chico()); } catch (e2) { } console.warn('Stock y MP: sin lugar en el navegador; los datos quedan en la nube.'); }
+}
 
 // ════════════════════════════════════════════════════════════════════
 //  Fuentes de datos: qué se pide, para qué y cómo se lee
@@ -932,6 +951,7 @@ function calcular() {
     H.cc += r.w.cc / 60 * r.d * 12; H.vc += r.w.vc / 60 * r.d * 12; H.mc += r.w.mc / 60 * r.d * 12;
   }
   RES = { res, mpres, H, nof, cub, at: Date.now() };
+  publicarRes();
   renderRes();
 }
 
@@ -1159,5 +1179,6 @@ renderCards(); renderParams();
   else $('#res-empty').innerHTML = 'Todavía no hay datos cargados. Andá a <b>Actualizar datos</b> y soltá los archivos.';
 })();
 </script>
+<script src="../assets/biotrom-tema.js"></script>
 </body>
 </html>
