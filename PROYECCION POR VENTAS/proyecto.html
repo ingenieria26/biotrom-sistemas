@@ -1,29 +1,515 @@
-<!DOCTYPE html><html lang="es"><head><script src="../assets/biotrom-auth.js"></script><meta charset="UTF-8"><title>Stock Master Pro - Dashboard</title><script src="../assets/xlsx-0.18.5.full.min.js"></script><script src="https://cdn.jsdelivr.net/npm/chart.js"></script><style>:root{--bg:#f8fafc;--panel:#ffffff;--accent:#3b82f6;--border:#e2e8f0;--proy:#059669;--pedir:#ea580c}*{box-sizing:border-box;margin:0;padding:0;font-family:'Segoe UI',sans-serif}body{display:flex;height:100vh;background:var(--bg);overflow:hidden}.sidebar{width:280px;background:var(--panel);border-right:1px solid var(--border);padding:20px;display:flex;flex-direction:column;gap:15px}.drop-zone{border:2px dashed var(--border);padding:12px;text-align:center;border-radius:8px;cursor:pointer;font-size:11px;color:#64748b;font-weight:700;transition:.3s}.drop-zone.loaded{border-color:#10b981;background:#f0fdf4;color:#15803d;border-style:solid}.main{flex:1;padding:20px;overflow:hidden;display:flex;flex-direction:column;gap:15px}.tabs-header{display:flex;gap:5px;border-bottom:2px solid var(--border)}.tab-btn{padding:12px 20px;cursor:pointer;border:none;background:0 0;font-weight:700;color:#94a3b8;font-size:12px;text-transform:uppercase}.tab-btn.active{color:var(--accent);border-bottom:3px solid var(--accent)}.tab-content{display:none;flex:1;overflow:hidden;flex-direction:column}.tab-content.active{display:flex}.table-container{background:#fff;border-radius:12px;border:1px solid var(--border);flex:1;overflow:auto}table{width:100%;border-collapse:collapse;font-size:11px;min-width:1100px}thead{position:sticky;top:0;background:#f8fafc;z-index:10;border-bottom:2px solid var(--border)}th{padding:10px;text-align:left;color:#475569;font-size:10px;font-weight:800}td{padding:8px 10px;border-bottom:1px solid #f1f5f9}.filter-select,.search-input{width:100%;padding:5px;border:1px solid var(--border);border-radius:4px;font-size:10px;margin-top:5px;outline:0;background:#fff}.clickable{color:var(--accent);cursor:pointer;font-weight:600;text-decoration:none}.badge{padding:4px 8px;border-radius:6px;font-weight:700;font-size:9px;text-align:center;display:inline-block;width:70px}.critico{background:#fee2e2;color:#991b1b}.ok{background:#dcfce7;color:#166534}.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;overflow-y:auto;padding:10px}.chart-box{background:#fff;padding:15px;border-radius:12px;border:1px solid var(--border);min-height:300px}</style><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"><link rel="icon" type="image/png" href="../assets/logo_biotrom_web.png"></head><body><aside class="sidebar"><h1 style="font-size:1.2rem;margin-bottom:10px;color:#1e293b">Stock<span style="color:var(--accent)">Master</span></h1><div id="drop-ventas" class="drop-zone" onclick='document.getElementById("file-ventas").click()'>1. CARGAR VENTAS<input type="file" id="file-ventas" hidden accept=".xlsx, .xls"></div><div id="drop-master" class="drop-zone" onclick='document.getElementById("file-master").click()'>2. CARGAR STOCK<input type="file" id="file-master" hidden accept=".xlsx, .xls"></div><div style="background:#f8fafc;padding:12px;border-radius:8px;border:1px solid var(--border)"><label style="font-size:10px;font-weight:800;color:#64748b">Meses a Proyectar</label> <input type="number" id="input-proy-meses" value="12" style="width:100%;padding:8px;margin-top:5px;border-radius:6px;border:1px solid #cbd5e1;font-weight:700" onchange="saveConfig();renderTable()"></div><button onclick="limpiarDatos()" style="margin-top:auto;padding:10px;background:#ef4444;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">LIMPIAR TODO</button></aside><main class="main"><div class="tabs-header"><button class="tab-btn active" onclick='switchTab("tab-stock",this)'>CONTROL DE STOCK</button> <button id="btn-tab-ventas" class="tab-btn" onclick='switchTab("tab-detalle-ventas",this)'>DETALLE DE VENTAS</button> <button class="tab-btn" onclick='switchTab("tab-graficos",this)'>GRÁFICOS</button></div><div id="tab-stock" class="tab-content active"><div class="table-container"><table id="mainTable"><thead><tr><th style="width:100px">CÓDIGO<br><input type="text" class="search-input" onkeyup="applyMainFilters()"></th><th>DESCRIPCIÓN<br><input type="text" class="search-input" onkeyup="applyMainFilters()"></th><th style="text-align:center">V. PROM</th><th style="text-align:center">STOCK</th><th style="text-align:center">COB.(M)</th><th style="text-align:center">Q. TENER</th><th style="text-align:center">A PEDIR</th><th style="width:130px">FABRICACIÓN</th><th style="width:90px">ESTADO</th></tr></thead><tbody id="tabla-body"></tbody></table></div></div><div id="tab-detalle-ventas" class="tab-content"><div style="padding:15px;background:#fff;border:1px solid var(--border);border-radius:8px;margin-bottom:10px"><h3 id="detalle-titulo" style="font-size:14px;color:#1e293b">Seleccione un producto en Stock</h3></div><div class="table-container"><table id="detalleTable"><thead><tr><th style="width:120px">Año / Fecha<br><select id="f-fecha" class="filter-select" onchange="applyDetalleFilters()"><option value="">Todos los años</option></select></th><th>Cliente</th><th style="text-align:center">Cantidad</th><th style="text-align:center">PtoV</th><th style="text-align:center">NroFactu</th><th style="width:150px">CodigoClien<br><select id="f-ccli" class="filter-select" onchange="applyDetalleFilters()"><option value="">Todos</option></select></th></tr></thead><tbody id="detalle-ventas-body"></tbody></table></div></div><div id="tab-graficos" class="tab-content"><div style="background:#fff;padding:15px;border-radius:8px;border:1px solid var(--border);margin-bottom:10px;display:flex;align-items:center;gap:15px"><span style="font-size:11px;font-weight:700;color:#64748b">ANÁLISIS DE PRODUCTO:</span> <select id="select-grafico-prod" class="filter-select" style="width:400px;margin:0" onchange="renderSpecificCharts(this.value)"></select></div><div class="chart-grid"><div class="chart-box" style="grid-column:span 2"><canvas id="chartTop10"></canvas></div><div class="chart-box"><canvas id="chartMensual"></canvas></div><div class="chart-box"><canvas id="chartAnual"></canvas></div></div></div></main><script>let store=[];let ventasHist={};let masterDataObj={};let mesesReales=1;let charts={top:null,mensual:null,anual:null};function _cargarDesdeLocalStorageYProcesar(){const savedVentas=localStorage.getItem("ventasHist");const savedMaster=localStorage.getItem("masterDataObj");const savedMeses=localStorage.getItem("mesesReales");const savedProy=localStorage.getItem("proyMeses");if(savedProy)document.getElementById("input-proy-meses").value=savedProy;if(savedVentas&&savedMaster){ventasHist=JSON.parse(savedVentas);Object.keys(ventasHist).forEach(cod=>{ventasHist[cod].forEach(v=>v.f=new Date(v.f))});masterDataObj=JSON.parse(savedMaster);mesesReales=parseFloat(savedMeses)||1;document.getElementById("drop-ventas").classList.add("loaded");document.getElementById("drop-master").classList.add("loaded");processData(false)}}window.onload=_cargarDesdeLocalStorageYProcesar;function saveConfig(){localStorage.setItem("proyMeses",document.getElementById("input-proy-meses").value)}function limpiarDatos(){if(confirm("¿Estás seguro de que quieres borrar todos los datos guardados?")){localStorage.clear();location.reload()}}function switchTab(id,btn){document.querySelectorAll(".tab-content").forEach(c=>c.classList.remove("active"));document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));document.getElementById(id).classList.add("active");btn.classList.add("active");if(id==="tab-graficos")setTimeout(renderGlobalCharts,100)}document.getElementById("file-ventas").onchange=e=>handleFile(e.target.files[0],"V");document.getElementById("file-master").onchange=e=>handleFile(e.target.files[0],"M");async function handleFile(file,tipo){const reader=new FileReader;reader.onload=e=>{const wb=XLSX.read(e.target.result,{cellDates:true,type:"array"});const data=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1});if(tipo==="V"){ventasHist={};const tempMap=new Map;let fList=[];for(let i=1;i<data.length;i++){const r=data[i];const cod=String(r[0]||"").trim();const fecha=r[3];if(cod&&fecha instanceof Date){const key=`${fecha.getTime()}_${r[6]}_${r[7]}_${cod}`;const cant=Math.abs(parseFloat(r[2])||0);if(tempMap.has(key))tempMap.get(key).q+=cant;else tempMap.set(key,{f:fecha,q:cant,cli:r[1]||"---",ptov:r[5]||"-",fact:r[6]||"-",ccli:String(r[7]||"-"),cod:cod});fList.push(fecha)}}tempMap.forEach(v=>{if(!ventasHist[v.cod])ventasHist[v.cod]=[];ventasHist[v.cod].push(v)});const min=new Date(Math.min(...fList)),max=new Date(Math.max(...fList));mesesReales=Math.max(1,(max.getFullYear()-min.getFullYear())*12+(max.getMonth()-min.getMonth())+1);localStorage.setItem("ventasHist",JSON.stringify(ventasHist));localStorage.setItem("mesesReales",mesesReales);document.getElementById("drop-ventas").classList.add("loaded")}else{masterDataObj={};let startRow=0;for(let i=0;i<data.length;i++)if(String(data[i]).includes("Codigo")){startRow=i+1;break}for(let i=startRow;i<data.length;i++){const r=data[i];if(r[5])masterDataObj[String(r[5]).trim()]={d:r[6],s:parseFloat(r[8])||0}}localStorage.setItem("masterDataObj",JSON.stringify(masterDataObj));document.getElementById("drop-master").classList.add("loaded")}if(Object.keys(ventasHist).length&&Object.keys(masterDataObj).length)processData(true)};reader.readAsArrayBuffer(file)}function processData(shouldSave){store=Object.keys(ventasHist).map(cod=>{const m=masterDataObj[cod]||{d:"Sin descripción",s:0};return{cod:cod,...m,t:ventasHist[cod].reduce((acc,v)=>acc+v.q,0),fab:"Activo"}}).sort((a,b)=>a.cod.localeCompare(b.cod));document.getElementById("select-grafico-prod").innerHTML=store.map(i=>`<option value="${i.cod}">${i.cod} - ${i.d}</option>`).join("");renderTable()}function renderTable(){const proy=parseFloat(document.getElementById("input-proy-meses").value)||12;const body=document.getElementById("tabla-body");body.innerHTML=store.map(item=>{const prom=item.t/mesesReales;const cob=prom>0?item.s/prom:0;const quiero=Math.ceil(prom*proy),pedir=quiero-item.s;return`<tr>\n            <td><a class="clickable" onclick="verDetalle('${item.cod}')">${item.cod}</a></td>\n            <td>${item.d}</td>\n            <td style="text-align:center">${prom.toFixed(1)}</td>\n            <td style="text-align:center">${item.s}</td>\n            <td style="text-align:center">${cob.toFixed(1)}</td>\n            <td style="color:var(--proy);font-weight:bold;text-align:center">${quiero}</td>\n            <td style="color:var(--pedir);font-weight:bold;text-align:center">${pedir>0?pedir:"-"}</td>\n            <td><select class="filter-select" onchange="store.find(i=>i.cod==='${item.cod}').fab=this.value">\n                <option value="Activo">Activo</option><option value="Discontinuo">Discontinuo</option><option value="Preguntar">Preguntar</option>\n            </select></td>\n            <td><span class="badge ${cob<1?"critico":"ok"}">${cob<1?"CRÍTICO":"OK"}</span></td>\n        </tr>`}).join("")}function renderGlobalCharts(){const top10=[...store].sort((a,b)=>b.t-a.t).slice(0,10);if(charts.top)charts.top.destroy();charts.top=new Chart(document.getElementById("chartTop10"),{type:"bar",data:{labels:top10.map(i=>i.cod),datasets:[{label:"Ventas Totales",data:top10.map(i=>i.t),backgroundColor:"#3b82f6",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{title:{display:true,text:"TOP 10 MÁS VENDIDOS"}}}});const initialCod=document.getElementById("select-grafico-prod").value;if(initialCod)renderSpecificCharts(initialCod)}function renderSpecificCharts(cod){const hist=ventasHist[cod]||[];const mData={},aData={};hist.forEach(v=>{const mKey=`${v.f.getFullYear()}-${String(v.f.getMonth()+1).padStart(2,"0")}`;const aKey=v.f.getFullYear();mData[mKey]=(mData[mKey]||0)+v.q;aData[aKey]=(aData[aKey]||0)+v.q});const labelsM=Object.keys(mData).sort();const labelsA=Object.keys(aData).sort();if(charts.mensual)charts.mensual.destroy();charts.mensual=new Chart(document.getElementById("chartMensual"),{type:"line",data:{labels:labelsM,datasets:[{label:"Mensual",data:labelsM.map(k=>mData[k]),borderColor:"#3b82f6",tension:.3,fill:true,backgroundColor:"rgba(59, 130, 246, 0.1)"}]},options:{responsive:true,maintainAspectRatio:false}});if(charts.anual)charts.anual.destroy();charts.anual=new Chart(document.getElementById("chartAnual"),{type:"bar",data:{labels:labelsA,datasets:[{label:"Anual",data:labelsA.map(k=>aData[k]),backgroundColor:"#10b981",borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false}})}function applyMainFilters(){const fCod=document.querySelectorAll("#mainTable .search-input")[0].value.toLowerCase();const fDes=document.querySelectorAll("#mainTable .search-input")[1].value.toLowerCase();const rows=document.getElementById("tabla-body").rows;for(let r of rows){const match=r.cells[0].innerText.toLowerCase().includes(fCod)&&r.cells[1].innerText.toLowerCase().includes(fDes);r.style.display=match?"":"none"}}function verDetalle(cod){const hist=ventasHist[cod]||[];const item=store.find(i=>i.cod===cod);document.getElementById("detalle-titulo").innerText=`HISTORIAL: ${cod} - ${item?.d||""}`;const años=[...new Set(hist.map(v=>v.f.getFullYear()))].sort((a,b)=>b-a);document.getElementById("f-fecha").innerHTML='<option value="">Todos los años</option>'+años.map(a=>`<option value="${a}">${a}</option>`).join("");const clientes=[...new Set(hist.map(v=>v.ccli))].sort();document.getElementById("f-ccli").innerHTML='<option value="">Todos</option>'+clientes.map(c=>`<option value="${c}">${c}</option>`).join("");document.getElementById("detalle-ventas-body").innerHTML=hist.sort((a,b)=>b.f-a.f).map(v=>`<tr data-year="${v.f.getFullYear()}">\n            <td>${v.f.toLocaleDateString()}</td><td>${v.cli}</td><td style="text-align:center; font-weight:bold">${v.q}</td>\n            <td style="text-align:center">${v.ptov}</td><td style="text-align:center">${v.fact}</td><td style="text-align:center">${v.ccli}</td>\n        </tr>`).join("");switchTab("tab-detalle-ventas",document.getElementById("btn-tab-ventas"))}function applyDetalleFilters(){const fYear=document.getElementById("f-fecha").value;const fCCli=document.getElementById("f-ccli").value;const rows=document.getElementById("detalle-ventas-body").rows;for(let r of rows){const mYear=fYear===""||r.getAttribute("data-year")===fYear;const mCCli=fCCli===""||r.cells[5].innerText===fCCli;r.style.display=mYear&&mCCli?"":"none"}}const FB_BASE_PROY="https://iniciobt2-default-rtdb.firebaseio.com/proyeccion_ventas";const CLAVES_SYNC_PROY=["ventasHist","masterDataObj","mesesReales","proyMeses"];let _proyUltimoRemoto={};let _proyPendientes=new Set;async function _fbProyPush(key){const val=localStorage.getItem(key);if(val===null)return;let parsed;try{parsed=JSON.parse(val)}catch{parsed=val}_proyPendientes.add(key);try{const res=await BiotromAuth.fetch(`${FB_BASE_PROY}/${key}.json`,{method:"PUT",body:JSON.stringify(parsed)});if(res.ok){_proyUltimoRemoto[key]=JSON.stringify(parsed);_proyPendientes.delete(key)}}catch(e){}}async function _fbProyPull(){try{const res=await BiotromAuth.fetch(`${FB_BASE_PROY}.json`);if(!res.ok)return;const remoto=await res.json();if(!remoto)return;let huboCambios=false;CLAVES_SYNC_PROY.forEach(key=>{if(_proyPendientes.has(key)||!(key in remoto))return;const remotoStr=JSON.stringify(remoto[key]);if(remotoStr===_proyUltimoRemoto[key])return;_proyUltimoRemoto[key]=remotoStr;localStorage.setItem(key,typeof remoto[key]==="string"?remoto[key]:JSON.stringify(remoto[key]));huboCambios=true});if(huboCambios)_cargarDesdeLocalStorageYProcesar()}catch(e){}}(()=>{const origSetItem=localStorage.setItem.bind(localStorage);localStorage.setItem=function(k,v){origSetItem(k,v);if(CLAVES_SYNC_PROY.includes(k))_fbProyPush(k)}})();_fbProyPull();((u,f)=>{try{let p=0;const es=new EventSource(u);es.addEventListener("put",()=>{if(p++)f()});es.addEventListener("patch",()=>f())}catch(e){}setInterval(()=>{if(document.visibilityState==="visible")f()},6e5)})(`${FB_BASE_PROY}.json`,_fbProyPull)</script><style id="bt-theme">/* ===== PROYECCION POR VENTAS · tema corporativo (solo estilos) ===== */
-:root{--bg:#f8fafc;--panel:#fff;--accent:#4f46e5;--border:#e2e8f0;--proy:#059669;--pedir:#d97706}
-html body,html body *{font-family:'Plus Jakarta Sans',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif}
-html body{-webkit-font-smoothing:antialiased;color:#334155}
-.sidebar{width:300px;padding:24px 20px;background:#fff;border-right:1px solid #e2e8f0;box-shadow:1px 0 2px rgba(15,23,42,.03)}
-.sidebar h1{color:#0f172a!important;font-weight:800;letter-spacing:-.01em}
-.sidebar h1 span{color:#4f46e5!important}
-.drop-zone{border-color:#cbd5e1;border-radius:12px;padding:14px;color:#64748b;transition:border-color .2s,background .2s,color .2s}
-.drop-zone:hover{border-color:#818cf8;background:#f5f7ff;color:#4338ca}
-.drop-zone.loaded{border-color:#6ee7b7;background:#ecfdf5;color:#047857}
-.sidebar input,.sidebar select,.filter-select,.search-input{border:1px solid #cbd5e1;border-radius:8px;transition:border-color .2s,box-shadow .2s}
-.sidebar input:focus,.sidebar select:focus,.filter-select:focus,.search-input:focus{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.15);outline:0}
-.sidebar button,.main button:not(.tab-btn){border-radius:8px;font-weight:700;transition:background .2s,filter .2s}
-.sidebar button:hover,.main button:not(.tab-btn):hover{filter:brightness(.95)}
-.tabs-header{border-bottom:1px solid #e2e8f0}
-.tab-btn{font-weight:700;color:#64748b;letter-spacing:.04em;border-radius:8px 8px 0 0;transition:color .2s,background .2s}
-.tab-btn:hover{color:#0f172a;background:#f1f5f9}
-.tab-btn.active{color:#4338ca;border-bottom:3px solid #4f46e5}
-.table-container,.chart-box{border-radius:14px;border:1px solid #e2e8f0;box-shadow:0 1px 2px rgba(15,23,42,.04)}
-thead,thead th{background:#f8fafc}
-th{color:#64748b;letter-spacing:.06em;text-transform:uppercase;font-weight:700}
-tbody tr{transition:background .15s}
-tbody tr:hover{background:#f5f7ff}
-.clickable{color:#4f46e5}
-.badge{border-radius:999px}
-button:focus-visible,.tab-btn:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}
-@media(max-width:800px){html body{height:auto;overflow:auto;flex-direction:column}.sidebar{width:auto;border-right:0;border-bottom:1px solid #e2e8f0}.main{overflow:visible}}
-#bt-back{position:fixed;right:14px;bottom:14px;z-index:99999;display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;font:600 12px "Plus Jakarta Sans",system-ui,sans-serif;text-decoration:none;box-shadow:0 4px 14px rgba(15,23,42,.18);transition:background .2s,border-color .2s}#bt-back:hover{background:#f1f5f9;border-color:#94a3b8}#bt-back:focus-visible{outline:2px solid #4f46e5;outline-offset:2px}@media print{#bt-back{display:none}}</style><a id="bt-back" href="../BIOTROM_Inicio.html" aria-label="Volver al inicio">&larr; Inicio</a><script src="../assets/biotrom-tema.js"></script>
-</body></html>
+<!DOCTYPE html>
+<html lang="es" data-bt-tema>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIOTROM · Proyección de ventas</title>
+<link rel="icon" type="image/png" href="../assets/logo_biotrom_web.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="../assets/xlsx-0.20.3.full.min.js"></script>
+<style>
+:root{--bg:#0b1120;--surface:#111a2e;--surface2:#16213a;--surface3:#1c2947;--border2:#25324d;
+--acc:#818cf8;--acc2:#a5b4fc;--acc-bg:rgba(129,140,248,.14);--fc:#38bdf8;--fc-bg:rgba(56,189,248,.16);
+--red:#f87171;--red-bg:rgba(248,113,113,.12);--amber:#fbbf24;--amber-bg:rgba(251,191,36,.12);--green:#34d399;--green-bg:rgba(52,211,153,.12);
+--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;--grid:rgba(148,163,184,.14)}
+html[data-tema=light]{color-scheme:light;--bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--surface3:#e2e8f0;--border2:#cbd5e1;
+--acc:#4338ca;--acc2:#3730a3;--acc-bg:rgba(67,56,202,.09);--fc:#0284c7;--fc-bg:rgba(2,132,199,.12);
+--red:#d93025;--red-bg:rgba(217,48,37,.08);--amber:#b45309;--amber-bg:rgba(201,129,10,.10);--green:#1a9e6e;--green-bg:rgba(26,158,110,.09);
+--text:#1e293b;--text2:#64748b;--text3:#94a3b8;--grid:rgba(15,23,42,.07)}
+html[data-tema=dark]{color-scheme:dark}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
+.wrap{max-width:1320px;margin:0 auto;padding:26px 24px 80px}
+.mono{font-family:'JetBrains Mono',monospace}
+header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.logo{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#6366f1,#0ea5e9);display:grid;place-items:center;color:#fff;font-weight:800;font-size:20px;flex:none}
+header h1{font-size:24px;font-weight:800;letter-spacing:-.02em}
+header p{color:var(--text2);font-size:13.5px}
+.back{margin-left:auto;padding:8px 14px;border:1px solid var(--border2);border-radius:10px;color:var(--text2);text-decoration:none;font-size:13px;background:var(--surface)}
+.back:hover{color:var(--text)}
+.info{color:var(--text3);font-size:12.5px;margin-bottom:16px;display:flex;flex-wrap:wrap;gap:4px 14px;align-items:center}
+.info b{color:var(--text2);font-weight:600}
+.live{display:inline-flex;align-items:center;gap:6px;color:var(--green);font-weight:700}
+.live:before{content:"";width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-bg)}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:16px}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--border2);border-radius:11px;padding:3px}
+.seg button{border:0;background:none;color:var(--text2);font:inherit;font-size:13px;font-weight:700;padding:6px 13px;border-radius:8px;cursor:pointer}
+.seg button.on{background:var(--acc);color:#fff}
+.lbl{font-size:12px;color:var(--text3);font-weight:600}
+.chk{display:inline-flex;gap:7px;align-items:center;font-size:13px;color:var(--text2);cursor:pointer;background:var(--surface);border:1px solid var(--border2);border-radius:11px;padding:7px 12px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:16px}
+.tile{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:16px 18px}
+.tile .v{font-size:28px;font-weight:800;letter-spacing:-.02em;line-height:1.15;font-variant-numeric:tabular-nums}
+.tile .l{font-weight:700;font-size:13.5px;margin-top:2px}
+.tile .s{color:var(--text3);font-size:12.5px;margin-top:2px}
+.up{color:var(--green)}.down{color:var(--red)}.flat{color:var(--text2)}
+.card{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:16px 18px;margin-bottom:16px}
+.card h3{font-size:15px;font-weight:800}
+.card .sub{color:var(--text3);font-size:12.5px}
+.chead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:8px}
+select,input[type=text],input[type=search]{font:inherit;font-size:13px;color:var(--text);background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:7px 10px}
+select:focus,input:focus{outline:2px solid var(--acc);outline-offset:1px}
+.charts{display:grid;grid-template-columns:2.3fr 1fr;gap:16px}
+@media(max-width:980px){.charts{grid-template-columns:1fr}}
+svg text{font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+.leg{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--text2);margin-top:6px}
+.leg i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border2);margin:6px 0 14px;flex-wrap:wrap}
+.tab{padding:10px 14px;font-weight:700;font-size:13.5px;color:var(--text2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px}
+.tab.on{color:var(--acc);border-color:var(--acc)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip{padding:6px 12px;border-radius:999px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-size:12.5px;font-weight:600}
+.chip.on{background:var(--acc-bg);border-color:var(--acc);color:var(--acc)}
+.chip b{font-weight:800}
+.tw{border:1px solid var(--border2);border-radius:14px;overflow:auto;max-height:640px;background:var(--surface)}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:13px}
+th{position:sticky;top:0;z-index:2;background:var(--surface2);text-align:left;font-size:11.5px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;padding:9px 10px;border-bottom:1px solid var(--border2);white-space:nowrap;cursor:pointer;user-select:none}
+th.n,td.n{text-align:right}
+th .ar{color:var(--acc)}
+td{padding:8px 10px;border-bottom:1px solid var(--border2);vertical-align:middle}
+td.n{font-variant-numeric:tabular-nums}
+tr.r{cursor:pointer}tr.r:hover td{background:var(--acc-bg)}
+td.pr b{display:block;font-size:12.5px;font-family:'JetBrains Mono',monospace}td.pr span{color:var(--text2);font-size:12.5px}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.p-red{background:var(--red-bg);color:var(--red)}.p-amb{background:var(--amber-bg);color:var(--amber)}.p-grn{background:var(--green-bg);color:var(--green)}.p-gry{background:var(--surface3);color:var(--text2)}
+.conf{display:inline-flex;gap:2px}.conf i{width:6px;height:12px;border-radius:2px;background:var(--surface3)}.conf i.on{background:var(--acc)}
+.hint{color:var(--text3);font-size:12.5px}
+.empty{padding:30px;text-align:center;color:var(--text3)}
+.shade{position:fixed;inset:0;background:rgba(2,6,23,.55);opacity:0;pointer-events:none;transition:.2s;z-index:50}
+.shade.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(760px,100%);background:var(--bg);border-left:1px solid var(--border2);transform:translateX(100%);transition:.25s;z-index:51;overflow-y:auto;overflow-x:hidden;padding:22px 24px 60px}
+.drawer.on{transform:none}
+.drawer .x{position:sticky;top:0;float:right;border:1px solid var(--border2);background:var(--surface);color:var(--text);border-radius:10px;width:36px;height:36px;cursor:pointer;font-size:16px}
+.drawer h2{font-size:19px;font-weight:800;margin:2px 0 2px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+.fact{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:10px 12px}
+.fact .v{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}.fact .l{font-size:12px;color:var(--text3)}
+.story{background:var(--acc-bg);border-radius:12px;padding:12px 14px;font-size:13.5px;line-height:1.6;margin:10px 0 14px}
+.mt{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:8px}
+.mt td,.mt th{padding:5px 8px;border-bottom:1px solid var(--border2);position:static;cursor:default;text-transform:none;letter-spacing:0;font-size:12px}
+.heat td{text-align:center;font-size:12px;font-variant-numeric:tabular-nums;padding:7px 6px}
+.drop{border:2px dashed var(--border2);border-radius:16px;padding:34px;text-align:center;cursor:pointer;color:var(--text2);background:var(--surface)}
+.drop:hover,.drop.ov{border-color:var(--acc);color:var(--acc);background:var(--acc-bg)}
+.btn{font:inherit;font-weight:700;font-size:13px;border-radius:10px;padding:8px 14px;cursor:pointer;border:1px solid var(--border2);background:var(--surface);color:var(--text)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.busy{position:fixed;inset:0;display:none;place-items:center;background:rgba(2,6,23,.45);z-index:80}
+.busy.on{display:grid}.busy div{background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:16px 22px;font-weight:700}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(30px);opacity:0;background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:13px;transition:.25s;z-index:90;max-width:90vw}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.skel{padding:60px;text-align:center;color:var(--text3)}
+@media(max-width:640px){.wrap{padding:18px 16px 70px}.tile .v{font-size:23px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">P</div>
+    <div><h1>Proyección de ventas</h1><p>Lo vendido en 2 años, lo que se va a vender y hasta cuándo alcanza el stock del MAESTRO.</p></div>
+    <a class="back" href="../BIOTROM_Inicio.html">← Inicio</a>
+  </header>
+  <div class="info" id="info">Cargando datos de la nube…</div>
+
+  <div id="app" style="display:none">
+    <div class="bar">
+      <span class="lbl">Proyectar</span>
+      <div class="seg" id="hz"><button data-h="3">3 meses</button><button data-h="6">6 meses</button><button data-h="12">12 meses</button></div>
+      <label class="chk"><input type="checkbox" id="est" checked> Estacionalidad</label>
+      <span class="lbl" style="margin-left:6px">Ver</span>
+      <select id="grpSel" aria-label="Grupo a mostrar"></select>
+    </div>
+    <div class="tiles" id="tiles"></div>
+    <div class="charts">
+      <div class="card"><div class="chead"><div><h3 id="chTit">Ventas por mes y proyección</h3><div class="sub" id="chSub"></div></div></div>
+        <div id="chMain"></div>
+        <div class="leg"><span><i style="background:var(--acc)"></i>Vendido</span><span><i style="background:var(--fc)"></i>Proyección</span><span><i style="background:var(--fc-bg);border:1px dashed var(--fc)"></i>Rango probable (8 de cada 10 veces)</span></div>
+      </div>
+      <div class="card"><h3>¿En qué meses se vende más?</h3><div class="sub">Cada mes contra un mes promedio (100). Sale de los 2 años de ventas.</div><div id="chEst"></div></div>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <div class="tab on" data-t="prod">Productos</div>
+      <div class="tab" data-t="grp">Grupos</div>
+      <div class="tab" data-t="cli">Clientes</div>
+      <div class="tab" data-t="heat">Mapa del año</div>
+      <div class="tab" data-t="up">Actualizar ventas</div>
+    </div>
+    <div id="view"></div>
+  </div>
+</div>
+<div class="shade" id="shade"></div>
+<aside class="drawer" id="drawer"><button class="x" id="dx" aria-label="Cerrar">✕</button><div id="dbody"></div></aside>
+<div class="busy" id="busy"><div id="busyT">Leyendo…</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+// ═══════════════ utilidades ═══════════════
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const fmt = (v, d = 0) => v == null || isNaN(v) ? '–' : Number(v).toLocaleString('es-AR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = v => (v > 0 ? '+' : '') + fmt(v * 100) + ' %';
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const plain = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const norm = s => String(s ?? '').trim().toUpperCase().replace(/\.+$/, '').replace(/[.$#\[\]\/]/g, '_');
+const excluido = k => k.startsWith('Z') || /^\d+$/.test(k);
+const EXCEL0 = Date.UTC(1899, 11, 30);
+const toSerial = d => Math.round((d.getTime() - EXCEL0) / 864e5);
+const fromSerial = n => new Date(EXCEL0 + n * 864e5);
+const ym = d => d.getUTCFullYear() * 12 + d.getUTCMonth();
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const MESL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const sum = a => a.reduce((x, y) => x + y, 0);
+const toast = t => { const e = $('#toast'); e.textContent = t; e.classList.add('on'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('on'), 3800); };
+const busy = t => { $('#busy').classList.toggle('on', !!t); if (t) $('#busyT').textContent = t; };
+const tick = () => new Promise(r => setTimeout(r, 30));
+const LSK = 'bt_proy_v2';
+let PREF = { h: 6, est: true, tab: 'prod', grp: '*' };
+try { Object.assign(PREF, JSON.parse(localStorage.getItem(LSK) || '{}')); } catch (e) {}
+const savePref = () => { try { localStorage.setItem(LSK, JSON.stringify(PREF)); } catch (e) {} };
+
+// ═══════════════ nube ═══════════════
+const FB = 'https://iniciobt2-default-rtdb.firebaseio.com';
+const getJ = p => fetch(FB + '/' + p + '.json').then(r => r.ok ? r.json() : null).catch(() => null);
+const putJ = (p, v) => fetch(FB + '/' + p + '.json', { method: 'PUT', body: JSON.stringify(v) }).then(r => { if (!r.ok) throw new Error('la nube respondió ' + r.status); return r; });
+const asObj = x => { if (!x) return {}; if (Array.isArray(x)) { const o = {}; x.forEach((v, i) => { if (v != null) o[i] = v; }); return o; } return x; };
+
+const D = { v: null, vsrc: null, cli: null, stk: {}, stkAt: 0, res: null, op: 2 };
+async function cargar() {
+  const [v, vsrc, cli, stk, sd, res, op] = await Promise.all([getJ('stock_mp/ventas'), getJ('stock_mp/src/ventas'), getJ('proyeccion_ventas/cli'),
+    getJ('maestro_mp/stkpt'), getJ('maestro_mp/stock_dates'), getJ('stock_mp/res'), getJ('stock_mp/par/op')]);
+  D.v = v; D.vsrc = vsrc; D.cli = cli; D.res = res; D.op = +op || 2;
+  ponerStock(stk, sd);
+}
+function ponerStock(stk, sd) {
+  D.stk = {}; D.stkDesc = {};
+  (Array.isArray(stk) ? stk : Object.values(stk || {})).forEach(r => { if (!r) return; const k = norm(r.Codigo); if (!k) return; D.stk[k] = (D.stk[k] || 0) + (parseFloat(r.Stock) || 0); if (r.Descripcion) D.stkDesc[k] = r.Descripcion; });
+  D.stkAt = sd && sd.stkpt || 0; D.hayStk = Object.keys(D.stk).length > 0;
+}
+// stock en vivo: se escucha la marca de fecha (liviana) y si cambia se baja el stock
+function escucharStock() {
+  try {
+    let n = 0; const es = new EventSource(FB + '/maestro_mp/stock_dates.json');
+    const ver = async () => { const sd = await getJ('maestro_mp/stock_dates'); if (sd && sd.stkpt && sd.stkpt !== D.stkAt) { ponerStock(await getJ('maestro_mp/stkpt'), sd); calcular(); render(); toast('Stock actualizado desde el MAESTRO'); } };
+    es.addEventListener('put', () => { if (n++) ver(); }); es.addEventListener('patch', ver);
+  } catch (e) {}
+}
+
+// ═══════════════ modelo ═══════════════
+let M = null;   // resultado del cálculo
+function serieMeses() {
+  const V = D.v, dF = fromSerial(V.fmin), dL = fromSerial(V.fmax), L = ym(dL), F = ym(dF);
+  const dim = d => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  const covF = (dim(dF) - dF.getUTCDate() + 1) / dim(dF), covL = dL.getUTCDate() / dim(dL);
+  const iMin = covL < 0.8 ? 1 : 0, iMax = (L - F) - (covF < 0.5 ? 1 : 0);   // índices: 0 = último mes
+  const meses = []; for (let i = iMax; i >= iMin; i--) { const t = L - i; meses.push({ i, y: Math.floor(t / 12), m: t % 12, esc: i === 0 && covL < 1 ? 1 / covL : 1 }); }
+  return meses;
+}
+function calcular() {
+  const H = PREF.h, V = D.v, meses = serieMeses(), T = meses.length;
+  const serie = m => { const o = asObj(m); return meses.map(x => (o[x.i] || 0) * x.esc); };
+  const prods = [];
+  for (const [k, m] of Object.entries(V.m)) { if (excluido(k)) continue; const y = serie(m); if (!sum(y)) continue; prods.push({ k, y, desc: (V.desc && V.desc[k]) || D.stkDesc[k] || '' }); }
+  // estacionalidad de toda la fábrica: total sin tendencia, promedio por mes del año, suavizado a la mitad
+  const tot = meses.map((_, t) => sum(prods.map(p => p.y[t])));
+  const xm = (T - 1) / 2, ymn = sum(tot) / T; let sxy = 0, sxx = 0; tot.forEach((v, t) => { sxy += (t - xm) * (v - ymn); sxx += (t - xm) ** 2; });
+  const b = sxx ? sxy / sxx : 0, fit = t => Math.max(ymn * 0.2, ymn + b * (t - xm));
+  const acc = Array(12).fill(0), cnt = Array(12).fill(0); tot.forEach((v, t) => { acc[meses[t].m] += v / fit(t); cnt[meses[t].m]++; });
+  let Sr = acc.map((a, i) => cnt[i] ? a / cnt[i] : 1); const mS = sum(Sr) / 12; Sr = Sr.map(s => s / mS);
+  const S = Sr.map(s => PREF.est ? 1 + 0.6 * (s - 1) : 1);
+  const s12t = sum(tot.slice(-12)), sp12t = sum(tot.slice(-24, -12)), g0 = sp12t > 0 ? s12t / sp12t - 1 : 0;
+  const last = meses[T - 1], fut = []; for (let h = 1; h <= 24; h++) { const t = last.y * 12 + last.m + h; fut.push({ y: Math.floor(t / 12), m: t % 12 }); }
+  const hoy = new Date(Date.UTC(fut[0].y, fut[0].m, 1));
+  // resultados de Stock y MP (punto de reposición de la ecuación elegida)
+  const PRm = {}; if (D.res && D.res.k) D.res.k.forEach((c, i) => { const o = D.res.v[i] && (D.res.v[i][D.op - 1] || D.res.v[i][1]); if (o) PRm[c] = o[1]; });
+  for (const p of prods) {
+    const y = p.y, l12 = y.slice(-12), p12 = y.slice(-24, -12), s12 = sum(l12), sp = sum(p12);
+    const des = l12.map((v, j) => v / S[meses[T - 12 + j].m]);
+    const Lv = sum(des) / 12, sd = Math.sqrt(sum(des.map(v => (v - Lv) ** 2)) / 11);
+    const gp = sp > 0 ? s12 / sp - 1 : (s12 > 0 ? g0 : 0), w = s12 / (s12 + 40);
+    const g = Math.max(-0.6, Math.min(1, w * gp + (1 - w) * g0));
+    const F = fut.map((f, h) => Lv * Math.pow(1 + g, (h + 6.5) / 12) * S[f.m]);
+    const nv = l12.filter(v => v > 0).length, cv = Lv > 0 ? sd / Lv : 9;
+    const conf = s12 === 0 ? 0 : nv >= 9 && cv < 0.6 ? 3 : nv <= 3 ? 1 : 2;
+    const stock = D.stk[p.k] ?? null;
+    // hasta cuándo alcanza: se descuenta la proyección mes a mes
+    let alc = null; if (stock != null) { let st = stock; alc = 99; for (let h = 0; h < 24; h++) { if (F[h] <= 0) continue; if (st < F[h]) { alc = h + st / F[h]; break; } st -= F[h]; } }
+    let rep = null; const pr = PRm[p.k]; if (stock != null && pr != null) { let st = stock; if (st <= pr) rep = 0; else { for (let h = 0; h < 24; h++) { st -= F[h]; if (st <= pr) { rep = h + 1; break; } } } }
+    const fH = sum(F.slice(0, H)), band = 1.28 * sd * Math.sqrt(H);
+    Object.assign(p, { grp: p.k.slice(0, 4), s12, sp, g, gp, Lv, sd, F, fH, band, conf, nv, stock, alc, rep, pr,
+      fab: stock == null ? null : Math.max(0, Math.ceil(fH - stock)), ult: (() => { for (let t = T - 1; t >= 0; t--) if (y[t] > 0) return t; return -1; })() });
+  }
+  // grupos: nombre = descripción del más vendido
+  const G = {}; for (const p of prods) { const x = G[p.grp] = G[p.grp] || { g: p.grp, ps: [], y: Array(T).fill(0), F: Array(24).fill(0) }; x.ps.push(p); p.y.forEach((v, t) => x.y[t] += v); p.F.forEach((v, h) => x.F[h] += v); }
+  for (const x of Object.values(G)) { x.ps.sort((a, b) => b.s12 - a.s12); x.nombre = nombreGrupo(x.ps); x.s12 = sum(x.y.slice(-12)); x.sp = sum(x.y.slice(-24, -12)); x.fH = sum(x.F.slice(0, H));
+    x.stock = sum(x.ps.map(p => p.stock || 0)); x.riesgo = x.ps.filter(p => p.alc != null && p.alc < H && p.fH >= 1).length; x.fab = sum(x.ps.map(p => p.fab || 0)); }
+  M = { meses, T, prods, G, S, Sr, tot, fut, g0, hoy, H };
+}
+// variación mes a mes de una serie (últimos 12 meses, sin el efecto del mes del año)
+function sdSerie(y) { const d = y.slice(-12).map((v, j) => v / M.S[M.meses[M.T - 12 + j].m]), m = sum(d) / 12; return Math.sqrt(sum(d.map(v => (v - m) ** 2)) / 11); }
+function nombreGrupo(ps) {
+  const d = String(ps[0] && ps[0].desc || '').toUpperCase().replace(/\(.*?\)/g, ' ').replace(/[Ø0-9.,X×\/-]+(\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
+  return d.split(' ').slice(0, 3).join(' ') || ps[0].k;
+}
+const fechaMes = h => { if (h == null) return '–'; const t = M.fut[0].y * 12 + M.fut[0].m + Math.floor(h); const d = Math.min(28, 1 + Math.round((h % 1) * 30)); return d + ' ' + MESES[t % 12] + ' ' + String(Math.floor(t / 12)).slice(2); };
+const etMes = x => MESES[x.m] + ' ' + String(x.y).slice(2);
+
+// ═══════════════ gráficos (SVG propio) ═══════════════
+function grafico(hist, F, band, opts = {}) {
+  const Wd = 760, Ht = opts.h || 250, pl = 46, pr = 10, pt = 14, pb = 28;
+  const n = hist.length + F.length, bw = (Wd - pl - pr) / n;
+  const max = Math.max(1, ...hist.map(x => x.v), ...F.map((v, i) => v + (band[i] || 0)), opts.stock || 0) * 1.08;
+  const yv = v => pt + (Ht - pt - pb) * (1 - v / max);
+  const step = Math.pow(10, Math.floor(Math.log10(max))) * (max / Math.pow(10, Math.floor(Math.log10(max))) > 5 ? 2 : max / Math.pow(10, Math.floor(Math.log10(max))) > 2 ? 1 : 0.5);
+  let s = `<svg viewBox="0 0 ${Wd} ${Ht}" width="100%" role="img" aria-label="${esc(opts.aria || 'Gráfico de ventas')}" style="display:block">`;
+  for (let v = 0; v <= max; v += step) s += `<line x1="${pl}" x2="${Wd - pr}" y1="${yv(v)}" y2="${yv(v)}" stroke="var(--grid)"/><text x="${pl - 6}" y="${yv(v) + 4}" text-anchor="end" font-size="10.5" fill="var(--text3)">${fmt(v)}</text>`;
+  hist.forEach((x, i) => { const X = pl + i * bw; s += `<rect x="${X + bw * 0.15}" y="${yv(x.v)}" width="${bw * 0.7}" height="${Math.max(0, Ht - pb - yv(x.v))}" rx="2" fill="var(--acc)"><title>${x.l}: ${fmt(x.v)} vendidas</title></rect>`; });
+  const x0 = pl + hist.length * bw;
+  if (F.length) s += `<line x1="${x0}" x2="${x0}" y1="${pt}" y2="${Ht - pb}" stroke="var(--text3)" stroke-dasharray="3 3"/><text x="${x0 + 4}" y="${pt + 8}" font-size="10.5" fill="var(--text3)">proyección →</text>`;
+  F.forEach((v, i) => { const X = x0 + i * bw, b = band[i] || 0;
+    if (b) s += `<rect x="${X + bw * 0.1}" y="${yv(v + b)}" width="${bw * 0.8}" height="${Math.max(0, yv(Math.max(0, v - b)) - yv(v + b))}" rx="2" fill="var(--fc-bg)" stroke="var(--fc)" stroke-dasharray="2 2" stroke-width=".8"/>`;
+    s += `<rect x="${X + bw * 0.25}" y="${yv(v)}" width="${bw * 0.5}" height="${Math.max(0, Ht - pb - yv(v))}" rx="2" fill="var(--fc)"><title>${opts.fl ? opts.fl[i] : ''}: se proyectan ${fmt(v)}${b ? ' (entre ' + fmt(Math.max(0, v - b)) + ' y ' + fmt(v + b) + ')' : ''}</title></rect>`; });
+  if (opts.stockLine) { const pts = opts.stockLine.map((v, i) => `${x0 + (i + 0.5) * bw},${yv(Math.max(0, v))}`).join(' '); s += `<polyline points="${x0},${yv(opts.stock)} ${pts}" fill="none" stroke="var(--green)" stroke-width="2.2"/>`; }
+  const all = [...hist.map(x => x.l), ...(opts.fl || [])]; const every = n > 30 ? 3 : n > 18 ? 2 : 1;
+  all.forEach((l, i) => { if (i % every) return; s += `<text x="${pl + (i + 0.5) * bw}" y="${Ht - 9}" text-anchor="middle" font-size="10" fill="var(--text3)">${l}</text>`; });
+  return s + '</svg>';
+}
+function spark(y, w = 96, h = 26) {
+  const mx = Math.max(1, ...y), st = w / (y.length - 1 || 1);
+  const pts = y.map((v, i) => `${(i * st).toFixed(1)},${(h - 2 - (h - 4) * v / mx).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--acc)" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+const tend = (g, sp, s12) => sp <= 0 && s12 > 0 ? '<span class="pill p-gry">nuevo</span>' : Math.abs(g) < 0.08 ? `<span class="flat">= ${pct(g)}</span>` : g > 0 ? `<span class="up">▲ ${pct(g)}</span>` : `<span class="down">▼ ${pct(g)}</span>`;
+const confH = c => `<span class="conf" title="${['sin ventas en el año', 'poca: vende pocos meses', 'media', 'alta: vende parejo casi todos los meses'][c]}">${[1, 2, 3].map(i => `<i class="${i <= c ? 'on' : ''}"></i>`).join('')}</span>`;
+function alcH(p, H) {
+  if (p.stock == null) return '<span class="pill p-gry">sin stock en MAESTRO</span>';
+  if (p.fH < 0.5) return '<span class="pill p-gry">sin venta prevista</span>';
+  if (p.alc >= 24) return '<span class="pill p-grn">más de 2 años</span>';
+  const c = p.alc < 1 ? 'p-red' : p.alc < H ? 'p-amb' : 'p-grn';
+  return `<span class="pill ${c}">${p.stock <= 0 ? 'sin stock' : 'hasta ' + fechaMes(p.alc)}</span>`;
+}
+
+// ═══════════════ pantalla ═══════════════
+let TAB = PREF.tab || 'prod', FILT = '*', Q = '', SORT = { k: 'riesgo', d: 1 };
+function render() {
+  const H = PREF.h, ps = M.prods, sel = PREF.grp, G = M.G;
+  $$('#hz button').forEach(b => b.classList.toggle('on', +b.dataset.h === H)); $('#est').checked = PREF.est;
+  // grupos en el selector
+  const gl = Object.values(G).sort((a, b) => b.s12 - a.s12);
+  $('#grpSel').innerHTML = `<option value="*">Toda la fábrica</option>` + gl.map(x => `<option value="${esc(x.g)}" ${sel === x.g ? 'selected' : ''}>${esc(x.g)} · ${esc(x.nombre)}</option>`).join('');
+  const base = sel === '*' ? { y: M.tot, F: M.fut.map((_, h) => sum(ps.map(p => p.F[h]))), ps } : G[sel] || { y: M.tot, F: [], ps };
+  const bps = base.ps;
+  // tiles
+  const s12 = sum(base.y.slice(-12)), sp = sum(base.y.slice(-24, -12)), g = sp ? s12 / sp - 1 : 0, fH = sum(base.F.slice(0, H));
+  const sdB = sdSerie(base.y), bandT = 1.28 * sdB * Math.sqrt(H);
+  const riesgo = bps.filter(p => p.alc != null && p.alc < H && p.fH >= 1), urg = riesgo.filter(p => p.alc < 1);
+  const fab = sum(bps.map(p => p.fab || 0));
+  $('#tiles').innerHTML = [
+    [fmt(s12), 'vendidas en los últimos 12 meses', `<span class="${g > 0.02 ? 'up' : g < -0.02 ? 'down' : 'flat'}">${pct(g)}</span> contra los 12 anteriores (${fmt(sp)})`],
+    [fmt(fH), `se proyectan para los próximos ${H} meses`, `entre ${fmt(Math.max(0, fH - bandT))} y ${fmt(fH + bandT)} · ${MESES[M.fut[0].m]} a ${MESES[M.fut[H - 1].m]} ${M.fut[H - 1].y}`],
+    [`<span style="color:${riesgo.length ? 'var(--red)' : 'var(--green)'}">${fmt(riesgo.length)}</span>`, `productos se quedan sin stock en ${H} meses`, D.hayStk ? `${fmt(urg.length)} en menos de 1 mes · stock del MAESTRO` : 'falta el stock del MAESTRO'],
+    [fmt(fab), `piezas a fabricar para cubrir ${H} meses`, `proyección − stock, en ${fmt(bps.filter(p => p.fab > 0).length)} productos`],
+  ].map(([v, l, s]) => `<div class="tile"><div class="v">${v}</div><div class="l">${l}</div><div class="s">${s}</div></div>`).join('');
+  // gráfico principal
+  const hist = M.meses.map((x, t) => ({ v: base.y[t], l: etMes(x) }));
+  const bandM = M.fut.map((_, h) => h < H ? 1.28 * sdB : 0);
+  $('#chTit').textContent = sel === '*' ? 'Ventas por mes y proyección · toda la fábrica' : `Ventas por mes y proyección · ${sel} ${G[sel] ? G[sel].nombre : ''}`;
+  $('#chSub').textContent = `Piezas vendidas por mes (${etMes(M.meses[0])} a ${etMes(M.meses[M.T - 1])}) y lo que se espera los próximos ${H} meses. Pasá el mouse por una barra para ver el número.`;
+  $('#chMain').innerHTML = grafico(hist, base.F.slice(0, H), bandM.slice(0, H), { fl: M.fut.slice(0, H).map(etMes), aria: 'Ventas por mes y proyección' });
+  // estacionalidad
+  const Sr = M.Sr, mxS = Math.max(...Sr), mnS = Math.min(...Sr);
+  $('#chEst').innerHTML = `<svg viewBox="0 0 300 200" width="100%" role="img" aria-label="Estacionalidad por mes">${Sr.map((s, i) => { const bw = 300 / 12, hgt = 150 * s / (mxS * 1.1), X = i * bw;
+    return `<rect x="${X + 3}" y="${170 - hgt}" width="${bw - 6}" height="${hgt}" rx="2" fill="${s >= 1.08 ? 'var(--green)' : s <= 0.92 ? 'var(--red)' : 'var(--acc)'}"><title>${MESL[i]}: ${fmt(s * 100)}</title></rect><text x="${X + bw / 2}" y="186" font-size="9.5" text-anchor="middle" fill="var(--text3)">${MESES[i].slice(0, 3)}</text><text x="${X + bw / 2}" y="${166 - hgt}" font-size="8.5" text-anchor="middle" fill="var(--text2)">${fmt(s * 100)}</text>`; }).join('')}
+    <line x1="0" x2="300" y1="${170 - 150 / (mxS * 1.1)}" y2="${170 - 150 / (mxS * 1.1)}" stroke="var(--text3)" stroke-dasharray="3 3"/></svg>
+    <p class="hint" style="margin-top:6px">Mes más fuerte: <b>${MESL[Sr.indexOf(mxS)]}</b> (${fmt(mxS * 100)}) · más flojo: <b>${MESL[Sr.indexOf(mnS)]}</b> (${fmt(mnS * 100)}).${PREF.est ? '' : ' <b>La proyección no la está usando.</b>'}</p>`;
+  $$('#tabs .tab').forEach(t => t.classList.toggle('on', t.dataset.t === TAB));
+  vista(bps);
+}
+function vista(bps) {
+  const v = $('#view'), H = PREF.h;
+  if (TAB === 'prod') {
+    const q = plain(Q);
+    const cnt = { '*': bps.length, r1: bps.filter(p => p.alc != null && p.alc < 1 && p.fH >= 1).length, rH: bps.filter(p => p.alc != null && p.alc < H && p.fH >= 1).length,
+      rep: bps.filter(p => p.rep != null && p.rep <= H).length, up: bps.filter(p => p.g >= 0.15 && p.s12 >= 12).length, dn: bps.filter(p => p.g <= -0.15 && p.sp >= 12).length, ns: bps.filter(p => p.stock == null && p.s12 > 0).length };
+    const ok = p => FILT === '*' || (FILT === 'r1' && p.alc != null && p.alc < 1 && p.fH >= 1) || (FILT === 'rH' && p.alc != null && p.alc < H && p.fH >= 1) || (FILT === 'rep' && p.rep != null && p.rep <= H)
+      || (FILT === 'up' && p.g >= 0.15 && p.s12 >= 12) || (FILT === 'dn' && p.g <= -0.15 && p.sp >= 12) || (FILT === 'ns' && p.stock == null && p.s12 > 0);
+    let arr = bps.filter(p => ok(p) && (!q || plain(p.k).includes(q) || plain(p.desc).includes(q)));
+    const key = { riesgo: p => -(p.alc == null || p.fH < 0.5 ? 999 : p.alc), k: p => p.k, s12: p => p.s12, g: p => p.g, fH: p => p.fH, stock: p => p.stock ?? -1, fab: p => p.fab ?? -1, conf: p => p.conf };
+    const f = key[SORT.k] || key.riesgo; arr.sort((a, b) => { const x = f(a), y = f(b); return (x < y ? 1 : x > y ? -1 : 0) * SORT.d || b.s12 - a.s12; });
+    const th = (k, l, n) => `<th class="${n ? 'n' : ''}" data-s="${k}">${l}${SORT.k === k ? ` <span class="ar">${SORT.d > 0 ? '▼' : '▲'}</span>` : ''}</th>`;
+    const chips = [['*', 'Todos'], ['r1', 'Se acaba en menos de 1 mes'], ['rH', `Se acaba en ${H} meses`], ['rep', 'Llega al punto de reposición'], ['up', 'Creciendo'], ['dn', 'Cayendo'], ['ns', 'Sin stock cargado']];
+    v.innerHTML = `<div class="bar" style="margin-bottom:10px"><input type="search" id="q" placeholder="Buscar código o descripción…" value="${esc(Q)}" style="flex:1;min-width:220px" aria-label="Buscar producto">
+      <button class="btn" id="xls">⬇ Excel</button></div>
+      <div class="chips" style="margin-bottom:10px">${chips.filter(c => c[0] === '*' || cnt[c[0]]).map(c => `<span class="chip ${FILT === c[0] ? 'on' : ''}" data-f="${c[0]}">${c[1]} <b>${fmt(cnt[c[0]])}</b></span>`).join('')}</div>
+      <div class="tw"><table><thead><tr>${th('k', 'Producto')}${th('s12', 'Vendido 12 m', 1)}<th>Últimos 24 meses</th>${th('g', 'Tendencia', 1)}${th('fH', `Proyección ${H} m`, 1)}${th('stock', 'Stock MAESTRO', 1)}${th('riesgo', 'El stock alcanza')}${th('fab', `A fabricar ${H} m`, 1)}${th('conf', 'Confianza')}</tr></thead><tbody>
+      ${arr.slice(0, 600).map(p => `<tr class="r" data-k="${esc(p.k)}"><td class="pr"><b>${esc(p.k)}</b><span>${esc(p.desc)}</span></td><td class="n">${fmt(p.s12)}</td><td>${spark(p.y)}</td><td class="n">${tend(p.g, p.sp, p.s12)}</td>
+        <td class="n"><b>${fmt(p.fH)}</b></td><td class="n">${p.stock == null ? '–' : fmt(p.stock)}</td><td>${alcH(p, H)}${p.rep != null && p.rep <= H ? `<div class="hint" style="font-size:11px">${p.rep === 0 ? 'ya está bajo el punto de reposición' : 'reponer antes del ' + fechaMes(p.rep)}</div>` : ''}</td>
+        <td class="n" style="font-weight:800;color:${p.fab ? 'var(--amber)' : 'var(--text3)'}">${p.fab ? fmt(p.fab) : '–'}</td><td>${confH(p.conf)}</td></tr>`).join('')}</tbody></table>
+      ${arr.length ? '' : '<div class="empty">Nada para mostrar con este filtro.</div>'}</div>
+      <p class="hint" style="margin-top:8px">${fmt(arr.length)} productos${arr.length > 600 ? ' (se ven los primeros 600; el Excel trae todos)' : ''}. Tocá uno para ver su historia, su proyección mes a mes y sus clientes. "Reponer antes del…" usa el punto de reposición de la ecuación elegida en Stock y MP.</p>`;
+    $('#q').oninput = e => { Q = e.target.value; clearTimeout(v._t); v._t = setTimeout(() => { vista(bps); const i = $('#q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
+    $$('#view [data-f]').forEach(c => c.onclick = () => { FILT = c.dataset.f; vista(bps); });
+    $$('#view th[data-s]').forEach(t => t.onclick = () => { SORT = { k: t.dataset.s, d: SORT.k === t.dataset.s ? -SORT.d : 1 }; vista(bps); });
+    $$('#view tr.r').forEach(tr => tr.onclick = () => detalle(tr.dataset.k));
+    $('#xls').onclick = () => excel(arr);
+  } else if (TAB === 'grp') {
+    const gl = Object.values(M.G).sort((a, b) => b.s12 - a.s12);
+    v.innerHTML = `<div class="tw"><table><thead><tr><th>Grupo</th><th class="n">Productos</th><th class="n">Vendido 12 m</th><th>Últimos 24 meses</th><th class="n">Tendencia</th><th class="n">Proyección ${H} m</th><th class="n">Stock MAESTRO</th><th class="n">Meses de stock</th><th class="n">Se quedan sin stock</th><th class="n">A fabricar</th></tr></thead><tbody>
+      ${gl.map(x => { const g = x.sp ? x.s12 / x.sp - 1 : 0, mes = x.fH > 0 ? x.stock / (x.fH / H) : null; return `<tr class="r" data-g="${esc(x.g)}"><td class="pr"><b>${esc(x.g)}</b><span>${esc(x.nombre)}</span></td><td class="n">${x.ps.length}</td><td class="n">${fmt(x.s12)}</td><td>${spark(x.y)}</td><td class="n">${tend(g, x.sp, x.s12)}</td><td class="n"><b>${fmt(x.fH)}</b></td><td class="n">${fmt(x.stock)}</td>
+        <td class="n">${mes == null ? '–' : `<span class="pill ${mes < 1 ? 'p-red' : mes < H ? 'p-amb' : 'p-grn'}">${mes > 99 ? '+99' : fmt(mes, 1)}</span>`}</td><td class="n" style="color:${x.riesgo ? 'var(--red)' : 'var(--text3)'};font-weight:700">${x.riesgo || '–'}</td><td class="n" style="font-weight:800;color:${x.fab ? 'var(--amber)' : 'var(--text3)'}">${x.fab ? fmt(x.fab) : '–'}</td></tr>`; }).join('')}</tbody></table></div>
+      <p class="hint" style="margin-top:8px">Grupo = primeras 4 letras del código. Tocá uno para verlo en el gráfico de arriba y en Productos.</p>`;
+    $$('#view tr.r').forEach(tr => tr.onclick = () => { PREF.grp = tr.dataset.g; savePref(); TAB = 'prod'; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  } else if (TAB === 'cli') {
+    if (!D.cli || !D.cli.cm) { v.innerHTML = '<div class="card"><h3>Faltan los clientes</h3><p class="hint" style="margin-top:6px">Cargá el archivo de ventas en la pestaña <b>Actualizar ventas</b>: de ahí salen los clientes de cada producto.</p></div>'; return; }
+    const meses = M.meses, C = [];
+    for (const [c, mm] of Object.entries(D.cli.cm)) { const o = asObj(mm), y = meses.map(x => o[x.i] || 0); const s12 = sum(y.slice(-12)), sp = sum(y.slice(-24, -12)); if (!s12 && !sp) continue;
+      const np = D.cli.np ? D.cli.np[c] || 0 : 0; C.push({ c, y, s12, sp, np }); }
+    const tot = sum(C.map(x => x.s12)); C.sort((a, b) => b.s12 - a.s12);
+    const top10 = sum(C.slice(0, 10).map(x => x.s12)), perd = C.filter(x => x.sp >= 20 && x.s12 === 0).length, nuevos = C.filter(x => x.sp === 0 && x.s12 > 0).length;
+    v.innerHTML = `<div class="tiles"><div class="tile"><div class="v">${fmt(C.filter(x => x.s12 > 0).length)}</div><div class="l">clientes compraron en 12 meses</div><div class="s">${fmt(nuevos)} nuevos · ${fmt(perd)} que compraban y dejaron de comprar</div></div>
+      <div class="tile"><div class="v">${fmt(tot ? top10 / tot * 100 : 0)} %</div><div class="l">de las piezas las compran 10 clientes</div><div class="s">${fmt(tot ? C[0].s12 / tot * 100 : 0)} % el primero</div></div></div>
+      <div class="tw"><table><thead><tr><th>Cliente</th><th class="n">Piezas 12 m</th><th class="n">Parte</th><th>Últimos 24 meses</th><th class="n">Contra año anterior</th><th class="n">Productos distintos</th></tr></thead><tbody>
+      ${C.slice(0, 200).map(x => `<tr class="r" data-c="${esc(x.c)}"><td><b>Cliente ${esc(x.c.replace(/^c/, ''))}</b></td><td class="n">${fmt(x.s12)}</td><td class="n">${fmt(tot ? x.s12 / tot * 100 : 0, 1)} %</td><td>${spark(x.y)}</td><td class="n">${x.sp ? tend(x.s12 / x.sp - 1, x.sp, x.s12) : (x.s12 ? '<span class="pill p-gry">nuevo</span>' : '')}${x.sp >= 20 && !x.s12 ? '<span class="pill p-red">dejó de comprar</span>' : ''}</td><td class="n">${x.np || '–'}</td></tr>`).join('')}</tbody></table></div>
+      <p class="hint" style="margin-top:8px">El archivo de ventas trae el código de cliente, no el nombre. Tocá uno para ver qué productos compra.</p>`;
+    $$('#view tr.r').forEach(tr => tr.onclick = () => detalleCli(tr.dataset.c));
+  } else if (TAB === 'heat') {
+    const gl = Object.values(M.G).sort((a, b) => b.s12 - a.s12).slice(0, 30);
+    const col = r => r >= 1.35 ? 'var(--green)' : r >= 1.12 ? 'var(--green-bg)' : r <= 0.65 ? 'var(--red)' : r <= 0.88 ? 'var(--red-bg)' : 'transparent';
+    const fg = r => r >= 1.35 || r <= 0.65 ? '#fff' : 'var(--text)';
+    v.innerHTML = `<div class="card"><h3>Cuánto se vende cada mes, por grupo</h3><div class="sub">Promedio de los 2 años. 100 = un mes normal para ese grupo. Verde: se vende más · rojo: se vende menos. Los 30 grupos que más venden.</div></div>
+      <div class="tw"><table class="heat"><thead><tr><th style="text-align:left">Grupo</th>${MESES.map(m => `<th style="text-align:center">${m}</th>`).join('')}</tr></thead><tbody>
+      ${gl.map(x => { const a = Array(12).fill(0), c = Array(12).fill(0); x.y.forEach((v, t) => { a[M.meses[t].m] += v; c[M.meses[t].m]++; }); const pm = a.map((s, i) => c[i] ? s / c[i] : 0), mm = sum(pm) / 12 || 1;
+        return `<tr><td style="text-align:left" class="pr"><b>${esc(x.g)}</b><span>${esc(x.nombre)}</span></td>${pm.map((s, i) => { const r = s / mm; return `<td style="background:${col(r)};color:${fg(r)}" title="${MESL[i]}: ${fmt(r * 100)}">${fmt(r * 100)}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+  } else {
+    const s = D.vsrc;
+    v.innerHTML = `<div class="card"><h3>Ventas cargadas</h3><p class="hint" style="margin-top:4px">${s ? `<b>${esc(s.file)}</b> · ${esc(s.msg)} · cargado el ${new Date(s.at).toLocaleString('es-AR')}` : 'Todavía no hay ventas.'}</p>
+      <p class="hint">Clientes: ${D.cli && D.cli.cm ? `${fmt(Object.keys(D.cli.cm).length)} clientes · del archivo <b>${esc(D.cli.file || '')}</b>` : 'todavía no cargados.'}</p>
+      <p class="hint">Stock: ${D.hayStk ? `${fmt(Object.keys(D.stk).length)} productos del MAESTRO (STK PT) · ${D.stkAt ? 'actualizado el ' + new Date(D.stkAt).toLocaleString('es-AR') : ''}. Se actualiza solo cuando alguien lo cambia en el MAESTRO.` : 'el MAESTRO todavía no subió el stock.'}</p></div>
+      <label class="drop" id="drop"><input type="file" id="fv" accept=".xlsx,.xls,.csv" hidden><b style="font-size:15px">Soltá acá el Excel de ventas</b><br><span class="hint">El mismo que se baja del sistema: Codigo_Producto, Descripcion, Cantidad, Fecha_Factura, …, Codigo_Cliente. Conviene que tenga 2 años.</span></label>
+      <p class="hint" style="margin-top:10px">Al cargarlo se actualizan esta herramienta y <b>Stock y MP</b> (usan las mismas ventas), para todos. No se cuentan servicios ni reventa (códigos que empiezan con Z o solo numéricos).</p>`;
+    const inp = $('#fv'), dz = $('#drop');
+    inp.onchange = () => inp.files[0] && subir(inp.files[0]);
+    dz.ondragover = e => { e.preventDefault(); dz.classList.add('ov'); }; dz.ondragleave = () => dz.classList.remove('ov');
+    dz.ondrop = e => { e.preventDefault(); dz.classList.remove('ov'); if (e.dataTransfer.files[0]) subir(e.dataTransfer.files[0]); };
+  }
+}
+
+// ═══════════════ detalle ═══════════════
+function abrir(h) { $('#dbody').innerHTML = h; $('#drawer').classList.add('on'); $('#shade').classList.add('on'); $('#drawer').scrollTop = 0; }
+function cerrar() { $('#drawer').classList.remove('on'); $('#shade').classList.remove('on'); }
+$('#dx').onclick = cerrar; $('#shade').onclick = cerrar; document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrar(); });
+function detalle(k) {
+  const p = M.prods.find(x => x.k === k); if (!p) return; const H = PREF.h, H12 = 12;
+  const hist = M.meses.map((x, t) => ({ v: p.y[t], l: etMes(x) }));
+  let st = p.stock; const sl = p.stock == null ? null : p.F.slice(0, H12).map(v => (st -= v));
+  const pico = M.Sr.indexOf(Math.max(...M.Sr));
+  const ultT = p.ult >= 0 ? M.meses[p.ult] : null;
+  const prom = p.s12 / 12;
+  const story = [`Vendió <b>${fmt(p.s12)}</b> en los últimos 12 meses (unas <b>${fmt(prom, prom < 10 ? 1 : 0)} por mes</b>)${p.sp ? `, ${p.gp >= 0 ? '' : ''}<b>${pct(p.gp)}</b> contra los 12 anteriores (${fmt(p.sp)})` : ', y no tenía ventas el año anterior'}.`,
+    p.s12 ? `Para los próximos ${H} meses se esperan <b>${fmt(p.fH)}</b> (lo más probable entre ${fmt(Math.max(0, p.fH - p.band))} y ${fmt(p.fH + p.band)}).` : 'No se espera venta mientras no vuelva a venderse.',
+    p.stock == null ? 'No figura en el stock del MAESTRO.' : p.alc >= 24 ? `Con <b>${fmt(p.stock)}</b> en stock alcanza para más de 2 años.` : p.stock <= 0 ? '<b>No hay stock.</b>' : `Con <b>${fmt(p.stock)}</b> en stock alcanza hasta el <b>${fechaMes(p.alc)}</b>.`,
+    p.fab ? `Para cubrir ${H} meses hay que fabricar <b>${fmt(p.fab)}</b>.` : '',
+    p.pr != null ? `El punto de reposición (Stock y MP, ecuación ${D.op}) es ${fmt(p.pr)}: ${p.rep === 0 ? '<b>ya está por debajo</b>' : p.rep != null ? `se llega el <b>${fechaMes(p.rep)}</b>` : 'no se llega en 2 años'}.` : '',
+    ['', 'La proyección es poco segura: vende pocos meses del año.', '', 'Vende parejo, la proyección es confiable.'][p.conf]].filter(Boolean).join(' ');
+  const cl = D.cli && D.cli.c && D.cli.c[p.k] ? Object.entries(D.cli.c[p.k]).sort((a, b) => b[1] - a[1]) : [];
+  const ctot = sum(cl.map(x => x[1]));
+  abrir(`<div class="hint mono">${esc(p.k)} · grupo ${esc(p.grp)}</div><h2>${esc(p.desc)}</h2>
+    <div class="facts"><div class="fact"><div class="v">${fmt(p.s12)}</div><div class="l">vendidas en 12 meses</div></div><div class="fact"><div class="v">${tend(p.g, p.sp, p.s12)}</div><div class="l">tendencia usada</div></div>
+    <div class="fact"><div class="v">${fmt(p.fH)}</div><div class="l">proyección ${H} meses</div></div><div class="fact"><div class="v">${p.stock == null ? '–' : fmt(p.stock)}</div><div class="l">stock MAESTRO</div></div><div class="fact"><div class="v">${p.fab ? fmt(p.fab) : '–'}</div><div class="l">a fabricar ${H} meses</div></div></div>
+    <div class="story">${story}</div>
+    <div class="card"><h3>Ventas y proyección a 12 meses</h3>${grafico(hist, p.F.slice(0, H12), p.F.slice(0, H12).map(() => 1.28 * p.sd), { fl: M.fut.slice(0, H12).map(etMes), h: 230, stockLine: sl, stock: p.stock || 0, aria: 'Ventas y proyección de ' + p.k })}
+      <div class="leg"><span><i style="background:var(--acc)"></i>Vendido</span><span><i style="background:var(--fc)"></i>Proyección</span>${sl ? '<span><i style="background:var(--green)"></i>Cómo baja el stock si no se fabrica</span>' : ''}</div></div>
+    <div class="card"><h3>Mes a mes</h3><div style="overflow-x:auto"><table class="mt"><thead><tr><th>Mes</th>${M.fut.slice(0, H12).map(x => `<th style="text-align:right">${etMes(x)}</th>`).join('')}</tr></thead><tbody>
+      <tr><td>Proyección</td>${p.F.slice(0, H12).map(v => `<td class="n">${fmt(v, v < 10 ? 1 : 0)}</td>`).join('')}</tr>
+      <tr><td>Hace 1 año</td>${M.fut.slice(0, H12).map(f => { const t = M.meses.findIndex(x => x.y === f.y - 1 && x.m === f.m); return `<td class="n">${t >= 0 ? fmt(p.y[t]) : '–'}</td>`; }).join('')}</tr>
+      ${sl ? `<tr><td>Stock que queda</td>${sl.map(v => `<td class="n" style="color:${v < 0 ? 'var(--red)' : 'inherit'}">${fmt(v)}</td>`).join('')}</tr>` : ''}</tbody></table></div>
+      <p class="hint" style="margin-top:8px">Cómo se calcula: promedio de los últimos 12 meses (sin el efecto del mes del año) × la tendencia (${pct(p.g)} al año${p.s12 < 40 ? ', mezclada con la de toda la fábrica porque vende poco' : ''}) × cuánto se vende en ese mes del año${PREF.est ? '' : ' (desactivado)'}.${ultT ? ` Última venta: ${MESL[ultT.m]} ${ultT.y}.` : ''} El mes que más vende la fábrica es ${MESL[pico]}.</p></div>
+    <div class="card"><h3>Quién lo compra</h3>${cl.length ? `<table class="mt"><thead><tr><th>Cliente</th><th style="text-align:right">Piezas (2 años)</th><th style="text-align:right">Parte</th></tr></thead><tbody>${cl.slice(0, 12).map(([c, q]) => `<tr><td>Cliente ${esc(c.replace(/^c/, ''))}</td><td class="n">${fmt(q)}</td><td class="n">${fmt(q / ctot * 100)} %</td></tr>`).join('')}</tbody></table>
+      <p class="hint" style="margin-top:6px">${cl.length} clientes en total${cl.length > 12 ? ' (se ven los 12 que más compran)' : ''}.${cl[0] && cl[0][1] / ctot > 0.5 ? ' <b>Más de la mitad lo compra un solo cliente:</b> si deja de comprar, la proyección cambia mucho.' : ''}</p>` : '<p class="hint">Sin datos de clientes: cargá el archivo de ventas en "Actualizar ventas".</p>'}</div>`);
+}
+function detalleCli(c) {
+  const rows = []; if (D.cli && D.cli.c) for (const [k, o] of Object.entries(D.cli.c)) if (o[c]) rows.push([k, o[c]]);
+  rows.sort((a, b) => b[1] - a[1]); const tot = sum(rows.map(r => r[1]));
+  const mm = asObj(D.cli.cm[c]), y = M.meses.map(x => mm[x.i] || 0);
+  abrir(`<div class="hint">Cliente</div><h2>Cliente ${esc(c.replace(/^c/, ''))}</h2>
+    <div class="facts"><div class="fact"><div class="v">${fmt(sum(y.slice(-12)))}</div><div class="l">piezas en 12 meses</div></div><div class="fact"><div class="v">${fmt(sum(y.slice(-24, -12)))}</div><div class="l">los 12 anteriores</div></div><div class="fact"><div class="v">${rows.length}</div><div class="l">productos distintos</div></div></div>
+    <div class="card"><h3>Compras por mes</h3>${grafico(M.meses.map((x, t) => ({ v: y[t], l: etMes(x) })), [], [], { h: 200, aria: 'Compras del cliente por mes' })}</div>
+    <div class="card"><h3>Qué compra</h3><table class="mt"><thead><tr><th>Producto</th><th style="text-align:right">Piezas (2 años)</th><th style="text-align:right">Parte</th></tr></thead><tbody>
+    ${rows.slice(0, 40).map(([k, q]) => { const p = M.prods.find(x => x.k === k); return `<tr><td><b class="mono">${esc(k)}</b> <span class="hint">${esc(p ? p.desc : '')}</span></td><td class="n">${fmt(q)}</td><td class="n">${fmt(q / tot * 100)} %</td></tr>`; }).join('')}</tbody></table></div>`);
+}
+
+// ═══════════════ Excel ═══════════════
+function excel(arr) {
+  if (!window.XLSX) return toast('No se pudo cargar la librería de Excel');
+  const H = PREF.h, wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(arr.map(p => { const o = { Codigo: p.k, Descripcion: p.desc, Grupo: p.grp, 'Vendido 12 meses': Math.round(p.s12), 'Vendido 12 anteriores': Math.round(p.sp), Tendencia: +(p.g * 100).toFixed(1) };
+    M.fut.slice(0, 12).forEach((f, h) => o[etMes(f)] = +p.F[h].toFixed(1)); Object.assign(o, { ['Proyeccion ' + H + ' meses']: Math.round(p.fH), 'Stock MAESTRO': p.stock ?? '', 'Alcanza hasta': p.stock == null ? '' : p.alc >= 24 ? '+2 años' : fechaMes(p.alc), ['A fabricar ' + H + ' meses']: p.fab ?? '', Confianza: ['', 'baja', 'media', 'alta'][p.conf] }); return o; })), 'Proyeccion');
+  XLSX.writeFile(wb, `Proyeccion_ventas_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+// ═══════════════ cargar archivo de ventas ═══════════════
+function leerVentas(R, nombre) {
+  const low = R.slice(0, 15).map(r => (r || []).map(c => plain(c)));
+  let hr = -1, ic = -1, iq = -1, ifc = -1, idesc = -1, icli = -1;
+  for (let i = 0; i < low.length && hr < 0; i++) { const r = low[i]; const f = (...w) => r.findIndex(c => w.some(x => c.includes(x)));
+    const c = f('codigo_producto', 'codigo producto', 'codigo', 'cod'), q = f('cantidad'), d = f('fecha'); if (c >= 0 && q >= 0 && d >= 0) { hr = i; ic = c; iq = q; ifc = d; idesc = f('descripcion'); icli = r.findIndex(x => x.includes('cliente')); } }
+  if (hr < 0) throw new Error('no encontré las columnas código, cantidad y fecha');
+  const V = {}, desc = {}, CL = {}; let fmin = Infinity, fmax = -Infinity, nexc = 0, nl = 0;
+  for (let i = hr + 1; i < R.length; i++) {
+    const r = R[i]; if (!r || r[ic] == null) continue;
+    let f0 = r[ifc]; let s; if (typeof f0 === 'number') s = Math.round(f0); else { if (!(f0 instanceof Date)) f0 = new Date(f0); if (isNaN(f0)) continue; s = toSerial(f0); }
+    const k = norm(r[ic]), q = Math.abs(parseFloat(String(r[iq]).replace(',', '.')) || 0); if (!q) continue;
+    if (excluido(k)) { nexc++; continue; }
+    fmin = Math.min(fmin, s); fmax = Math.max(fmax, s); nl++;
+    (V[k] = V[k] || []).push([s, q]); if (idesc >= 0 && !desc[k]) desc[k] = r[idesc];
+    if (icli >= 0 && r[icli] != null) (CL[k] = CL[k] || []).push([s, q, 'c' + String(r[icli]).trim().replace(/[.$#\[\]\/]/g, '_')]);
+  }
+  if (!nl) throw new Error('el archivo no tiene ventas');
+  const L = ym(fromSerial(fmax)), nm = L - ym(fromSerial(fmin)) + 1, out = {};
+  for (const [k, arr] of Object.entries(V)) { const m = {}; for (const [s, q] of arr) { const i = L - ym(fromSerial(s)); m[i] = (m[i] || 0) + q; } out[k] = m; }
+  const anios = Math.max(1, Math.round((fmax - fmin) / 365.25 * 10) / 10);
+  const c = {}, cm = {}, np = {};
+  for (const [k, arr] of Object.entries(CL)) for (const [s, q, cli] of arr) { (c[k] = c[k] || {})[cli] = (c[k][cli] || 0) + q; const i = L - ym(fromSerial(s)); (cm[cli] = cm[cli] || {})['m' + i] = (cm[cli]['m' + i] || 0) + q; }
+  for (const o of Object.values(c)) for (const cli of Object.keys(o)) np[cli] = (np[cli] || 0) + 1;
+  for (const o of Object.values(cm)) for (const key of Object.keys(o)) { o[key.slice(1)] = o[key]; delete o[key]; }
+  const dd = d => fromSerial(d).toLocaleDateString('es-AR', { timeZone: 'UTC' });
+  const msg = `${fmt(nl)} líneas · ${fmt(Object.keys(out).length)} productos · ${dd(fmin)} a ${dd(fmax)} (${fmt(anios, 1)} años). Sin ${fmt(nexc)} líneas de servicios/reventa.`;
+  return { ventas: { m: out, desc, nm, fmin, fmax, anios }, cli: Object.keys(c).length ? { c, cm, np, file: nombre, at: Date.now() } : null, msg };
+}
+async function subir(f) {
+  try {
+    busy('Leyendo ' + f.name + '…'); await tick();
+    const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: false });
+    const R = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: null });
+    const x = leerVentas(R, f.name);
+    if (!confirm(`${x.msg}\n\nSe van a reemplazar las ventas de esta herramienta y de Stock y MP, para todos. ¿Seguir?`)) { busy(); return; }
+    busy('Guardando en la nube…');
+    const src = { at: Date.now(), file: f.name, msg: x.msg, warn: false };
+    await putJ('stock_mp/ventas', x.ventas); await putJ('stock_mp/src/ventas', src);
+    if (x.cli) await putJ('proyeccion_ventas/cli', x.cli);
+    D.v = x.ventas; D.vsrc = src; if (x.cli) D.cli = x.cli;
+    calcular(); render(); busy(); toast('Ventas cargadas: ' + x.msg);
+  } catch (e) { busy(); alert('No se pudo cargar: ' + e.message); }
+}
+
+// ═══════════════ arranque ═══════════════
+function infoLinea() {
+  const s = D.vsrc, V = D.v;
+  $('#info').innerHTML = `<span>Ventas: <b>${V ? fromSerial(V.fmin).toLocaleDateString('es-AR', { timeZone: 'UTC' }) + ' a ' + fromSerial(V.fmax).toLocaleDateString('es-AR', { timeZone: 'UTC' }) : '–'}</b>${s ? ' · ' + esc(s.file) : ''}</span>`
+    + `<span>Stock: <b>${D.hayStk ? 'MAESTRO' + (D.stkAt ? ' al ' + new Date(D.stkAt).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '') : 'sin cargar'}</b></span>`
+    + (D.hayStk ? '<span class="live">en vivo</span>' : '') + (D.res ? `<span>Punto de reposición: Stock y MP, ecuación ${D.op}</span>` : '');
+}
+$$('#hz button').forEach(b => b.onclick = () => { PREF.h = +b.dataset.h; savePref(); calcular(); render(); });
+$('#est').onchange = e => { PREF.est = e.target.checked; savePref(); calcular(); render(); };
+$('#grpSel').onchange = e => { PREF.grp = e.target.value; savePref(); render(); };
+$$('#tabs .tab').forEach(t => t.onclick = () => { TAB = t.dataset.t; PREF.tab = TAB === 'up' ? 'prod' : TAB; savePref(); render(); });
+const _r = render; render = function () { infoLinea(); _r(); };
+(async () => {
+  await cargar();
+  if (!D.v || !D.v.m) { $('#info').textContent = 'Todavía no hay ventas en la nube.'; $('#app').style.display = 'block'; TAB = 'up'; M = { meses: [], T: 0, prods: [], G: {}, S: [], Sr: Array(12).fill(1), tot: [], fut: [{ y: 2026, m: 0 }], H: 6 }; vista([]); return; }
+  calcular(); $('#app').style.display = 'block'; render(); escucharStock();
+})();
+</script>
+<script src="../assets/biotrom-tema.js"></script>
+</body>
+</html>
