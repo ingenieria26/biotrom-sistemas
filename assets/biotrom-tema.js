@@ -23,6 +23,8 @@
   function fondo() {
     return rgb(getComputedStyle(document.body).backgroundColor) || rgb(getComputedStyle(document.documentElement).backgroundColor) || [255, 255, 255];
   }
+  // si la página trae sus dos versiones (<html data-bt-tema>), se usa la suya en vez de invertir colores
+  var propio = document.documentElement.hasAttribute('data-bt-tema');
   var base = fondo();
   var nativo = (0.299 * base[0] + 0.587 * base[1] + 0.114 * base[2]) / 255 < 0.45 ? 'dark' : 'light';
 
@@ -42,12 +44,13 @@
   btn.id = 'bt-tema'; btn.type = 'button';
   function aplicar() {
     var elegido = leer() || nativo;
-    document.documentElement.classList.toggle('bt-inv', elegido !== nativo);
+    if (propio) document.documentElement.setAttribute('data-tema', elegido);
+    document.documentElement.classList.toggle('bt-inv', !propio && elegido !== nativo);
     // el botón muestra a qué se cambia (sol = pasar a claro, luna = pasar a oscuro)
     btn.textContent = elegido === 'dark' ? '☀️' : '🌙';
     btn.title = elegido === 'dark' ? 'Ver en claro' : 'Ver en oscuro';
     // si la página quedó invertida, el botón también: se compensa para que siempre se vea blanco
-    btn.style.filter = elegido !== nativo ? 'invert(1) hue-rotate(180deg)' : '';
+    btn.style.filter = !propio && elegido !== nativo ? 'invert(1) hue-rotate(180deg)' : '';
   }
   btn.onclick = function () { guardar((leer() || nativo) === 'dark' ? 'light' : 'dark'); aplicar(); };
   aplicar();
