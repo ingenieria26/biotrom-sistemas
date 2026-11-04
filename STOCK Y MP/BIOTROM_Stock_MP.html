@@ -100,6 +100,7 @@ h2{font-size:19px;font-weight:800;margin-bottom:4px;letter-spacing:-.01em}
 .eqleg div{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:8px 10px;font-size:12.5px;line-height:1.4}
 .eqleg b{display:block;color:var(--text);margin-bottom:2px}.eqleg span{color:var(--text3)}
 td.rec{background:rgba(52,211,153,.10);box-shadow:inset 0 0 0 1px rgba(52,211,153,.35)}
+.eqaviso{background:var(--amber-bg);border:1px solid var(--amber);color:var(--text);border-radius:10px;padding:8px 12px;font-size:13px;margin-top:8px}.eqc{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:10px;margin-top:12px}.eqc>div{border:1px solid var(--border2);border-radius:12px;padding:12px 14px;background:var(--surface2)}.eqc>div.on{border:2px solid var(--acc);background:var(--acc-bg)}.eqc .t{font-weight:800;font-size:13.5px;margin-bottom:8px}.eqc .eqn{font-size:24px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}.eqc .eqn small{font-size:13px;font-weight:600;color:var(--text2)}.eqc .l{color:var(--text3);font-size:12px;margin-bottom:8px}.eqc .rw{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--text2);padding:4px 0;border-top:1px dashed var(--border2)}.eqc .rw b{color:var(--text);white-space:nowrap}.eqc p{font-size:12px;color:var(--text3);margin-top:8px;line-height:1.4}.bdg{display:inline-block;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-radius:20px;padding:2px 8px;margin-left:6px;vertical-align:1px}.b-el{background:var(--acc);color:#fff}.b-su{background:var(--green-bg);color:var(--green)}table.eqt td.pr{min-width:240px;white-space:normal}table.eqt td.pr b{display:block;font-size:12.5px}table.eqt td.pr span{color:var(--text2);font-size:12.5px}table.eqt th.n{text-align:right;line-height:1.25}table.eqt th.thel{color:var(--acc)}table.eqt td.f{text-align:right;font-variant-numeric:tabular-nums;font-weight:700;font-size:13.5px;min-width:92px}table.eqt td.f.z{color:var(--text3);font-weight:400}table.eqt td.f.rec{background:var(--green-bg);box-shadow:inset 3px 0 0 var(--green)}table.eqt td.f .rz{display:block;color:var(--red);font-size:11px;font-weight:700}table.eqt td.cv{color:var(--green);font-weight:700;font-size:12.5px;white-space:nowrap}table.eqt td.cv span{display:block;color:var(--text3);font-weight:400}table.eqt tr.r{cursor:pointer}table.eqt tr.ab td{background:var(--acc-bg)}table.eqt tr.x>td{background:var(--surface2);white-space:normal;padding:12px 16px}.xw p{font-size:13px;margin-bottom:6px;max-width:900px}.mini{width:auto!important;min-width:0!important;display:table!important;border-collapse:collapse;margin:8px 0 10px;background:var(--surface);border-radius:8px}.mini th,.mini td{padding:5px 12px;text-align:right;border-bottom:1px solid var(--border2);font-size:12.5px;font-variant-numeric:tabular-nums}.mini th:first-child,.mini td:first-child{text-align:left;color:var(--text2)}.mini td.rec{background:var(--green-bg)}.mini tr.mh td{font-weight:800;color:var(--text);font-size:12px;white-space:nowrap}.lg{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px}.lg-g{background:var(--green-bg);box-shadow:inset 3px 0 0 var(--green)}
 td.oc{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.35}
 td.oc small{display:block;font-size:11px}
 td.why{white-space:normal;min-width:280px;max-width:420px;color:var(--text2);font-size:12.5px;line-height:1.4}
@@ -1081,39 +1082,63 @@ function renderTable() {
     $$('#tview th[data-s]').forEach(th => th.onclick = () => { SORT = SORT === th.dataset.s ? null : th.dataset.s; renderTable(); });
     $$('#tview tr.r').forEach(tr => tr.onclick = () => detalle(tr.dataset.k));
   } else if (TAB === 'eq') {
-    const arr = filtro(RES.res);
-    const resumen = [0, 1, 2, 3, 4].map(i => ({
+    const arr = filtro(RES.res), ch = +(DB.par.op || 2);
+    const res5 = [0, 1, 2, 3, 4].map(i => ({
       crit: arr.filter(r => r.op[i].crit).length, fab: arr.reduce((a, r) => a + r.op[i].fab, 0),
       mn: arr.reduce((a, r) => a + r.op[i].mn, 0), nof: arr.filter(r => r.op[i].fab > 0).length, rec: arr.filter(r => r.rec === i + 1).length }));
-    let h = `<div class="box"><h4>Las 5 ecuaciones con nuestros datos</h4>
-      <p>Mismos productos, mismo stock y mismos tiempos; cambia solo la fórmula. En verde, la que conviene para cada producto.</p>
-      <div class="eqleg">${OPN.map((o, i) => `<div><b>${o}</b><span>${OPW[i]}</span></div>`).join('')}</div></div>
-      <div class="tw" style="max-height:none;margin-bottom:14px"><table><thead><tr><th>Ecuación</th><th class="n">Críticos hoy</th><th class="n">Piezas a fabricar</th><th class="n">OF a lanzar</th><th class="n">Stock mínimo total</th><th class="n">Conviene en</th></tr></thead><tbody>
-      ${resumen.map((x, i) => `<tr><td><b>${OPN[i]}</b></td><td class="n">${fmt(x.crit)}</td><td class="n">${fmt(x.fab)}</td><td class="n">${fmt(x.nof)}</td><td class="n">${fmt(x.mn)}</td><td class="n" style="color:var(--green);font-weight:700">${fmt(x.rec)} productos</td></tr>`).join('')}
-      </tbody></table></div>
-      <div class="tbar"><span class="chip ${EQG ? '' : 'on'}" data-g="0">Por producto</span><span class="chip ${EQG ? 'on' : ''}" data-g="1">Por grupo</span>
-      <span class="hint">Cada celda: mínimo–máximo y, abajo, cuánto fabricar hoy. ● rojo = queda crítico con esa ecuación.</span></div>`;
-    const cell = (o, rec) => `<td class="oc ${rec ? 'rec' : ''}">${fmt(o.mn)}–${fmt(o.mx)}<small style="color:${o.fab ? '#fb923c' : 'var(--text3)'}">${o.fab ? 'fabricar ' + fmt(o.fab) : 'no fabricar'}${o.crit ? ' <span style="color:#f87171">●</span>' : ''}</small></td>`;
+    const cuenta = [0, 1, 2, 3, 4].map(i => RES.res.filter(r => r.rec === i + 1).length), best = cuenta.indexOf(Math.max(...cuenta)) + 1;
+    const CLN = { A: 'clase A', B: 'clase B', C: 'clase C', '-': 'productos sin venta' };
+    const qv = $('#q').value.trim();
+    const aviso = CL !== '*' || qv ? `<div class="eqaviso">Estás viendo solo <b>${[CL !== '*' ? CLN[CL] : '', qv ? '"' + esc(qv) + '"' : ''].filter(Boolean).join(' · ')}</b> (${fmt(arr.length)} productos). Para comparar con toda la fábrica tocá <b>Todas</b> y borrá la búsqueda.</div>` : '';
+    let h = `<div class="box"><h4>¿Qué cambia según la ecuación?</h4>
+      <p>Mismos productos, mismo stock y mismos tiempos: solo cambia la fórmula. Cada tarjeta dice qué habría que hacer hoy con esa ecuación.</p>${aviso}
+      <div class="eqc">${OPN.map((o, i) => { const x = res5[i]; return `<div class="${ch === i + 1 ? 'on' : ''}">
+        <div class="t">${o}${ch === i + 1 ? '<span class="bdg b-el">elegida</span>' : ''}${best === i + 1 ? '<span class="bdg b-su">sugerida</span>' : ''}</div>
+        <div class="eqn">${fmt(x.fab)} <small>piezas</small></div><div class="l">a fabricar hoy, en ${fmt(x.nof)} OF</div>
+        <div class="rw"><span>Productos en riesgo de faltar</span><b style="color:${x.crit ? 'var(--red)' : 'var(--green)'}">${fmt(x.crit)}</b></div>
+        <div class="rw"><span>Stock mínimo a mantener</span><b>${fmt(x.mn)} pz</b></div>
+        <div class="rw"><span>Es la mejor para</span><b style="color:var(--green)">${fmt(x.rec)} productos</b></div>
+        <p>${OPW[i]}</p></div>`; }).join('')}</div>
+      <p class="hint" style="margin-top:10px">Para elegir otra, tocála arriba en "Ecuación elegida". La fórmula de cada una está en la pestaña <b>Cómo se calcula</b>.</p></div>
+      <div class="tbar"><span class="chip ${EQG ? '' : 'on'}" data-g="0">Producto por producto</span><span class="chip ${EQG ? 'on' : ''}" data-g="1">Por grupo</span></div>
+      <p class="hint" style="margin:-4px 0 8px">Cada número es cuántas piezas manda fabricar hoy esa ecuación (– = nada). <span class="lg lg-g"></span> la que conviene · <span style="color:var(--red);font-weight:700">riesgo</span> = con esa ecuación el producto puede faltar. Tocá una fila para ver mínimo, reposición y máximo de las 5.</p>`;
+    const celda = (fab, rec, crit, n) => `<td class="f ${rec ? 'rec' : ''} ${fab ? '' : 'z'}">${fab ? fmt(fab) : '–'}${crit ? `<span class="rz">riesgo${n ? ' ' + n : ''}</span>` : ''}</td>`;
+    const cab = OPN.map((o, i) => `<th class="n${ch === i + 1 ? ' thel' : ''}">${o.replace(' · ', '<br>')}</th>`).join('');
     if (!EQG) {
-      const list = arr.filter(r => r.d > 0 || r.fab > 0).slice(0, 800);
-      h += `<div class="tw"><table><thead><tr><th>Código</th><th>Descripción</th><th>Clase</th><th>Cuál conviene</th>${OPN.map(o => `<th class="n">${o}</th>`).join('')}</tr></thead><tbody>
-        ${list.map(r => `<tr class="r" data-k="${esc(r.k)}"><td class="mono">${esc(r.k)}</td><td class="desc">${esc(r.desc)}</td><td>${CLS(r.cls)}</td>
-        <td class="why"><b style="color:var(--green)">${OPN[r.rec - 1]}</b> — ${r.why}</td>${r.op.map((o, i) => cell(o, r.rec === i + 1)).join('')}</tr>`).join('')}</tbody></table></div>
-        <p class="hint" style="margin-top:8px">${fmt(list.length)} productos con venta o a fabricar${arr.length > 800 ? ' (primeros 800; el Excel trae todos)' : ''}. Clic en una fila para ver la cuenta de la opción 2.</p>`;
+      let list = arr.filter(r => r.d > 0), sinv = arr.length - list.length, solo = false;
+      if (!list.length) { list = arr.filter(r => r.fab > 0); solo = true; }
+      list = [...list].sort((a, b) => b.V - a.V).slice(0, 800);
+      h += `<div class="tw"><table class="eqt"><thead><tr><th>Producto</th><th>Clase</th><th class="n">Vende<br>por mes</th>${cab}<th>Conviene</th></tr></thead><tbody>
+        ${list.map(r => `<tr class="r" data-k="${esc(r.k)}"><td class="pr"><b class="mono">${esc(r.k)}</b><span>${esc(r.desc)}</span></td><td>${CLS(r.cls)}</td><td class="n">${fmt(r.d, r.d < 10 ? 1 : 0)}</td>
+          ${r.op.map((o, i) => celda(o.fab, r.rec === i + 1, o.crit)).join('')}<td class="cv">${OPN[r.rec - 1]}</td></tr>`).join('')}</tbody></table>
+        ${list.length ? '' : '<div class="empty">Nada para mostrar con este filtro.</div>'}</div>
+        <p class="hint" style="margin-top:8px">${fmt(list.length)} productos, de mayor a menor venta${solo ? ' (sin venta: solo se reponen los baúles y las 5 dan lo mismo)' : sinv ? `. No se muestran ${fmt(sinv)} sin venta: ahí solo se reponen los baúles y las 5 ecuaciones dan lo mismo` : ''}${list.length >= 800 ? '. Se ven los primeros 800; el Excel trae todos' : ''}.</p>`;
     } else {
       const G = {};
-      for (const r of arr) { const x = G[r.grp] = G[r.grp] || { g: r.grp, desc: r.desc, n: 0, V: 0, op: [0, 1, 2, 3, 4].map(() => ({ mn: 0, mx: 0, fab: 0, crit: 0 })), rec: {} };
-        x.n++; x.V += r.V; r.op.forEach((o, i) => { const y = x.op[i]; y.mn += o.mn; y.mx += o.mx; y.fab += o.fab; y.crit += o.crit ? 1 : 0; }); x.rec[r.rec] = (x.rec[r.rec] || 0) + 1; }
+      for (const r of arr) { const x = G[r.grp] = G[r.grp] || { g: r.grp, desc: r.desc, n: 0, d: 0, V: 0, op: [0, 1, 2, 3, 4].map(() => ({ fab: 0, crit: 0 })), rec: {} };
+        x.n++; x.V += r.V; x.d += r.d; r.op.forEach((o, i) => { x.op[i].fab += o.fab; x.op[i].crit += o.crit ? 1 : 0; }); x.rec[r.rec] = (x.rec[r.rec] || 0) + 1; }
       const gl = Object.values(G).sort((a, b) => b.V - a.V);
-      h += `<div class="tw"><table><thead><tr><th>Grupo</th><th>Ejemplo</th><th class="n">Productos</th><th>Cuál conviene</th>${OPN.map(o => `<th class="n">${o}</th>`).join('')}</tr></thead><tbody>
-        ${gl.map(x => { const best = +Object.keys(x.rec).sort((a, b) => x.rec[b] - x.rec[a])[0];
-          const why = `<td class="why"><b style="color:var(--green)">${OPN[best - 1]}</b> — en ${x.rec[best]} de ${x.n} productos del grupo${Object.keys(x.rec).length > 1 ? ' (' + Object.keys(x.rec).filter(k => +k !== best).map(k => `opción ${k}: ${x.rec[k]}`).join(', ') + ')' : ''}.</td>`;
-          return `<tr><td class="mono">${esc(x.g)}</td><td class="desc">${esc(x.desc)}</td><td class="n">${fmt(x.n)}</td>${why}${x.op.map((o, i) => `<td class="oc ${best === i + 1 ? 'rec' : ''}">${fmt(o.mn)}–${fmt(o.mx)}<small style="color:${o.fab ? '#fb923c' : 'var(--text3)'}">${o.fab ? 'fabricar ' + fmt(o.fab) : 'no fabricar'}${o.crit ? ` <span style="color:#f87171">● ${o.crit}</span>` : ''}</small></td>`).join('')}</tr>`; }).join('')}
-        </tbody></table></div><p class="hint" style="margin-top:8px">Grupos ordenados por venta. El número rojo es cuántos productos del grupo quedan críticos con esa ecuación.</p>`;
+      h += `<div class="tw"><table class="eqt"><thead><tr><th>Grupo</th><th class="n">Productos</th><th class="n">Vende<br>por mes</th>${cab}<th>Conviene</th></tr></thead><tbody>
+        ${gl.map(x => { const bb = +Object.keys(x.rec).sort((a, b) => x.rec[b] - x.rec[a])[0];
+          return `<tr><td class="pr"><b class="mono">${esc(x.g)}</b><span>${esc(x.desc)}</span></td><td class="n">${fmt(x.n)}</td><td class="n">${fmt(x.d, x.d < 10 ? 1 : 0)}</td>
+          ${x.op.map((o, i) => celda(o.fab, bb === i + 1, o.crit, o.crit)).join('')}<td class="cv">${OPN[bb - 1]}<span>en ${x.rec[bb]} de ${x.n}</span></td></tr>`; }).join('')}
+        </tbody></table></div><p class="hint" style="margin-top:8px">Grupos de mayor a menor venta. "riesgo 3" = 3 productos del grupo pueden faltar con esa ecuación.</p>`;
     }
     v.innerHTML = h;
     $$('#tview [data-g]').forEach(c => c.onclick = () => { EQG = c.dataset.g === '1'; renderTable(); });
-    $$('#tview tr.r').forEach(tr => tr.onclick = () => detalle(tr.dataset.k));
+    $$('#tview table.eqt tr.r').forEach(tr => tr.onclick = () => {
+      const nx = tr.nextElementSibling; if (nx && nx.classList.contains('x')) { nx.remove(); tr.classList.remove('ab'); return; }
+      const r = RES.res.find(z => z.k === tr.dataset.k); if (!r) return; tr.classList.add('ab');
+      const fila = (l, f) => `<tr><td>${l}</td>${r.op.map((o, i) => `<td class="${r.rec === i + 1 ? 'rec' : ''}">${f(o)}</td>`).join('')}</tr>`;
+      tr.insertAdjacentHTML('afterend', `<tr class="x"><td colspan="${tr.cells.length}"><div class="xw">
+        <p><b style="color:var(--green)">Conviene la ${OPN[r.rec - 1]}:</b> ${esc(r.why)}</p>
+        <p class="hint">Hoy tiene ${fmt(r.disp)} disponibles (depósito + baúles + en proceso). Vende ${fmt(r.d, 1)} por mes y la OF tarda ${fmt(r.Lr * MES)} días.</p>
+        <table class="mini"><tbody><tr class="mh"><td></td>${OPN.map((o, i) => `<td class="${r.rec === i + 1 ? 'rec' : ''}">${o}</td>`).join('')}</tr>
+        ${fila('Stock mínimo', o => fmt(o.mn))}${fila('Punto de reposición', o => fmt(o.pr))}${fila('Stock máximo', o => fmt(o.mx))}
+        ${fila('Fabricar hoy', o => `<b>${o.fab ? fmt(o.fab) : '–'}</b>`)}${fila('¿Puede faltar?', o => o.crit ? '<span style="color:var(--red);font-weight:700">sí</span>' : 'no')}</tbody></table>
+        <button class="btn sec sm" data-det="${esc(r.k)}">Ver la cuenta completa</button></div></td></tr>`);
+      tr.nextElementSibling.querySelector('[data-det]').onclick = e => { e.stopPropagation(); detalle(r.k); };
+    });
   } else if (TAB === 'mp') {
     if (!RES.mpres.length) { v.innerHTML = '<div class="empty">No hay productos con MP y consumo por pieza. Cargá el stock desde MAESTRO.xlsx o una planilla con las columnas MP y consumo.</div>'; return; }
     const q = plain($('#q').value); const arr = RES.mpres.filter(m => !q || plain(m.mp).includes(q) || plain(m.desc).includes(q));
