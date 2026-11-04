@@ -41,6 +41,33 @@ h2{font-size:19px;font-weight:800;margin-bottom:4px;letter-spacing:-.01em}
 .card.drag{border-color:var(--acc);transform:translateY(-2px);background:var(--surface2)}
 .card.done{border-color:rgba(52,211,153,.45)}
 .card .top{display:flex;align-items:flex-start;gap:12px}
+.big{display:flex;align-items:center;gap:22px;border:2px dashed var(--acc-bd);border-radius:22px;padding:30px 28px;background:linear-gradient(135deg,rgba(129,140,248,.10),rgba(56,189,248,.06));cursor:pointer;transition:all .2s;margin-bottom:16px}
+.big:hover,.big.drag{border-color:var(--acc);background:linear-gradient(135deg,rgba(129,140,248,.18),rgba(56,189,248,.10));transform:translateY(-1px)}
+.big input{display:none}
+.big .ic{flex:none;width:64px;height:64px;border-radius:18px;display:grid;place-items:center;font-size:30px;background:linear-gradient(135deg,#818cf8,#38bdf8);color:#0b1120;box-shadow:0 10px 30px rgba(99,102,241,.35)}
+.big b{display:block;font-size:20px;font-weight:800;letter-spacing:-.01em}
+.big span{color:var(--text2);font-size:13.5px}
+.chk{background:var(--surface);border:1px solid var(--border2);border-radius:18px;overflow:hidden}
+.row{display:grid;grid-template-columns:30px 1fr auto;gap:12px;align-items:center;padding:12px 16px;border-top:1px solid var(--border2)}
+.row:first-child{border-top:none}
+.row .ok{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:13px}
+.row .ok.y{background:var(--green);color:#0b1120}.row .ok.n{background:var(--surface3);color:var(--text3)}.row .ok.w{background:var(--amber);color:#0b1120}
+.row .t{font-weight:700;font-size:14.5px}
+.row .t small{font-weight:600;font-size:11px;margin-left:8px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em}
+.row .t small.ob{color:var(--red)}
+.row .m{color:var(--text2);font-size:12.5px;line-height:1.4;margin-top:1px}
+.row .m.w{color:#fde68a}
+.row .a{display:flex;gap:6px;align-items:center}
+.row .a label,.row .a button{border:1px solid var(--border2);background:var(--surface2);color:var(--text2);border-radius:9px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit}
+.row .a label:hover,.row .a button:hover{color:var(--text);border-color:var(--acc-bd)}
+.row .a input{display:none}
+.row .info{grid-column:2/4;color:var(--text3);font-size:12.5px;display:none;padding-top:2px}
+.row .info code{font-family:'JetBrains Mono',monospace;color:var(--acc2);font-size:11.5px;background:var(--surface3);padding:1px 5px;border-radius:5px}
+.row .info a{cursor:pointer}
+.row.open .info{display:block}
+.go{display:flex;gap:14px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.go .btn.pri{padding:14px 28px;font-size:16px}
+.go a{color:var(--text2);cursor:pointer;font-size:13px}
 .num{flex:none;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:800;color:#0b1120}
 .card h3{font-size:15px;font-weight:700;line-height:1.3}
 .tag{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:2px}
@@ -157,15 +184,18 @@ td.desc{white-space:normal;min-width:240px;color:var(--text2)}
 
 <!-- ======================= 1. DATOS ======================= -->
 <section class="pane on" id="p-datos">
-  <h2>Qué se necesita para el cálculo</h2>
-  <p class="lead">Arrastrá cada archivo sobre su tarjeta o hacé clic para elegirlo. Los <b>obligatorios</b> son el mínimo para calcular;
-  los <b>recomendados</b> hacen que el cálculo use tiempos y demoras reales. Lo que cargues queda guardado en esta computadora
-  para la próxima vez (los archivos no se suben a ningún lado).</p>
-  <div class="grid" id="cards"></div>
-  <div class="bar">
-    <button class="btn pri" id="go-param">Siguiente: parámetros →</button>
-    <button class="btn sec btn sm" id="clear-all">Borrar datos guardados</button>
+  <label class="big" id="bigdrop"><input type="file" multiple id="bigfile">
+    <div class="ic">⇪</div>
+    <div><b>Soltá acá todos los archivos juntos</b>
+    <span>Ventas, stock (MAESTRO.xlsx), baúles (INFO_CAJAS.html), OF cerradas, calculadora de costos… cada uno se reconoce solo.
+    Queda guardado en esta PC: la próxima vez cargás solo lo que cambió.</span></div>
+  </label>
+  <div class="chk" id="cards"></div>
+  <div class="go">
+    <button class="btn pri" id="go-calc-d">Calcular →</button>
     <span class="hint" id="ready-hint"></span>
+    <a id="go-param">Ajustar parámetros</a>
+    <a id="clear-all">Borrar todo</a>
   </div>
 </section>
 
@@ -310,35 +340,85 @@ const SOURCES = [
 ];
 
 function cardHTML(s) {
-  const st = DB.src[s.id];
-  const tag = { ob: ['t-ob', 'obligatorio'], rec: ['t-rec', 'recomendado'], op: ['t-op', 'opcional'] }[s.tag];
-  return `<div class="card ${st ? 'done' : ''}" id="c-${s.id}">
-    <div class="top"><div class="num" style="background:${s.col}">${s.n}</div>
-      <div><h3>${s.title}<span class="tag ${tag[0]}">${tag[1]}</span></h3></div></div>
-    <div class="why">${s.why}</div>
-    <div class="src">${s.src}</div>
-    <label class="drop"><input type="file" accept="${s.accept}" ${s.multi ? 'multiple' : ''} data-id="${s.id}">
-      ${st ? 'Reemplazar archivo' + (s.multi ? 's' : '') : 'Soltá el archivo acá o hacé clic'}</label>
-    <div class="st ${st ? (st.warn ? 'warn' : 'ok') : ''}"><span class="dot"></span><span>${st ? st.msg : 'Sin cargar'}</span></div>
-    <div class="mini">${st ? `<span>${esc(st.file || '')} · ${new Date(st.at).toLocaleDateString('es-AR')}</span><a data-del="${s.id}">quitar</a>` : ''}
-      ${s.tpl ? `<a data-tpl="${s.id}">descargar plantilla</a>` : ''}</div>
+  const st = DB.src[s.id], ok = !!DB[s.id], warn = st && (st.warn || !ok);
+  return `<div class="row" id="c-${s.id}">
+    <div class="ok ${ok && !warn ? 'y' : warn ? 'w' : 'n'}">${ok && !warn ? '✓' : warn ? '!' : s.n}</div>
+    <div><div class="t">${s.title}<small class="${s.tag === 'ob' ? 'ob' : ''}">${s.tag === 'ob' ? 'obligatorio' : s.tag === 'rec' ? 'recomendado' : 'opcional'}</small></div>
+      <div class="m ${warn ? 'w' : ''}">${st ? st.msg : 'Falta'}</div></div>
+    <div class="a"><label>${ok ? 'cambiar' : 'elegir'}<input type="file" accept="${s.accept}" ${s.multi ? 'multiple' : ''} data-id="${s.id}"></label>
+      <button data-info="${s.id}" title="Qué es y de dónde sale">?</button>${st ? `<button data-del="${s.id}" title="Quitar">✕</button>` : ''}</div>
+    <div class="info">${s.why} ${s.src}${s.tpl ? ` · <a data-tpl="${s.id}">descargar plantilla</a>` : ''}</div>
   </div>`;
 }
 function renderCards() {
   $('#cards').innerHTML = SOURCES.map(cardHTML).join('');
   $$('#cards input[type=file]').forEach(i => i.onchange = e => load(i.dataset.id, [...e.target.files]));
-  $$('#cards .card').forEach(c => {
+  $$('#cards .row').forEach(c => {
     const id = c.id.slice(2);
-    c.ondragover = e => { e.preventDefault(); c.classList.add('drag'); };
-    c.ondragleave = () => c.classList.remove('drag');
-    c.ondrop = e => { e.preventDefault(); c.classList.remove('drag'); load(id, [...e.dataTransfer.files]); };
+    c.ondragover = e => { e.preventDefault(); e.stopPropagation(); c.style.background = 'var(--surface2)'; };
+    c.ondragleave = () => c.style.background = '';
+    c.ondrop = e => { e.preventDefault(); e.stopPropagation(); c.style.background = ''; load(id, [...e.dataTransfer.files]); };
   });
+  $$('[data-info]').forEach(b => b.onclick = () => $('#c-' + b.dataset.info).classList.toggle('open'));
   $$('[data-del]').forEach(a => a.onclick = () => { delete DB.src[a.dataset.del]; delete DB[a.dataset.del]; save(); renderCards(); });
   $$('[data-tpl]').forEach(a => a.onclick = () => { const s = SOURCES.find(x => x.id === a.dataset.tpl); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(s.tpl), 'Datos'); XLSX.writeFile(wb, `plantilla_${s.id}.xlsx`); });
-  const faltan = SOURCES.filter(s => s.tag === 'ob' && !DB.src[s.id]).map(s => s.title);
-  $('#ready-hint').textContent = faltan.length ? 'Falta: ' + faltan.join(', ') : 'Listo para calcular ✓';
+  const faltan = SOURCES.filter(s => s.tag === 'ob' && !DB[s.id]).map(s => s.title.split(' (')[0].toLowerCase());
+  $('#ready-hint').textContent = faltan.length ? 'Falta: ' + faltan.join(', ') : 'Todo listo';
+  $('#go-calc-d').disabled = !!faltan.length;
   $('#go-calc') && ($('#go-calc').disabled = !!faltan.length);
   $$('.stp')[0].classList.toggle('ok', !faltan.length);
+}
+
+// ---------- reconocer de qué es cada archivo ----------
+async function detectar(f) {
+  const n = plain(f.name), ext = (f.name.split('.').pop() || '').toLowerCase();
+  if (ext === 'html' || ext === 'htm') {
+    const t = await readText(f);
+    if (t.includes('DB_CARTAS_PLANOS')) return 'calc';
+    if (/const\s+DATA\s*=/.test(t)) return 'baules';
+    return null;
+  }
+  if (ext === 'csv') {
+    const h = plain((await readText(f)).split(/\r?\n/)[0]);
+    if (h.includes('fechadecierre') || (h.includes('emision') && h.includes('cierre'))) return 'of';
+    if (h.includes('estado') && h.includes('codigo')) return 'prod';
+    if (h.includes('cantidad') && h.includes('fecha')) return 'ventas';
+    if (h.includes('stock')) return 'mp';
+    return null;
+  }
+  if (/venta/.test(n)) return 'ventas';
+  if (/maestro|planproduc/.test(n)) return 'stock';
+  if (/cerrad|ofabric|ordenesfab|subdiario/.test(n)) return 'of';
+  if (/baul|caja/.test(n)) return 'baules';
+  if (/stockmp|materiaprima/.test(n)) return 'mp';
+  if (/producto/.test(n)) return 'prod';
+  if (f.size > 8e6) return 'stock';
+  try {   // por el contenido: primeras filas de la primera hoja
+    const wb = XLSX.read(await readBuf(f), { type: 'array', sheetRows: 40 });
+    if (wb.SheetNames.includes('Plan Produccion')) return 'stock';
+    const R = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null });
+    if (R.some(r => r && String(r[1] || '').includes('Subdiario de Ordenes Cerradas'))) return 'of';
+    if (findHeader(R, [['codigo', 'cod'], 'emision', 'cierre'])) return 'of';
+    if (findHeader(R, [['codigo', 'cod'], 'cantidad', 'fecha'])) return 'ventas';
+    if (findHeader(R, [['codigo', 'cod'], ['enbaul', 'baules']])) return 'baules';
+    if (findHeader(R, [['codigo', 'cod'], ['deposito', 'dpt']])) return 'stock';
+    if (findHeader(R, [['codigo', 'cod'], 'estado'])) return 'prod';
+    if (findHeader(R, [['codigo', 'cod'], 'stock'])) return 'mp';
+  } catch (e) { }
+  return null;
+}
+async function cargarTodos(files) {
+  if (!files.length) return;
+  busy('Reconociendo ' + files.length + ' archivo(s)…'); await tick();
+  const grupos = {}, raros = [];
+  for (const f of files) { const id = await detectar(f); if (id) (grupos[id] = grupos[id] || []).push(f); else raros.push(f.name); }
+  busy();
+  // el stock (MAESTRO, pesado) al final para no hacer esperar lo demas
+  for (const id of Object.keys(grupos).sort((a, b) => (a === 'stock') - (b === 'stock'))) {
+    const s = SOURCES.find(x => x.id === id);
+    await load(id, s.multi ? grupos[id] : grupos[id].slice(-1));
+  }
+  if (raros.length) toast('No reconocí: ' + raros.join(', ') + '. Cargalo con "elegir" en su renglón.');
 }
 
 async function load(id, files) {
@@ -349,7 +429,7 @@ async function load(id, files) {
     DB[id] = r.data;
     DB.src[id] = { msg: r.msg, warn: !!r.warn, file: files.map(f => f.name).join(', '), at: Date.now() };
     if (r.extra) for (const [k, v] of Object.entries(r.extra)) { DB[k] = v.data; DB.src[k] = { msg: v.msg, file: files[0].name + ' (automático)', at: Date.now() }; }
-    save(); toast('✓ ' + SOURCES.find(s => s.id === id).title + ' cargado');
+    save(); toast('✓ ' + SOURCES.find(s => s.id === id).title);
   } catch (e) {
     console.error(e);
     DB.src[id] = { msg: 'No se pudo leer: ' + e.message, warn: true, file: files[0].name, at: Date.now() };
@@ -811,6 +891,15 @@ function exportar() {
 function go(p) { $$('.stp').forEach(s => s.classList.toggle('on', s.dataset.go === p)); $$('section.pane').forEach(s => s.classList.toggle('on', s.id === 'p-' + p)); if (p === 'param') renderParams(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 $$('.stp').forEach(s => s.onclick = () => go(s.dataset.go));
 $('#go-param').onclick = () => go('param');
+$('#go-calc-d').onclick = () => $('#go-calc').click();
+const BD = $('#bigdrop');
+$('#bigfile').onchange = e => { cargarTodos([...e.target.files]); e.target.value = ''; };
+BD.ondragover = e => { e.preventDefault(); BD.classList.add('drag'); };
+BD.ondragleave = () => BD.classList.remove('drag');
+BD.ondrop = e => { e.preventDefault(); e.stopPropagation(); BD.classList.remove('drag'); cargarTodos([...e.dataTransfer.files]); };
+// soltar archivos en cualquier lugar de la pantalla de datos tambien sirve
+$('#p-datos').ondragover = e => e.preventDefault();
+$('#p-datos').ondrop = e => { e.preventDefault(); cargarTodos([...e.dataTransfer.files]); };
 $('#go-calc').onclick = async () => { busy('Calculando…'); await tick(); try { calcular(); go('res'); } catch (e) { console.error(e); toast('Error al calcular: ' + e.message); } busy(); };
 $('#reset-par').onclick = () => { DB.par = {}; save(); renderParams(); };
 $('#clear-all').onclick = () => { if (confirm('¿Borrar todos los datos cargados y parámetros guardados en esta computadora?')) { DB = { src: {}, par: {} }; save(); RES = null; renderCards(); renderParams(); $('#res-empty').style.display = ''; $('#res-body').style.display = 'none'; } };
