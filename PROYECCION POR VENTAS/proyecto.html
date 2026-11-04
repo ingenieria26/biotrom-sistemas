@@ -70,7 +70,7 @@ th.n,td.n{text-align:right}
 th .ar{color:var(--acc)}
 td{padding:8px 10px;border-bottom:1px solid var(--border2);vertical-align:middle}
 td.n{font-variant-numeric:tabular-nums}
-tr.r{cursor:pointer}tr.r:hover td{background:var(--acc-bg)}
+tr.fam td{background:var(--surface2);border-top:2px solid var(--border2)}tr.fam td.pr{white-space:nowrap}b.fn{display:inline!important;font-family:inherit!important;font-size:13.5px!important;font-weight:800}tr.fam td.pr span:last-child{margin-left:8px;font-size:11.5px}tr.sg td.pr{padding-left:34px}.tg{display:inline-block;width:22px;cursor:pointer;color:var(--text2)!important;font-size:13px!important}.fbar{display:flex;gap:4px;margin:0 0 12px;height:54px}.fb{min-width:64px;border-radius:10px;background:var(--acc-bg);border:1px solid var(--border2);padding:7px 10px;cursor:pointer;overflow:hidden}.fb:hover{border-color:var(--acc)}.fb b{display:block;font-size:15px}.fb span{display:block;font-size:11px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}tr.r{cursor:pointer}tr.r:hover td{background:var(--acc-bg)}
 td.pr b{display:block;font-size:12.5px;font-family:'JetBrains Mono',monospace}td.pr span{color:var(--text2);font-size:12.5px}
 .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;white-space:nowrap}
 .p-red{background:var(--red-bg);color:var(--red)}.p-amb{background:var(--amber-bg);color:var(--amber)}.p-grn{background:var(--green-bg);color:var(--green)}.p-gry{background:var(--surface3);color:var(--text2)}
@@ -242,11 +242,19 @@ function calcular() {
   // grupos: nombre = descripción del más vendido
   const G = {}; for (const p of prods) { const x = G[p.grp] = G[p.grp] || { g: p.grp, ps: [], y: Array(T).fill(0), F: Array(24).fill(0) }; x.ps.push(p); p.y.forEach((v, t) => x.y[t] += v); p.F.forEach((v, h) => x.F[h] += v); }
   for (const x of Object.values(G)) { x.ps.sort((a, b) => b.s12 - a.s12); x.nombre = nombreGrupo(x.ps); x.s12 = sum(x.y.slice(-12)); x.sp = sum(x.y.slice(-24, -12)); x.fH = sum(x.F.slice(0, H));
-    x.stock = sum(x.ps.map(p => p.stock || 0)); x.riesgo = x.ps.filter(p => p.alc != null && p.alc < H && p.fH >= 1).length; x.fab = sum(x.ps.map(p => p.fab || 0)); }
+    x.stock = sum(x.ps.map(p => p.stock || 0)); x.riesgo = x.ps.filter(p => p.alc != null && p.alc < H && p.fH >= 1).length; x.fab = sum(x.ps.map(p => p.fab || 0)); x.fam = famDe(x.g); }
+  // familias (primer número del código) = suma de sus grupos
+  for (const x of Object.values(G)) { const k = 'F' + x.fam, f = G[k] = G[k] || { g: k, fam: x.fam, esFam: 1, nombre: FAMS[x.fam], ps: [], gs: [], y: Array(T).fill(0), F: Array(24).fill(0), s12: 0, sp: 0, fH: 0, stock: 0, riesgo: 0, fab: 0 };
+    f.gs.push(x); f.ps.push(...x.ps); x.y.forEach((v, t) => f.y[t] += v); x.F.forEach((v, h) => f.F[h] += v); for (const c of ['s12', 'sp', 'fH', 'stock', 'riesgo', 'fab']) f[c] += x[c]; }
+  for (const x of Object.values(G)) if (x.esFam) { x.gs.sort((a, b) => b.s12 - a.s12); x.ps.sort((a, b) => b.s12 - a.s12); }
   M = { meses, T, prods, G, S, Sr, tot, fut, g0, hoy, H };
 }
 // variación mes a mes de una serie (últimos 12 meses, sin el efecto del mes del año)
 function sdSerie(y) { const d = y.slice(-12).map((v, j) => v / M.S[M.meses[M.T - 12 + j].m]), m = sum(d) / 12; return Math.sqrt(sum(d.map(v => (v - m) ** 2)) / 11); }
+const FAMS = { 1: 'Tutores', 2: 'Columna vía posterior', 3: 'Columna vía anterior', 4: 'Osteosíntesis', 5: 'Clavos', 6: 'Prótesis / endoprótesis', 0: 'Otros' };
+const famDe = k => /^[1-6]/.test(k) ? +k[0] : 0;
+const famL = f => (f ? f + ' · ' : '') + FAMS[f];
+const famsOrd = () => Object.values(M.G).filter(x => x.esFam).sort((a, b) => (a.fam || 9) - (b.fam || 9));
 function nombreGrupo(ps) {
   const d = String(ps[0] && ps[0].desc || '').toUpperCase().replace(/\(.*?\)/g, ' ').replace(/[Ø0-9.,X×\/-]+(\s|$)/g, ' ').replace(/\s+/g, ' ').trim();
   return d.split(' ').slice(0, 3).join(' ') || ps[0].k;
@@ -295,8 +303,9 @@ function render() {
   const H = PREF.h, ps = M.prods, sel = PREF.grp, G = M.G;
   $$('#hz button').forEach(b => b.classList.toggle('on', +b.dataset.h === H)); $('#est').checked = PREF.est;
   // grupos en el selector
-  const gl = Object.values(G).sort((a, b) => b.s12 - a.s12);
-  $('#grpSel').innerHTML = `<option value="*">Toda la fábrica</option>` + gl.map(x => `<option value="${esc(x.g)}" ${sel === x.g ? 'selected' : ''}>${esc(x.g)} · ${esc(x.nombre)}</option>`).join('');
+  const op = (v, l) => `<option value="${esc(v)}" ${sel === v ? 'selected' : ''}>${esc(l)}</option>`;
+  $('#grpSel').innerHTML = op('*', 'Toda la fábrica') + `<optgroup label="Familias">${famsOrd().map(f => op(f.g, 'Familia ' + famL(f.fam))).join('')}</optgroup>`
+    + famsOrd().map(f => `<optgroup label="Grupos de ${esc(famL(f.fam))}">${f.gs.map(x => op(x.g, x.g + ' · ' + x.nombre)).join('')}</optgroup>`).join('');
   const base = sel === '*' ? { y: M.tot, F: M.fut.map((_, h) => sum(ps.map(p => p.F[h]))), ps } : G[sel] || { y: M.tot, F: [], ps };
   const bps = base.ps;
   // tiles
@@ -313,7 +322,7 @@ function render() {
   // gráfico principal
   const hist = M.meses.map((x, t) => ({ v: base.y[t], l: etMes(x) }));
   const bandM = M.fut.map((_, h) => h < H ? 1.28 * sdB : 0);
-  $('#chTit').textContent = sel === '*' ? 'Ventas por mes y proyección · toda la fábrica' : `Ventas por mes y proyección · ${sel} ${G[sel] ? G[sel].nombre : ''}`;
+  $('#chTit').textContent = sel === '*' ? 'Ventas por mes y proyección · toda la fábrica' : (G[sel] && G[sel].esFam ? `Ventas por mes y proyección · familia ${famL(G[sel].fam)}` : `Ventas por mes y proyección · ${sel} ${G[sel] ? G[sel].nombre + ' · ' + FAMS[G[sel].fam] : ''}`);
   $('#chSub').textContent = `Piezas vendidas por mes (${etMes(M.meses[0])} a ${etMes(M.meses[M.T - 1])}) y lo que se espera los próximos ${H} meses. Pasá el mouse por una barra para ver el número.`;
   $('#chMain').innerHTML = grafico(hist, base.F.slice(0, H), bandM.slice(0, H), { fl: M.fut.slice(0, H).map(etMes), aria: 'Ventas por mes y proyección' });
   // estacionalidad
@@ -353,12 +362,17 @@ function vista(bps) {
     $$('#view tr.r').forEach(tr => tr.onclick = () => detalle(tr.dataset.k));
     $('#xls').onclick = () => excel(arr);
   } else if (TAB === 'grp') {
-    const gl = Object.values(M.G).sort((a, b) => b.s12 - a.s12);
-    v.innerHTML = `<div class="tw"><table><thead><tr><th>Grupo</th><th class="n">Productos</th><th class="n">Vendido 12 m</th><th>Últimos 24 meses</th><th class="n">Tendencia</th><th class="n">Proyección ${H} m</th><th class="n">Stock MAESTRO</th><th class="n">Meses de stock</th><th class="n">Se quedan sin stock</th><th class="n">A fabricar</th></tr></thead><tbody>
-      ${gl.map(x => { const g = x.sp ? x.s12 / x.sp - 1 : 0, mes = x.fH > 0 ? x.stock / (x.fH / H) : null; return `<tr class="r" data-g="${esc(x.g)}"><td class="pr"><b>${esc(x.g)}</b><span>${esc(x.nombre)}</span></td><td class="n">${x.ps.length}</td><td class="n">${fmt(x.s12)}</td><td>${spark(x.y)}</td><td class="n">${tend(g, x.sp, x.s12)}</td><td class="n"><b>${fmt(x.fH)}</b></td><td class="n">${fmt(x.stock)}</td>
-        <td class="n">${mes == null ? '–' : `<span class="pill ${mes < 1 ? 'p-red' : mes < H ? 'p-amb' : 'p-grn'}">${mes > 99 ? '+99' : fmt(mes, 1)}</span>`}</td><td class="n" style="color:${x.riesgo ? 'var(--red)' : 'var(--text3)'};font-weight:700">${x.riesgo || '–'}</td><td class="n" style="font-weight:800;color:${x.fab ? 'var(--amber)' : 'var(--text3)'}">${x.fab ? fmt(x.fab) : '–'}</td></tr>`; }).join('')}</tbody></table></div>
-      <p class="hint" style="margin-top:8px">Grupo = primeras 4 letras del código. Tocá uno para verlo en el gráfico de arriba y en Productos.</p>`;
-    $$('#view tr.r').forEach(tr => tr.onclick = () => { PREF.grp = tr.dataset.g; savePref(); TAB = 'prod'; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    const abiertas = PREF.famAb || (PREF.famAb = {});
+    const fila = (x, fam) => { const g = x.sp ? x.s12 / x.sp - 1 : 0, mes = x.fH > 0 ? x.stock / (x.fH / H) : null;
+      return `<tr class="r ${fam ? 'fam' : 'sg'}" data-g="${esc(x.g)}"><td class="pr">${fam ? `<span class="tg" role="button" aria-label="Plegar o desplegar">${abiertas[x.fam] ? '▾' : '▸'}</span><b class="fn">${esc(famL(x.fam))}</b><span>${x.gs.length} grupos</span>` : `<b>${esc(x.g)}</b><span>${esc(x.nombre)}</span>`}</td><td class="n">${x.ps.length}</td><td class="n">${fmt(x.s12)}</td><td>${spark(x.y)}</td><td class="n">${tend(g, x.sp, x.s12)}</td><td class="n"><b>${fmt(x.fH)}</b></td><td class="n">${fmt(x.stock)}</td>
+        <td class="n">${mes == null ? '–' : `<span class="pill ${mes < 1 ? 'p-red' : mes < H ? 'p-amb' : 'p-grn'}">${mes > 99 ? '+99' : fmt(mes, 1)}</span>`}</td><td class="n" style="color:${x.riesgo ? 'var(--red)' : 'var(--text3)'};font-weight:700">${x.riesgo || '–'}</td><td class="n" style="font-weight:800;color:${x.fab ? 'var(--amber)' : 'var(--text3)'}">${x.fab ? fmt(x.fab) : '–'}</td></tr>`; };
+    const fs = famsOrd(), tot = sum(fs.map(f => f.s12)) || 1;
+    v.innerHTML = `<div class="fbar">${fs.map(f => `<div class="fb" data-g="${esc(f.g)}" title="${esc(famL(f.fam))}: ${fmt(f.s12)} piezas en 12 meses" style="flex:${f.s12 || 0.001}"><b>${fmt(f.s12 / tot * 100)} %</b><span>${esc(FAMS[f.fam])}</span></div>`).join('')}</div>
+      <div class="tw"><table class="gt"><thead><tr><th>Familia / grupo</th><th class="n">Productos</th><th class="n">Vendido 12 m</th><th>Últimos 24 meses</th><th class="n">Tendencia</th><th class="n">Proyección ${H} m</th><th class="n">Stock MAESTRO</th><th class="n">Meses de stock</th><th class="n">Se quedan sin stock</th><th class="n">A fabricar</th></tr></thead><tbody>
+      ${fs.map(f => fila(f, 1) + (!abiertas[f.fam] ? '' : f.gs.map(x => fila(x)).join(''))).join('')}</tbody></table></div>
+      <p class="hint" style="margin-top:8px">Familia = primer número del código (1 Tutores, 2 Columna vía posterior, 3 Columna vía anterior, 4 Osteosíntesis, 5 Clavos, 6 Prótesis / endoprótesis). Grupo = primeras 4 letras. Tocá la flecha ▸ para ver los grupos de una familia; tocá el nombre para verla en el gráfico de arriba y en Productos.</p>`;
+    $$('#view .tg').forEach(t => t.onclick = e => { e.stopPropagation(); const f = M.G[t.closest('tr').dataset.g].fam; abiertas[f] = abiertas[f] ? 0 : 1; savePref(); vista(bps); });
+    $$('#view tr.r, #view .fb').forEach(tr => tr.onclick = () => { PREF.grp = tr.dataset.g; savePref(); TAB = 'prod'; render(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
   } else if (TAB === 'cli') {
     if (!D.cli || !D.cli.cm) { v.innerHTML = '<div class="card"><h3>Faltan los clientes</h3><p class="hint" style="margin-top:6px">Cargá el archivo de ventas en la pestaña <b>Actualizar ventas</b>: de ahí salen los clientes de cada producto.</p></div>'; return; }
     const meses = M.meses, C = [];
@@ -373,13 +387,14 @@ function vista(bps) {
       <p class="hint" style="margin-top:8px">El archivo de ventas trae el código de cliente, no el nombre. Tocá uno para ver qué productos compra.</p>`;
     $$('#view tr.r').forEach(tr => tr.onclick = () => detalleCli(tr.dataset.c));
   } else if (TAB === 'heat') {
-    const gl = Object.values(M.G).sort((a, b) => b.s12 - a.s12).slice(0, 30);
+    const top = Object.values(M.G).filter(x => !x.esFam).sort((a, b) => b.s12 - a.s12).slice(0, 30), gl = [];
+    for (const f of famsOrd()) { const gs = top.filter(x => x.fam === f.fam); if (gs.length || f.s12) gl.push(f, ...gs); }
     const col = r => r >= 1.35 ? 'var(--green)' : r >= 1.12 ? 'var(--green-bg)' : r <= 0.65 ? 'var(--red)' : r <= 0.88 ? 'var(--red-bg)' : 'transparent';
     const fg = r => r >= 1.35 || r <= 0.65 ? '#fff' : 'var(--text)';
-    v.innerHTML = `<div class="card"><h3>Cuánto se vende cada mes, por grupo</h3><div class="sub">Promedio de los 2 años. 100 = un mes normal para ese grupo. Verde: se vende más · rojo: se vende menos. Los 30 grupos que más venden.</div></div>
-      <div class="tw"><table class="heat"><thead><tr><th style="text-align:left">Grupo</th>${MESES.map(m => `<th style="text-align:center">${m}</th>`).join('')}</tr></thead><tbody>
+    v.innerHTML = `<div class="card"><h3>Cuánto se vende cada mes, por grupo</h3><div class="sub">Promedio de los 2 años. 100 = un mes normal para esa familia o grupo. Verde: se vende más · rojo: se vende menos. Cada familia con sus grupos que más venden (los 30 mayores de la fábrica).</div></div>
+      <div class="tw"><table class="heat"><thead><tr><th style="text-align:left">Familia / grupo</th>${MESES.map(m => `<th style="text-align:center">${m}</th>`).join('')}</tr></thead><tbody>
       ${gl.map(x => { const a = Array(12).fill(0), c = Array(12).fill(0); x.y.forEach((v, t) => { a[M.meses[t].m] += v; c[M.meses[t].m]++; }); const pm = a.map((s, i) => c[i] ? s / c[i] : 0), mm = sum(pm) / 12 || 1;
-        return `<tr><td style="text-align:left" class="pr"><b>${esc(x.g)}</b><span>${esc(x.nombre)}</span></td>${pm.map((s, i) => { const r = s / mm; return `<td style="background:${col(r)};color:${fg(r)}" title="${MESL[i]}: ${fmt(r * 100)}">${fmt(r * 100)}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+        return `<tr class="${x.esFam ? 'fam' : 'sg'}"><td style="text-align:left" class="pr">${x.esFam ? `<b class="fn">${esc(famL(x.fam))}</b>` : `<b>${esc(x.g)}</b><span>${esc(x.nombre)}</span>`}</td>${pm.map((s, i) => { const r = s / mm; return `<td style="background:${col(r)};color:${fg(r)}" title="${MESL[i]}: ${fmt(r * 100)}">${fmt(r * 100)}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
   } else {
     const s = D.vsrc;
     v.innerHTML = `<div class="card"><h3>Ventas cargadas</h3><p class="hint" style="margin-top:4px">${s ? `<b>${esc(s.file)}</b> · ${esc(s.msg)} · cargado el ${new Date(s.at).toLocaleString('es-AR')}` : 'Todavía no hay ventas.'}</p>
@@ -413,7 +428,7 @@ function detalle(k) {
     ['', 'La proyección es poco segura: vende pocos meses del año.', '', 'Vende parejo, la proyección es confiable.'][p.conf]].filter(Boolean).join(' ');
   const cl = D.cli && D.cli.c && D.cli.c[p.k] ? Object.entries(D.cli.c[p.k]).sort((a, b) => b[1] - a[1]) : [];
   const ctot = sum(cl.map(x => x[1]));
-  abrir(`<div class="hint mono">${esc(p.k)} · grupo ${esc(p.grp)}</div><h2>${esc(p.desc)}</h2>
+  abrir(`<div class="hint mono">${esc(p.k)} · familia ${esc(famL(famDe(p.k)))} · grupo ${esc(p.grp)}</div><h2>${esc(p.desc)}</h2>
     <div class="facts"><div class="fact"><div class="v">${fmt(p.s12)}</div><div class="l">vendidas en 12 meses</div></div><div class="fact"><div class="v">${tend(p.g, p.sp, p.s12)}</div><div class="l">tendencia usada</div></div>
     <div class="fact"><div class="v">${fmt(p.fH)}</div><div class="l">proyección ${H} meses</div></div><div class="fact"><div class="v">${p.stock == null ? '–' : fmt(p.stock)}</div><div class="l">stock MAESTRO</div></div><div class="fact"><div class="v">${p.fab ? fmt(p.fab) : '–'}</div><div class="l">a fabricar ${H} meses</div></div></div>
     <div class="story">${story}</div>
@@ -442,7 +457,7 @@ function detalleCli(c) {
 function excel(arr) {
   if (!window.XLSX) return toast('No se pudo cargar la librería de Excel');
   const H = PREF.h, wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(arr.map(p => { const o = { Codigo: p.k, Descripcion: p.desc, Grupo: p.grp, 'Vendido 12 meses': Math.round(p.s12), 'Vendido 12 anteriores': Math.round(p.sp), Tendencia: +(p.g * 100).toFixed(1) };
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(arr.map(p => { const o = { Codigo: p.k, Descripcion: p.desc, Familia: famL(famDe(p.k)), Grupo: p.grp, 'Vendido 12 meses': Math.round(p.s12), 'Vendido 12 anteriores': Math.round(p.sp), Tendencia: +(p.g * 100).toFixed(1) };
     M.fut.slice(0, 12).forEach((f, h) => o[etMes(f)] = +p.F[h].toFixed(1)); Object.assign(o, { ['Proyeccion ' + H + ' meses']: Math.round(p.fH), 'Stock MAESTRO': p.stock ?? '', 'Alcanza hasta': p.stock == null ? '' : p.alc >= 24 ? '+2 años' : fechaMes(p.alc), ['A fabricar ' + H + ' meses']: p.fab ?? '', Confianza: ['', 'baja', 'media', 'alta'][p.conf] }); return o; })), 'Proyeccion');
   XLSX.writeFile(wb, `Proyeccion_ventas_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
