@@ -68,6 +68,13 @@ h2{font-size:19px;font-weight:800;margin-bottom:4px;letter-spacing:-.01em}
 .go{display:flex;gap:14px;align-items:center;margin-top:18px;flex-wrap:wrap}
 .go .btn.pri{padding:14px 28px;font-size:16px}
 .go a{color:var(--text2);cursor:pointer;font-size:13px}
+.eqleg{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px;margin-top:10px}
+.eqleg div{background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:8px 10px;font-size:12.5px;line-height:1.4}
+.eqleg b{display:block;color:var(--text);margin-bottom:2px}.eqleg span{color:var(--text3)}
+td.rec{background:rgba(52,211,153,.10);box-shadow:inset 0 0 0 1px rgba(52,211,153,.35)}
+td.oc{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.35}
+td.oc small{display:block;font-size:11px}
+td.why{white-space:normal;min-width:280px;max-width:420px;color:var(--text2);font-size:12.5px;line-height:1.4}
 .num{flex:none;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:800;color:#0b1120}
 .card h3{font-size:15px;font-weight:700;line-height:1.3}
 .tag{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:999px;margin-left:6px;vertical-align:2px}
@@ -221,6 +228,7 @@ td.desc{white-space:normal;min-width:240px;color:var(--text2)}
       <div class="tab" data-t="all">Todos los productos</div>
       <div class="tab" data-t="mp">Compra de MP</div>
       <div class="tab" data-t="hs">Horas y tiempos</div>
+      <div class="tab" data-t="eq">Ecuaciones</div>
     </div>
     <div class="tbar">
       <input class="search" id="q" placeholder="Buscar código o descripción…">
@@ -316,11 +324,11 @@ const SOURCES = [
     tpl: [['Codigo_Producto', 'Descripcion', 'Cantidad', 'Fecha_Factura'], ['4LT22712', 'TORNILLO BLOQUEADO 2.7 X 12 (T)', -10, '2026-10-01']] },
   { id: 'stock', n: 2, col: '#38bdf8', tag: 'ob', title: 'Stock de producto terminado', multi: false, accept: '.xlsx,.xls,.csv',
     why: 'Cuánto hay hoy en depósito y en proceso (solo OF activas), el estado del producto y su materia prima con el consumo por pieza.',
-    src: 'Puede ser <code>MAESTRO.xlsx</code> (usa la hoja "Plan Produccion" y, si está, "Stock MP"; es pesado, tarda 1 o 2 minutos) o una planilla con columnas: código, depósito, en proceso, y opcional estado, MP y consumo (mm por pieza).',
+    src: 'Puede ser <code>MAESTRO.xlsx</code> (usa la hoja "Plan Produccion" y, si está, "Stock MP"; es pesado, tarda 1 o 2 minutos) o el <code>stock-resumen.csv</code> del sistema (actualiza solo el depósito; lo demás queda de la última carga del MAESTRO), o una planilla con código, depósito y en proceso.',
     tpl: [['Codigo', 'Descripcion', 'Deposito', 'En proceso', 'Estado', 'MP', 'Consumo mm'], ['4LT22712', 'TORNILLO BLOQUEADO 2.7 X 12 (T)', 36, 0, 'ACTIVO', '21A20', 20]] },
-  { id: 'baules', n: 3, col: '#f472b6', tag: 'ob', title: 'Baúles en consignación', multi: false, accept: '.html,.htm,.xlsx,.xls,.csv',
+  { id: 'baules', n: 3, col: '#f472b6', tag: 'ob', title: 'Baúles en consignación', multi: false, accept: '.html,.htm,.xlsx,.xls,.csv,.CSV',
     why: 'Las piezas que tienen que estar siempre en los baúles (C) y las que hacen falta para armar un baúl más de cada familia (Pb).',
-    src: 'El archivo <code>INFO_CAJAS.html</code> (se toman solo los "BAULES EN CONSIGNACION") o una planilla con: código, piezas en baúles, piezas por baúl.',
+    src: 'El archivo <code>INFO_CAJAS.html</code> (se toman solo los "BAULES EN CONSIGNACION") o el <code>cajas_AAAA-MM-DD.csv</code> (Familia, Cajas, Codigo, Tipo, Por caja, Total), o una planilla con: código, piezas en baúles, piezas por baúl.',
     tpl: [['Codigo', 'Piezas en baules', 'Piezas por baul'], ['4LT22712', 22, 4]] },
   { id: 'of', n: 4, col: '#34d399', tag: 'rec', title: 'OF cerradas', multi: true, accept: '.xls,.xlsx,.csv',
     why: 'Cuánto tardan de verdad las OF, de emisión a cierre. Da el tiempo de fabricación (L) de cada producto y el general. Se pueden cargar varios archivos juntos.',
@@ -331,7 +339,7 @@ const SOURCES = [
     src: 'El archivo <code>COSTOS + PEDIR MP\\calculadorapor (17).html</code>. Se leen los tiempos que vienen cargados en el archivo (no los que se cambiaron dentro del navegador).' },
   { id: 'mp', n: 6, col: '#a78bfa', tag: 'rec', title: 'Stock de materia prima', multi: false, accept: '.xlsx,.xls,.csv',
     why: 'Cuántos mm hay de cada MP, para saber cuánto comprar. Si cargaste MAESTRO.xlsx en la tarjeta 2, se toma de ahí solo.',
-    src: 'Planilla con: código de MP, descripción y stock (mm).',
+    src: 'El <code>stock-resumen.csv</code> de materia prima (Saldo en MM) o una planilla con código de MP, descripción y stock (mm).',
     tpl: [['Codigo MP', 'Descripcion', 'Stock mm'], ['21A20', 'TI ALEADO BARRA Ø 2,5', 12000]] },
   { id: 'prod', n: 7, col: '#94a3b8', tag: 'op', title: 'Productos activos / inactivos', multi: false, accept: '.csv,.xlsx,.xls',
     why: 'Para no calcular productos inactivos. Si no se carga, se usa el estado de la planilla de stock.',
@@ -379,7 +387,9 @@ async function detectar(f) {
     return null;
   }
   if (ext === 'csv') {
-    const h = plain((await readText(f)).split(/\r?\n/)[0]);
+    const t = await readText(f), h = plain(t.split(/\r?\n/)[0]);
+    if (h.includes('nomenclatura') && h.includes('saldo')) { const L = leerResumen(t); return L && L.mp ? 'mp' : 'stock'; }
+    if (h.includes('familia') && h.includes('porcaja')) return 'baules';
     if (h.includes('fechadecierre') || (h.includes('emision') && h.includes('cierre'))) return 'of';
     if (h.includes('estado') && h.includes('codigo')) return 'prod';
     if (h.includes('cantidad') && h.includes('fecha')) return 'ventas';
@@ -391,6 +401,7 @@ async function detectar(f) {
   if (/cerrad|ofabric|ordenesfab|subdiario/.test(n)) return 'of';
   if (/baul|caja/.test(n)) return 'baules';
   if (/stockmp|materiaprima/.test(n)) return 'mp';
+  if (/stockresumen/.test(n)) return 'stock';
   if (/producto/.test(n)) return 'prod';
   if (f.size > 8e6) return 'stock';
   try {   // por el contenido: primeras filas de la primera hoja
@@ -414,9 +425,11 @@ async function cargarTodos(files) {
   for (const f of files) { const id = await detectar(f); if (id) (grupos[id] = grupos[id] || []).push(f); else raros.push(f.name); }
   busy();
   // el stock (MAESTRO, pesado) al final para no hacer esperar lo demas
-  for (const id of Object.keys(grupos).sort((a, b) => (a === 'stock') - (b === 'stock'))) {
+  const rk = x => x === 'mp' ? 2 : x === 'stock' ? 1 : 0;   // stock (MAESTRO, pesado) al final; el stock de MP despues, para que no lo pise la hoja vieja del MAESTRO
+  for (const id of Object.keys(grupos).sort((a, b) => rk(a) - rk(b))) {
     const s = SOURCES.find(x => x.id === id);
-    await load(id, s.multi ? grupos[id] : grupos[id].slice(-1));
+    if (s.multi) await load(id, grupos[id]);
+    else for (const f of grupos[id].sort((a, b) => /\.csv$/i.test(a.name) - /\.csv$/i.test(b.name))) await load(id, [f]);   // el CSV actualiza lo cargado antes
   }
   if (raros.length) toast('No reconocí: ' + raros.join(', ') + '. Cargalo con "elegir" en su renglón.');
 }
@@ -449,6 +462,37 @@ async function sheetRows(f, opts = {}) {
   };
   return { wb, rows };
 }
+// CSV con ; o , (respeta comillas)
+function csvRows(t) {
+  t = t.replace(/^﻿/, '');
+  const sep = (t.split(/\r?\n/)[0].match(/;/g) || []).length >= (t.split(/\r?\n/)[0].match(/,/g) || []).length ? ';' : ',';
+  const out = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (q) { if (c === '"') { if (t[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; continue; }
+    if (c === '"') q = true; else if (c === sep) { row.push(cur); cur = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && t[i + 1] === '\n') i++; row.push(cur); out.push(row); row = []; cur = ''; }
+    else cur += c;
+  }
+  if (cur || row.length) { row.push(cur); out.push(row); }
+  return out;
+}
+// "Resumen de stock" del sistema: Cod.;Nomenclatura;Descripcion;Esteril;Saldo ("54 UN", "1.200 MM")
+function leerResumen(t) {
+  const R = csvRows(t); const H = (R[0] || []).map(plain);
+  const ic = H.indexOf('nomenclatura'), is = H.indexOf('saldo'), id = H.findIndex(h => h.startsWith('descripcion'));
+  if (ic < 0 || is < 0) return null;
+  const out = {}; let mm = 0, un = 0;
+  for (const r of R.slice(1)) {
+    const k = norm(r[ic]); if (!k) continue;
+    const m = String(r[is] || '').trim().match(/^(-?[\d.]*,?\d+)\s*([A-Za-z]*)/);
+    if (!m) continue;
+    let q = +m[1].replace(/\./g, '').replace(',', '.'); const u = m[2].toUpperCase();
+    if (u === 'M') q *= 1000; if (u === 'MM' || u === 'M') mm++; else un++;
+    out[k] = { q, d: id >= 0 ? r[id] : '' };
+  }
+  return { out, mp: mm > un };
+}
 const excluido = k => k.startsWith('Z') || /^\d+$/.test(k);   // servicios, reventa y codigos genericos
 
 const PARSERS = {
@@ -478,6 +522,18 @@ const PARSERS = {
   },
   // ---------- 2 stock ----------
   async stock([f]) {
+    if (/\.csv$/i.test(f.name)) {
+      const L = leerResumen(await readText(f));
+      if (!L) throw new Error('el CSV no tiene las columnas Nomenclatura y Saldo');
+      if (L.mp) throw new Error('este CSV es de materia prima (viene en MM): cargalo en "Stock de materia prima"');
+      // actualiza el depósito; estado, en proceso, MP y consumo se conservan de lo que ya estaba cargado (MAESTRO)
+      const prev = DB.stock || {}, P = {};
+      for (const [k, v] of Object.entries(prev)) P[k] = Object.assign({}, v, { dpt: 0 });
+      for (const [k, v] of Object.entries(L.out)) P[k] = Object.assign({ d: v.d, e: '', wip: 0, mp: '', u: 0 }, P[k] || {}, { dpt: v.q });
+      const n = Object.keys(L.out).length, conMp = Object.values(P).filter(p => p.mp && p.u > 0).length;
+      return { data: P, warn: !Object.keys(prev).length, msg: `${fmt(n)} productos con stock · ${fmt(Object.values(L.out).reduce((a, v) => a + v.q, 0))} piezas en depósito` +
+        (Object.keys(prev).length ? ` · en proceso, estado y MP se mantienen de la carga anterior (${fmt(conMp)} con MP)` : ' · este archivo no trae en proceso, estado ni MP: cargá una vez el MAESTRO.xlsx y después este CSV para actualizar el depósito') };
+    }
     const big = f.size > 8e6;
     if (big) busy('Leyendo ' + f.name + ' (es pesado, puede tardar 1 o 2 minutos)…'), await tick();
     const { wb, rows } = await sheetRows(f, big ? { sheets: ['Plan Produccion', 'Stock MP', 'Maestro MP'], dense: true } : {});
@@ -486,7 +542,7 @@ const PARSERS = {
       const R = rows('Plan Produccion');
       for (let i = 6; i < R.length; i++) {
         const r = R[i]; if (!r || r[3] == null) continue; const k = norm(r[3]);
-        const p = { d: r[4] || '', e: norm(r[5]), dpt: num(r[7]), wip: num(r[8]), mp: r[14] ? String(r[14]).trim() : '', mpd: r[15] || '', u: num(r[16]) };
+        const p = { f: r[2] ? String(r[2]).trim() : '', d: r[4] || '', e: norm(r[5]), dpt: num(r[7]), wip: num(r[8]), mp: r[14] ? String(r[14]).trim() : '', mpd: r[15] || '', u: num(r[16]) };
         if (!P[k] || num(r[6]) > (P[k]._v || 0)) P[k] = Object.assign(p, { _v: num(r[6]) });
       }
       for (const p of Object.values(P)) delete p._v;
@@ -521,6 +577,22 @@ const PARSERS = {
         for (const it of v.items || []) if (it.tipo === 'PT') { const k = norm(it.codigo); C[k] = (C[k] || 0) + num(it.cant); Pb[k] = (Pb[k] || 0) + num(it.std); }
       }
       return { data: { C, Pb, nb }, msg: `${fmt(nb)} baúles · ${fmt(Object.keys(C).length)} productos · ${fmt(Object.values(C).reduce((a, b) => a + b, 0))} piezas` };
+    }
+    if (/\.csv$/i.test(f.name)) {
+      const R = csvRows(await readText(f)); const H = (R[0] || []).map(plain);
+      const iF = H.indexOf('familia'), iN = H.indexOf('cajas'), iC = H.indexOf('codigo'), iT = H.indexOf('tipo'), iP = H.indexOf('porcaja'), iTot = H.indexOf('total');
+      if (iC < 0 || iP < 0) throw new Error('el CSV no tiene las columnas Codigo y Por caja');
+      const fam = {};
+      for (const r of R.slice(1)) {
+        const k = norm(r[iC]); if (!k) continue;
+        if (iT >= 0 && !/terminado|^pt$/i.test(String(r[iT]).trim())) continue;   // solo producto terminado (no instrumental)
+        const pc = num(r[iP]), nc = iN >= 0 ? num(r[iN]) || 1 : 1;
+        C[k] = (C[k] || 0) + (iTot >= 0 && r[iTot] !== '' ? num(r[iTot]) : pc * nc); Pb[k] = (Pb[k] || 0) + pc;
+        if (iF >= 0) fam[r[iF]] = nc;
+      }
+      const nb = Object.values(fam).reduce((a, b) => a + b, 0), todas1 = Object.values(fam).every(x => x === 1);
+      return { data: { C, Pb, nb }, warn: todas1, msg: `${fmt(Object.keys(fam).length)} familias · ${fmt(nb)} cajas · ${fmt(Object.keys(C).length)} productos · ${fmt(Object.values(C).reduce((a, b) => a + b, 0))} piezas` +
+        (todas1 ? ' · OJO: todas las familias figuran con 1 caja y el archivo no dice cuáles son baúles; se cuentan todas' : '') };
     }
     const { rows } = await sheetRows(f); const R = rows(); const h = findHeader(R, [['codigo', 'cod'], ['enbaul', 'baules', 'piezasenbaul']]);
     if (!h) throw new Error('no encontré las columnas código y piezas en baúles');
@@ -575,6 +647,12 @@ const PARSERS = {
   },
   // ---------- 6 stock de MP ----------
   async mp([f]) {
+    if (/\.csv$/i.test(f.name)) {
+      const L = leerResumen(await readText(f));
+      if (!L) throw new Error('el CSV no tiene las columnas Nomenclatura y Saldo');
+      const M = {}, D = {}; for (const [k, v] of Object.entries(L.out)) { M[k] = v.q; D[k] = v.d; }
+      return { data: { s: M, d: D }, msg: `${fmt(Object.keys(M).length)} códigos de MP (en mm)` };
+    }
     const { rows } = await sheetRows(f); const R = rows(); const h = findHeader(R, [['codigo', 'cod'], 'stock']);
     if (!h) throw new Error('no encontré las columnas código y stock');
     const id = colOf(R, h.row, ['descripcion', 'desc']); const M = {}, D = {};
@@ -754,9 +832,31 @@ function calcular() {
     const disp = p.dpt + c + p.wip;
     const fab = disp <= pr && mx > 0 ? Math.max(0, Math.ceil(mx - disp)) : 0;
     const cob = d > 0 ? (p.dpt + p.wip - ss) / d : null;
-    res.push({ k, desc: (PR && PR[k] && PR[k][1]) || p.d || (V.desc[k] || ''), est, cls, V: Vk, sig: SIG[k] || 0, d, L: Lb, Lr, Lsrc: k in LP ? `propio (${byK[k].length} OF)` : (w && w.terc ? 'con terceros' : 'general'),
+    res.push({ k, grp: (p.f || k.slice(0, 4)), desc: (PR && PR[k] && PR[k][1]) || p.d || (V.desc[k] || ''), est, cls, V: Vk, sig: SIG[k] || 0, d, L: Lb, Lr, Lsrc: k in LP ? `propio (${byK[k].length} OF)` : (w && w.terc ? 'con terceros' : 'general'),
       ss, C: c, Pb: pb, Q: q, qset, mn, pr, mx, dpt: p.dpt, wip: p.wip, disp, fab, cob, urg: cob != null && cob < Lr,
       mp: p.mp || (w && w.mp) || '', u: p.u || 0, w });
+  }
+  // ---- las 5 ecuaciones del documento, con los mismos datos de cada producto ----
+  const Z = { A: 1.65, B: 1.28, C: 0.84 };
+  for (const r of res) {
+    const d = r.d, base = r.C + r.Pb, L = r.Lr, disp = r.disp, sg = r.sig * (1 + g);
+    const mk = (ss, mn, pr, mx, n) => {
+      mn = Math.ceil(mn); pr = Math.ceil(pr); mx = Math.ceil(mx);
+      let fab;
+      if (n === 5) { const f = mx - disp; fab = d > 0 ? (f >= d ? f : 0) : (disp < mn ? f : 0); }
+      else fab = disp <= pr && mx > 0 ? mx - disp : 0;
+      return { mn, pr, mx, fab: Math.max(0, Math.ceil(fab)), crit: d > 0 && (r.dpt + r.wip - ss) / d < L };
+    };
+    const s3 = (Z[r.cls] || 0) * sg * Math.sqrt(L), s4 = d * L * 0.75;
+    r.op = [
+      mk(d, base + d, base + d + d * L, base + d + d * 3, 1),
+      mk(r.ss, base + r.ss, base + r.ss + d * L, base + r.ss + r.Q, 2),
+      mk(s3, base + s3, base + s3 + d * L, base + s3 + r.Q, 3),
+      mk(s4, base + s4, base + s4 + d * L, base + s4 + d * L + Math.max(d * L * 0.5, d), 4),
+      mk(r.ss, base + r.ss, base + r.ss + d * (0.25 + L), base + r.ss + d * (0.25 + L), 5),
+    ];
+    r.cv = r.V > 0 ? r.sig / (r.V / 12) : 0;
+    Object.assign(r, recomendar(r));
   }
   const ord = { A: 0, B: 1, C: 2, '-': 3 };
   res.sort((a, b) => (b.urg - a.urg) || (ord[a.cls] - ord[b.cls]) || ((a.cob ?? 99) - (b.cob ?? 99)));
@@ -783,6 +883,31 @@ function calcular() {
   RES = { res, mpres, H, nof, cub, at: Date.now() };
   renderRes();
 }
+
+// Cuál de las 5 le corresponde a cada producto, con una explicación corta
+function recomendar(r) {
+  const dias = Math.round(r.L * MES);
+  if (r.est === 'A pedido' || r.d <= 0)
+    return { rec: 2, why: 'Sin venta en el período: solo se mantienen los baúles. Las cinco dan lo mismo.' };
+  if (r.cls === 'A' && r.cv >= 1)
+    return { rec: 3, why: `Producto A con venta muy despareja (de un mes a otro cambia ${fmt(r.cv * 100)} %): el colchón fijo de la 2 se queda corto; la 3 mide esa variación.` };
+  if ((r.cls === 'A' || r.cls === 'B') && dias > 60)
+    return { rec: 4, why: `Tarda ${fmt(dias)} días en fabricarse (terceros o cola larga): la 4 agranda el colchón con todo ese tiempo; la 2 lo acorta con la raíz.` };
+  if (r.d < 1)
+    return { rec: 2, why: 'Se vende menos de 1 por mes: la 1 y la 3 piden stock de más, y la 5 lanzaría OF de 1 o 2 piezas.' };
+  if (r.cls === 'C')
+    return { rec: 2, why: 'Producto C: colchón chico y lote por preparación. La 1 inmoviliza stock que casi no rota.' };
+  return { rec: 2, why: 'Venta pareja: la 2 da el colchón justo sin multiplicar OF. La 1 pide de más; la 4 y la 5 lanzan muchas OF chicas.' };
+}
+const OPN = ['1 · Meses fijos', '2 · Por clase', '3 · Nivel de servicio', '4 · Zonas de color', '5 · Revisión semanal'];
+const OPW = [
+  'Mismo colchón (1 mes) para todo: sobra en lo que casi no se vende y falta en lo más vendido.',
+  'Colchón según la clase A/B/C. Simple y estable, pero no mira cuánto varía la venta de cada producto.',
+  'El colchón sale de cuánto varió la venta en 2 años. Protege mejor, pero con pocas ventas el dato es inestable y pide de más.',
+  'Colchón proporcional a lo que tarda la OF. Bueno para lo que tarda mucho; pide mirar los colores a diario y lanza más OF.',
+  'Se revisa todo cada semana. Programa parejo, pero muchas OF chicas = muchas preparaciones de máquina.',
+];
+let EQG = false;
 
 // ════════════════════════════════════════════════════════════════════
 //  Resultados
@@ -824,6 +949,40 @@ function renderTable() {
       </tbody></table>${arr.length ? '' : '<div class="empty">Nada para mostrar con este filtro.</div>'}</div>
       <p class="hint" style="margin-top:8px">${fmt(arr.length)} productos${arr.length > 1500 ? ' (se muestran los primeros 1.500; exportá a Excel para ver todos)' : ''}. Orden: críticos primero, después clase A → C y menor cobertura. Clic en una fila para ver la cuenta.</p>`;
     $$('#tview th[data-s]').forEach(th => th.onclick = () => { SORT = SORT === th.dataset.s ? null : th.dataset.s; renderTable(); });
+    $$('#tview tr.r').forEach(tr => tr.onclick = () => detalle(tr.dataset.k));
+  } else if (TAB === 'eq') {
+    const arr = filtro(RES.res);
+    const resumen = [0, 1, 2, 3, 4].map(i => ({
+      crit: arr.filter(r => r.op[i].crit).length, fab: arr.reduce((a, r) => a + r.op[i].fab, 0),
+      mn: arr.reduce((a, r) => a + r.op[i].mn, 0), nof: arr.filter(r => r.op[i].fab > 0).length, rec: arr.filter(r => r.rec === i + 1).length }));
+    let h = `<div class="box"><h4>Las 5 ecuaciones con nuestros datos</h4>
+      <p>Mismos productos, mismo stock y mismos tiempos; cambia solo la fórmula. En verde, la que conviene para cada producto.</p>
+      <div class="eqleg">${OPN.map((o, i) => `<div><b>${o}</b><span>${OPW[i]}</span></div>`).join('')}</div></div>
+      <div class="tw" style="max-height:none;margin-bottom:14px"><table><thead><tr><th>Ecuación</th><th class="n">Críticos hoy</th><th class="n">Piezas a fabricar</th><th class="n">OF a lanzar</th><th class="n">Stock mínimo total</th><th class="n">Conviene en</th></tr></thead><tbody>
+      ${resumen.map((x, i) => `<tr><td><b>${OPN[i]}</b></td><td class="n">${fmt(x.crit)}</td><td class="n">${fmt(x.fab)}</td><td class="n">${fmt(x.nof)}</td><td class="n">${fmt(x.mn)}</td><td class="n" style="color:var(--green);font-weight:700">${fmt(x.rec)} productos</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="tbar"><span class="chip ${EQG ? '' : 'on'}" data-g="0">Por producto</span><span class="chip ${EQG ? 'on' : ''}" data-g="1">Por grupo</span>
+      <span class="hint">Cada celda: mínimo–máximo y, abajo, cuánto fabricar hoy. ● rojo = queda crítico con esa ecuación.</span></div>`;
+    const cell = (o, rec) => `<td class="oc ${rec ? 'rec' : ''}">${fmt(o.mn)}–${fmt(o.mx)}<small style="color:${o.fab ? '#fb923c' : 'var(--text3)'}">${o.fab ? 'fabricar ' + fmt(o.fab) : 'no fabricar'}${o.crit ? ' <span style="color:#f87171">●</span>' : ''}</small></td>`;
+    if (!EQG) {
+      const list = arr.filter(r => r.d > 0 || r.fab > 0).slice(0, 800);
+      h += `<div class="tw"><table><thead><tr><th>Código</th><th>Descripción</th><th>Clase</th><th>Cuál conviene</th>${OPN.map(o => `<th class="n">${o}</th>`).join('')}</tr></thead><tbody>
+        ${list.map(r => `<tr class="r" data-k="${esc(r.k)}"><td class="mono">${esc(r.k)}</td><td class="desc">${esc(r.desc)}</td><td>${CLS(r.cls)}</td>
+        <td class="why"><b style="color:var(--green)">${OPN[r.rec - 1]}</b> — ${r.why}</td>${r.op.map((o, i) => cell(o, r.rec === i + 1)).join('')}</tr>`).join('')}</tbody></table></div>
+        <p class="hint" style="margin-top:8px">${fmt(list.length)} productos con venta o a fabricar${arr.length > 800 ? ' (primeros 800; el Excel trae todos)' : ''}. Clic en una fila para ver la cuenta de la opción 2.</p>`;
+    } else {
+      const G = {};
+      for (const r of arr) { const x = G[r.grp] = G[r.grp] || { g: r.grp, desc: r.desc, n: 0, V: 0, op: [0, 1, 2, 3, 4].map(() => ({ mn: 0, mx: 0, fab: 0, crit: 0 })), rec: {} };
+        x.n++; x.V += r.V; r.op.forEach((o, i) => { const y = x.op[i]; y.mn += o.mn; y.mx += o.mx; y.fab += o.fab; y.crit += o.crit ? 1 : 0; }); x.rec[r.rec] = (x.rec[r.rec] || 0) + 1; }
+      const gl = Object.values(G).sort((a, b) => b.V - a.V);
+      h += `<div class="tw"><table><thead><tr><th>Grupo</th><th>Ejemplo</th><th class="n">Productos</th><th>Cuál conviene</th>${OPN.map(o => `<th class="n">${o}</th>`).join('')}</tr></thead><tbody>
+        ${gl.map(x => { const best = +Object.keys(x.rec).sort((a, b) => x.rec[b] - x.rec[a])[0];
+          const why = `<td class="why"><b style="color:var(--green)">${OPN[best - 1]}</b> — en ${x.rec[best]} de ${x.n} productos del grupo${Object.keys(x.rec).length > 1 ? ' (' + Object.keys(x.rec).filter(k => +k !== best).map(k => `opción ${k}: ${x.rec[k]}`).join(', ') + ')' : ''}.</td>`;
+          return `<tr><td class="mono">${esc(x.g)}</td><td class="desc">${esc(x.desc)}</td><td class="n">${fmt(x.n)}</td>${why}${x.op.map((o, i) => `<td class="oc ${best === i + 1 ? 'rec' : ''}">${fmt(o.mn)}–${fmt(o.mx)}<small style="color:${o.fab ? '#fb923c' : 'var(--text3)'}">${o.fab ? 'fabricar ' + fmt(o.fab) : 'no fabricar'}${o.crit ? ` <span style="color:#f87171">● ${o.crit}</span>` : ''}</small></td>`).join('')}</tr>`; }).join('')}
+        </tbody></table></div><p class="hint" style="margin-top:8px">Grupos ordenados por venta. El número rojo es cuántos productos del grupo quedan críticos con esa ecuación.</p>`;
+    }
+    v.innerHTML = h;
+    $$('#tview [data-g]').forEach(c => c.onclick = () => { EQG = c.dataset.g === '1'; renderTable(); });
     $$('#tview tr.r').forEach(tr => tr.onclick = () => detalle(tr.dataset.k));
   } else if (TAB === 'mp') {
     if (!RES.mpres.length) { v.innerHTML = '<div class="empty">No hay productos con MP y consumo por pieza. Cargá el stock desde MAESTRO.xlsx o una planilla con las columnas MP y consumo.</div>'; return; }
@@ -881,6 +1040,9 @@ function exportar() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(RES.mpres.map(m => ({ MP: m.mp, Descripcion: m.desc, Productos: m.n, 'Consumo anio (m)': +(m.base / 1000).toFixed(2),
     'Nuevos (m)': +(m.nuev / 1000).toFixed(2), 'Imprevistos (m)': +(m.imp / 1000).toFixed(2), 'Seguridad (m)': +(m.ss / 1000).toFixed(2), 'Necesidad (m)': +(m.need / 1000).toFixed(2),
     'Stock (m)': +(m.stk / 1000).toFixed(2), 'Comprar (m)': +(m.comp / 1000).toFixed(2), Barras: m.barras }))), 'Compra MP');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(RES.res.map(r => { const o = { Codigo: r.k, Grupo: r.grp, Descripcion: r.desc, Clase: r.cls };
+    r.op.forEach((x, i) => { o[`Op${i + 1} Minimo`] = x.mn; o[`Op${i + 1} Maximo`] = x.mx; o[`Op${i + 1} Fabricar`] = x.fab; o[`Op${i + 1} Critico`] = x.crit ? 'SI' : ''; });
+    o['Conviene'] = OPN[r.rec - 1]; o['Por que'] = r.why; return o; })), 'Ecuaciones');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(PDEF.filter(p => p.id).map(p => ({ Parametro: p.label, Valor: par(p.id), Unidad: p.unit }))), 'Parametros');
   const d = new Date(); XLSX.writeFile(wb, `BIOTROM_Stock_MP_${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.xlsx`);
 }
