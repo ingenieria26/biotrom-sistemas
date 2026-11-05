@@ -2731,6 +2731,8 @@ function precioAuto(cod){var d=descMP(cod),pf=String(cod).slice(0,2),re=MATS2[pf
  if(!re||!band||!fm)return{ok:false};band=bandaForma(band,fm.f);
  var dens=mpDetectarDensidad(cod,d),kgm=areaMP(fm)*dens/1000,centro=Math.sqrt(band[0]*band[1]),cand=candidatosMP(cod,d,re,fm);
  for(var i=0;i<cand.length;i++){var c=cand[i],un=String(c.it.unidad||"").toUpperCase().replace(/\./g,"").trim(),opts,metodo="",forz=null;
+  /* OC en pesos: se compara en dólares al tipo de cambio actual, y solo si es de los últimos 6 meses (las más viejas quedarían baratas por la inflación) */
+  var esArs=c.oc.moneda==="ars",fdo=fechaOC(c.oc.fecha);if(esArs&&(!fdo||(Date.now()-fdo.getTime())>183*86400000))continue;var pu=esArs?c.p/tc():c.p;
   /* 1) la descripcion o la unidad dicen "kg"; 2) la relacion precio/diametro dentro de la OC; 3) la columna de unidad (casi nunca viene); 4) el precio habitual del material */
   if(c.oc.precioPor==="kg"){forz="kg";metodo="el encabezado de la OC dice precio por kg"}
   else if(c.oc.precioPor==="m"){forz="m";metodo="el encabezado de la OC dice precio por metro"}
@@ -2739,9 +2741,9 @@ function precioAuto(cod){var d=descMP(cod),pf=String(cod).slice(0,2),re=MATS2[pf
   else{var sl=pendienteOC(c.oc,re);if(sl!=null&&sl>=0.6){forz="m";metodo="por metro: el precio crece con el diámetro en esa OC"}else if(sl!=null&&sl<=0.3){forz="kg";metodo="por kg: el precio es igual para todos los diámetros de esa OC"}
    else if(/^(M|MT|MTS|METRO|METROS)$/.test(un)){metodo="unidad de la OC: metros"}}
   opts=forz?[forz]:["m","kg"];
-  var ok=[];opts.forEach(function(o){var kg=o==="m"?c.p/kgm:c.p;if(kg>=band[0]&&kg<=band[1])ok.push({o:o,kg:kg,dist:Math.abs(Math.log(kg/centro))})});
+  var ok=[];opts.forEach(function(o){var kg=o==="m"?pu/kgm:pu;if(kg>=band[0]&&kg<=band[1])ok.push({o:o,kg:kg,dist:Math.abs(Math.log(kg/centro))})});
   if(ok.length){ok.sort(function(x,y){return x.dist-y.dist});var best=ok[0],amb=!forz&&ok.length>1&&!metodo,fd=fechaOC(c.oc.fecha),dias=fd?Math.round((Date.now()-fd.getTime())/86400000):null;
-   return{ok:true,precio:c.p,unidad:best.o,moneda:c.oc.moneda==="ars"?"ars":"usd",oc:c.oc.numero,fecha:c.oc.fecha||"",dias:dias,desc:c.it.descripcion,kg:best.kg,saltadas:i,metodo:metodo,amb:amb}}}
+   return{ok:true,precio:c.p,unidad:best.o,moneda:c.oc.moneda==="ars"?"ars":"usd",oc:c.oc.numero,fecha:c.oc.fecha||"",dias:dias,desc:c.it.descripcion,kg:best.kg,saltadas:i,metodo:metodo+(esArs?(metodo?"; ":"")+"OC en pesos: USD "+fmt(best.kg,2)+"/kg al tipo de cambio actual":""),amb:amb}}}
  return{ok:false,hayOC:cand.length>0}}
 function textoOC(a){if(a.chapa&&!a.ok)return"OC "+a.oc+" ("+(a.fecha||"s/f")+"): "+(a.moneda==="ars"?"ARS ":"USD ")+fmt(a.precioChapa,2)+" por chapa entera de "+a.esp+" mm";var u=a.unidad==="kg"?"kg":"m";return"OC "+a.oc+" ("+(a.fecha||"s/f")+"): "+(a.moneda==="ars"?"ARS ":"USD ")+fmt(a.precio,2)+"/"+u+(a.amb?" ⚠ la OC no indica la unidad: se supuso por "+(u==="kg"?"kilo":"metro")+" según el precio habitual, confirmalo":(a.metodo?" ("+a.metodo+")":""))+(a.saltadas?" · se saltearon "+a.saltadas+" OC más nueva"+(a.saltadas>1?"s":"")+" con precio no razonable":"")}
 /* Pista de precio: la OC mas reciente de un material parecido (misma familia y mismo diametro). Es solo una pista: el precio por unidad de las OC no siempre es comparable (kg, metros, barras), por eso se confirma a mano. */
@@ -3097,9 +3099,14 @@ function clave(n){return String(n).replace(/[.$#\[\]\/]/g,"_")}
 function aSet(todas){var s={};Object.keys(todas).forEach(function(k){if((todas[k].v||0)<2)return;var a=String(todas[k].archivo||"").toLowerCase().replace(/\.pdf$/,"");if(a)s[a]=1});return s}
 function guardarLocal(todas){try{localStorage.setItem(LS_ORDENES_COMPRA,JSON.stringify(todas));return true}catch(e){return false}}
 async function subirLote(lote){var ks=Object.keys(lote);if(!ks.length)return;try{await fxT(FB_OCP+".json",{method:"PATCH",body:JSON.stringify(lote)},60000)}catch(e){}}
-(async function ocSincronizar(){try{await sleep(4000);var loc=_cargarOrdenesCompra(),ks=Object.keys(loc),r=await fxT(FB_OCP+".json?shallow=true",{},30000);if(!r.ok)return;var rem=await r.json()||{},nr=Object.keys(rem).length;
- if(ks.length){var lote={},n=0,sub=0;for(var i=0;i<ks.length;i++){var k=clave(ks[i]);if(rem[k])continue;lote[k]=loc[ks[i]];n++;sub++;if(n>=100){await subirLote(lote);lote={};n=0}}if(n)await subirLote(lote);if(sub)console.info("OC subidas a la nube:",sub);return}
- if(nr){var rp=await fxT(FB_OCP+".json",{},90000);if(!rp.ok)return;var all=await rp.json()||{},t={};Object.keys(all).forEach(function(k){var o=all[k];if(o)t[o.numero||k]=o});if(Object.keys(t).length&&guardarLocal(t)){console.info("OC bajadas de la nube:",Object.keys(t).length);document.dispatchEvent(new Event("oc-actualizadas"))}}
+(async function ocSincronizar(){try{await sleep(4000);var loc=_cargarOrdenesCompra(),ks=Object.keys(loc),locK={};ks.forEach(function(k){locK[clave(k)]=k});var r=await fxT(FB_OCP+".json?shallow=true",{},30000);if(!r.ok)return;var rem=await r.json()||{};
+ /* 1) subir las OC de este navegador que la nube no tiene */
+ var lote={},n=0,sub=0;for(var i=0;i<ks.length;i++){var k=clave(ks[i]);if(rem[k])continue;lote[k]=loc[ks[i]];n++;sub++;if(n>=100){await subirLote(lote);lote={};n=0}}if(n)await subirLote(lote);if(sub)console.info("OC subidas a la nube:",sub);
+ /* 2) bajar las de la nube que faltan acá (por ejemplo las OC enviadas que se cargan desde PI) */
+ var falt=Object.keys(rem).filter(function(k){return!locK[k]}),baj=0;
+ if(falt.length>150){var rp=await fxT(FB_OCP+".json",{},90000);if(rp.ok){var all=await rp.json()||{};falt.forEach(function(k){var o=all[k];if(o){loc[o.numero||k]=o;baj++}})}}
+ else{for(var j=0;j<falt.length;j++){try{var r1=await fxT(FB_OCP+"/"+encodeURIComponent(falt[j])+".json",{},30000);if(r1.ok){var o=await r1.json();if(o){loc[o.numero||falt[j]]=o;baj++}}}catch(e){}}}
+ if(baj&&guardarLocal(loc)){console.info("OC bajadas de la nube:",baj);document.dispatchEvent(new Event("oc-actualizadas"))}
 }catch(e){}})();
 window.ocCancelar=function(){cancelar=true;est("Cancelando… se guarda lo leído hasta ahora.")};
 window.ocTraerDeLaNube=async function(){
