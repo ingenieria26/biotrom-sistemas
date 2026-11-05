@@ -2510,7 +2510,9 @@ function descripciones(){var m={};try{(getDBProd()||[]).concat(getDBComp()||[]).
 function cargarLocal(){try{MAS=JSON.parse(localStorage.getItem(LS_MAS)||"null")}catch(e){MAS=null}try{PRECIOS=JSON.parse(localStorage.getItem(LS_PMP)||"{}")||{}}catch(e){PRECIOS={}}}
 function guardarPrecios(){_lnkIdx=null;try{localStorage.setItem(LS_PMP,JSON.stringify(PRECIOS))}catch(e){}try{BiotromAuth.fetch(URL_PMP,{method:"PUT",body:JSON.stringify(PRECIOS)}).catch(function(){})}catch(e){}}
 function bajarPrecios(){try{BiotromAuth.fetch(URL_PMP).then(function(r){return r.ok?r.json():null}).then(function(d){if(d&&typeof d==="object"){PRECIOS=Object.assign({},d,PRECIOS);_lnkIdx=null;try{localStorage.setItem(LS_PMP,JSON.stringify(PRECIOS))}catch(e){}if(activo())render()}}).catch(function(){})}catch(e){}}
-function guardarMas(){try{localStorage.setItem(LS_MAS,JSON.stringify(MAS))}catch(e){}}
+var URL_MAS=FB_BASE_CALCPP+"/costos_masivo.json";
+function guardarMas(){try{localStorage.setItem(LS_MAS,JSON.stringify(MAS))}catch(e){}try{if(MAS&&MAS.items){if(!MAS.at)MAS.at=Date.now();var lista=Object.keys(MAS.items).map(function(k){var it=Object.assign({},MAS.items[k]);if(it.det){it.det=Object.assign({},it.det);delete it.det.pasos}return[k,it]});var lite={fecha:MAS.fecha,tc:MAS.tc,base:MAS.base,at:MAS.at,items:lista};BiotromAuth.fetch(URL_MAS,{method:"PUT",body:JSON.stringify(lite)}).catch(function(){})}}catch(e){}}
+function bajarMas(){try{BiotromAuth.fetch(URL_MAS).then(function(r){return r.ok?r.json():null}).then(function(d){if(!d||!d.items)return;var items={};(Array.isArray(d.items)?d.items:[]).forEach(function(p){if(p&&p[0])items[p[0]]=p[1]});if(!Object.keys(items).length)return;if(MAS&&MAS.items&&Object.keys(MAS.items).length&&(MAS.at||0)>=(d.at||0))return;MAS={fecha:d.fecha,tc:d.tc,base:d.base,at:d.at,items:items,deNube:true};try{localStorage.setItem(LS_MAS,JSON.stringify(MAS))}catch(e){}if(activo())render()}).catch(function(){})}catch(e){}}
 /* ---------- carta del producto (misma logica que "aplicarCartasPlanos", sin tocar la pantalla) ---------- */
 function cartaDe(cod,desc){var cc=window.cartaCompra&&window.cartaCompra(cod,desc);if(cc&&cc._servicio)return{d:cc,origen:cc._origen,mp:MP_DESPIECE[cod]||cc.mp||""};if(cc)return{d:cc,origen:"producto comprado, "+cc._ocTxt+" + lavado + envasado",mp:""};return cartaPropia(cod,desc)}
 function cartaPropia(cod,desc){var d=DB_CARTAS_PLANOS[cod],origen="carta propia";
@@ -2875,7 +2877,7 @@ window.expCalcular=async function(){if(corriendo)return;corriendo=true;cancelar=
     if(cancelar){resumenRun="Cálculo cancelado: se procesaron "+hechos+" de "+totalCola+" productos (no se guardó nada).";throw new Error("__cancelado")}
     procesarEns(colaE[e2]);hechos++}
   var d=new Date(),p2=function(n){return String(n).padStart(2,"0")};
-  MAS={fecha:p2(d.getDate())+"/"+p2(d.getMonth()+1)+"/"+d.getFullYear(),tc:tcAct,base:(function(){try{var c=JSON.parse(localStorage.getItem("biotrom_calcpp_base_horas")||"null");return c?c.modo+(c.modo==="piso"?" "+c.piso+" %":""):"teorica"}catch(e){return""}})(),items:items};guardarMas();
+  MAS={at:Date.now(),fecha:p2(d.getDate())+"/"+p2(d.getMonth()+1)+"/"+d.getFullYear(),tc:tcAct,base:(function(){try{var c=JSON.parse(localStorage.getItem("biotrom_calcpp_base_horas")||"null");return c?c.modo+(c.modo==="piso"?" "+c.piso+" %":""):"teorica"}catch(e){return""}})(),items:items};guardarMas();
   resumenRun="Listo en "+Math.round((Date.now()-t0)/1000)+" s: "+resumenMas(MAS)+".";
  }catch(e){if(e.message!=="__cancelado")resumenRun="No se pudo calcular: "+e.message}
  if(ifr)ifr.remove();corriendo=false;render()};
@@ -2969,8 +2971,12 @@ function graficoComposicionPNG(titulo,partes){var esc=2,W=620,H=150,cv=document.
  partes.forEach(function(p,i){var w=(W-28)*p[1]/tot;g.fillStyle=cols[i%cols.length];g.fillRect(x,48,Math.max(1,w-2),34);
   g.fillStyle=cols[i%cols.length];g.fillRect(14+i*200,101,12,12);g.fillStyle="#1e293b";g.font="12px Calibri, Arial";g.fillText(p[0]+": "+fmt(p[1]/tot*100,1)+" %",32+i*200,112);x+=w});
  return{b64:cv.toDataURL("image/png"),w:W,h:H}}
-window.expDescargar=function(){cargarExcelJS(function(ok){if(!ok){return window.expDescargarSheetJS()}
+window.expDescargar=function(){if(corriendo){alert("Se está calculando: esperá a que termine y volvé a tocar «Descargar Excel».");return}
+ if((!MAS||!MAS.items||!Object.keys(MAS.items).length)&&!window.__expAuto){if(confirm("Todavía no hay un cálculo de costos en esta computadora ni en la nube, por eso el Excel saldría sin costos.\n\n¿Calcular los costos ahora (tarda 1 o 2 minutos) y descargar el Excel al terminar?")){window.__expAuto=true;Promise.resolve(window.expCalcular()).then(function(){window.__expAuto=false;window.expDescargar()})}return}
+ window.__expAuto=false;cargarExcelJS(function(ok){if(!ok){return window.expDescargarSheetJS()}
  var datosM=modeloExcel();if(!datosM.length){alert("No hay productos para exportar con estas opciones.");return}
+ var _con=datosM.filter(function(o){return o.tot!==null}).length;if(!_con){var nOC=0;try{nOC=Object.keys(_cargarOrdenesCompra()).length}catch(e){}var sinMP=Object.keys((MAS&&MAS.items)||{}).filter(function(k){return MAS.items[k].estado==="sin_precio"}).length;
+  if(!confirm("Ningún producto tiene costo"+(sinMP?": a "+sinMP+" les falta el precio de la materia prima":"")+".\n\n"+(nOC?"":"Esta computadora no tiene Órdenes de Compra cargadas (de ahí sale el precio de la materia prima): cargalas en la pestaña de OC.\n")+"También podés elegir «Mostrar el costo sin materia prima» arriba del botón «Calcular costos».\n\n¿Descargar el Excel igual (sin costos)?"))return}
  var M=S.moneda,fmtNum=S.dec==="full"?"#,##0.0000":"#,##0.00",fmtMon="#,##0",AZUL="1E3A8A",CELESTE="DBEAFE",GRIS="F1F5F9",wb=new ExcelJS.Workbook();wb.creator="BIOTROM";wb.created=new Date();
  var fino={style:"thin",color:{argb:"FFE2E8F0"}},borde={top:fino,bottom:fino,left:fino,right:fino};
  var conC=datosM.filter(function(o){return o.tot!==null}),piezas=datosM.reduce(function(a,o){return a+o.qty},0),piezasC=conC.reduce(function(a,o){return a+o.qty},0);
@@ -3025,7 +3031,7 @@ window.expDescargar=function(){cargarExcelJS(function(ok){if(!ok){return window.
   "No incluye instrumentales, sus cajas ni partes de caja. Los productos sin costo se listan en la hoja «A completar» con el motivo."].forEach(function(t){R.mergeCells("B"+fila+":G"+fila);var c=R.getCell("B"+fila);c.value="•  "+t;c.font={size:9,color:{argb:"FF475569"}};c.alignment={wrapText:true,vertical:"top"};R.getRow(fila).height=26;fila++});
  R.headerFooter={oddFooter:"&8BIOTROM S.A. · Costos de fabricación · &P de &N"};
  /* ===== Hoja 2: Costos por producto ===== */
- var ws=wb.addWorksheet("Costos por producto",{properties:{tabColor:{argb:"FF3B82F6"},outlineProperties:{summaryBelow:false}},pageSetup:{orientation:"landscape",paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:"4:4"},views:[{state:"frozen",xSplit:2,ySplit:4}]});
+ var ws=wb.addWorksheet("Costos por producto",{properties:{tabColor:{argb:"FF3B82F6"},outlineLevelRow:1,outlineProperties:{summaryBelow:false}},pageSetup:{orientation:"landscape",paperSize:9,fitToPage:true,fitToWidth:1,fitToHeight:0,printTitlesRow:"4:4"},views:[{state:"frozen",xSplit:2,ySplit:4}]});
  var cols=[["Código",13],["Producto",46],["Familia",22],["Tipo",11],["Materia prima",34],["Piezas (12 m)",11],["Materia prima ("+M+")",13],["Operaciones ("+M+")",13],["Costo directo ("+M+")",13],["Indirectos ("+M+")",13],["Costo total unitario ("+M+")",14],["Costo anual ("+M+")",15],["% del costo anual",10],["Origen del costo",50]];
  ws.columns=cols.map(function(c){return{width:c[1]}});
  ws.mergeCells("A1:N1");ws.getCell("A1").value="Costos por producto — "+PERIODO_TXT;ws.getCell("A1").font={size:15,bold:true,color:{argb:"FF"+AZUL}};ws.getRow(1).height=24;
@@ -3067,7 +3073,7 @@ var _st=window.switchTab;
 window.switchTab=function(id,btn){var r=_st.apply(this,arguments);if(id==="tab-exportar")render();return r};
 document.addEventListener("oc-actualizadas",function(){if(activo())render()});
 document.addEventListener("bom-actualizado",function(){if(activo())render()});
-cargarLocal();bajarPrecios();
+cargarLocal();bajarPrecios();bajarMas();
 })();
 </script><script>/* ===================== ORDENES DE COMPRA: traerlas de la Nube (sin congelar el navegador) =====================
    Los PDF de OC se suben a la Nube (herramienta NUBE, tipo "OC"). Aca se bajan de a uno, se leen con la misma
@@ -3091,6 +3097,10 @@ function clave(n){return String(n).replace(/[.$#\[\]\/]/g,"_")}
 function aSet(todas){var s={};Object.keys(todas).forEach(function(k){if((todas[k].v||0)<2)return;var a=String(todas[k].archivo||"").toLowerCase().replace(/\.pdf$/,"");if(a)s[a]=1});return s}
 function guardarLocal(todas){try{localStorage.setItem(LS_ORDENES_COMPRA,JSON.stringify(todas));return true}catch(e){return false}}
 async function subirLote(lote){var ks=Object.keys(lote);if(!ks.length)return;try{await fxT(FB_OCP+".json",{method:"PATCH",body:JSON.stringify(lote)},60000)}catch(e){}}
+(async function ocSincronizar(){try{await sleep(4000);var loc=_cargarOrdenesCompra(),ks=Object.keys(loc),r=await fxT(FB_OCP+".json?shallow=true",{},30000);if(!r.ok)return;var rem=await r.json()||{},nr=Object.keys(rem).length;
+ if(ks.length){var lote={},n=0,sub=0;for(var i=0;i<ks.length;i++){var k=clave(ks[i]);if(rem[k])continue;lote[k]=loc[ks[i]];n++;sub++;if(n>=100){await subirLote(lote);lote={};n=0}}if(n)await subirLote(lote);if(sub)console.info("OC subidas a la nube:",sub);return}
+ if(nr){var rp=await fxT(FB_OCP+".json",{},90000);if(!rp.ok)return;var all=await rp.json()||{},t={};Object.keys(all).forEach(function(k){var o=all[k];if(o)t[o.numero||k]=o});if(Object.keys(t).length&&guardarLocal(t)){console.info("OC bajadas de la nube:",Object.keys(t).length);document.dispatchEvent(new Event("oc-actualizadas"))}}
+}catch(e){}})();
 window.ocCancelar=function(){cancelar=true;est("Cancelando… se guarda lo leído hasta ahora.")};
 window.ocTraerDeLaNube=async function(){
  if(corriendo)return;
