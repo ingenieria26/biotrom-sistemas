@@ -2954,6 +2954,7 @@ window.expCalcular=async function(){if(corriendo)return;corriendo=true;cancelar=
     rec.ownD=ownD;rec.ownC=ownC;
     rec.comps=bom.map(function(b){if(b.u==="MM"){var cmM=(b.cod in cmCache)?cmCache[b.cod]:(cmCache[b.cod]=costoMetroMP(w,b.cod,PRECIOS[b.cod])),okM=!!(cmM&&cmM.cm);return{cod:b.cod,desc:b.desc||"",uso:1,d:okM?cmM.cm*(parseFloat(b.uso)||0)/1000:null,c:0,src:okM?"materia prima directa: "+b.uso+" mm de "+b.cod+" ("+cmM.fuente+")":null,motivo:okM?"":"sin precio de la materia prima ("+b.cod+")",mm:b.uso}}
      var k=costoComp(b.cod),motivo="";
+     if(!k){var cp=compraDe(b.cod,b.desc);if(cp&&!cp.serv)k={d:cp.usd,c:0,src:"pieza comprada · "+cp.txt}}
      if(!k){var r0=items[b.cod];motivo=r0?(r0.estado==="sin_precio"?(r0.mp?"sin precio de la materia prima ("+r0.mp+")":"la carta no indica la materia prima"):(r0.estado==="sin_carta"?"sin carta de proceso":"sin cálculo")):"sin carta de proceso";
       if(!r0||r0.estado==="sin_carta"){var oc=precioCompOC(b);if(oc){k={d:oc.usd,c:0,src:"pieza comprada, sin carta · "+oc.txt};motivo=""}}}
      return{cod:b.cod,desc:b.desc||"",uso:parseFloat(b.uso)||1,d:k?k.d:null,c:k?k.c:null,src:k?k.src:null,motivo:motivo}});
@@ -3138,7 +3139,7 @@ window.expDescargar=function(){if(corriendo){alert("Se está calculando: esperá
   for(var i=1;i<=14;i++){var c=row.getCell(i);c.border=borde;c.alignment=Object.assign({vertical:"middle",wrapText:i===2||i===5||i===14},c.alignment||{});c.font={size:9,bold:i===1||i===11||esE};if(esE)c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFEDE9FE"}}}
   if(o.tipo==="Comprado")row.getCell(4).fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFFEF3C7"}};
   if(o.tot===null){row.getCell(1).font={size:9,bold:true,color:{argb:"FF94A3B8"}};row.getCell(14).font={size:9,color:{argb:"FFB45309"}}}
-  o.comps.forEach(function(x){var cr=ws.getRow(r++);cr.outlineLevel=1;cr.getCell(1).value="   └ "+x.cod;cr.getCell(2).value=x.desc+(x.mm?"":"   ×"+x.uso+" por ensamble");cr.getCell(4).value="Componente";cr.getCell(6).value=x.mm?x.mm+" mm":x.uso*o.qty;if(!x.mm)cr.getCell(6).numFmt="#,##0";
+  o.comps.forEach(function(x){var cr=ws.getRow(r++);cr.outlineLevel=1;cr.getCell(1).value="   └ "+x.cod;cr.getCell(2).value=x.desc+(x.mm?"":"   ×"+x.uso);cr.getCell(4).value="Componente";cr.getCell(6).value=x.mm?x.mm+" mm":x.uso*o.qty;if(!x.mm)cr.getCell(6).numFmt="#,##0";
    num(cr.getCell(9),x.dir);num(cr.getCell(10),x.cif);num(cr.getCell(11),x.tot);num(cr.getCell(12),x.sub);cr.getCell(14).value=x.origen;
    for(var i=1;i<=14;i++){var c=cr.getCell(i);c.border=borde;c.alignment=Object.assign({vertical:"middle",wrapText:i===2||i===14,indent:i===2?1:0},c.alignment||{});c.font={size:8,color:{argb:i===14&&/⚠/.test(x.origen)?"FFB91C1C":"FF64748B"}};c.fill={type:"pattern",pattern:"solid",fgColor:{argb:"FFF8FAFC"}}}})});
  ws.autoFilter={from:{row:4,column:1},to:{row:r-1,column:14}};
