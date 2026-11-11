@@ -1528,6 +1528,18 @@ function _buscarCostoHistorialPorCodigo(codigo){
 // (ver mp:"Ensamble" en algunos items), lo suma recursivamente desde SUS
 // componentes - con proteccion anti-loop por si el BOM tuviera una
 // referencia circular.
+/* ---------- Ensambles configurables (2026-11-11): filas con "g" (grupo) = opciones a elegir una; "def" = opción estándar ---------- */
+function bomGrupos(list){var gs={},orden=[];(list||[]).forEach(function(c,i){var g=(c&&c.g)?String(c.g).trim():"";if(!g)return;if(!gs[g]){gs[g]=[];orden.push(g)}gs[g].push(i)});return{gs:gs,orden:orden}}
+function bomIncluidos(list,sel){
+    var r=bomGrupos(list),inc=new Set();
+    (list||[]).forEach(function(c,i){if(!(c&&c.g&&String(c.g).trim()))inc.add(i)});
+    r.orden.forEach(function(g){var ids=r.gs[g],e=null,s=sel&&sel[g];
+        if(s!=null)ids.forEach(function(i){if(e==null&&list[i].cod===s)e=i});
+        if(e==null)ids.forEach(function(i){if(e==null&&list[i].def)e=i});
+        if(e==null)e=ids[0];inc.add(e)});
+    return inc;
+}
+let _bomSel={};
 function _costoComponente(codigo,visitados){
     visitados=visitados||new Set();
     if(visitados.has(codigo))return null;
@@ -1536,51 +1548,76 @@ function _costoComponente(codigo,visitados){
     if(hist)return hist.costo;
     const subComps=ENSAMBLES_MAESTRO[codigo];
     if(subComps&&subComps.length){
-        let total=0,completo=true;
-        subComps.forEach(sc=>{
-            const c=_costoComponente(sc.cod,visitados);
+        let total=0,completo=true;const inc=bomIncluidos(subComps,null);
+        subComps.forEach((sc,i)=>{
+            if(!inc.has(i))return;
+            const c=_costoComponente(sc.cod,new Set(visitados));
             if(c==null)completo=false;else total+=c*(parseFloat(sc.uso)||1);
         });
         return completo?total:null;
     }
     return null;
 }
+function _fmtUsd(n){return n==null?"—":"USD "+n.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}
 function renderCostoEnsamble(codigo){
     const box=document.getElementById("ensambleBox");
     if(!box)return;
     const comps=ENSAMBLES_MAESTRO[codigo]||[];
     if(!comps.length&&_tipoItemActual!=="ensamble"){box.style.display="none";box.innerHTML="";_ensambleTotalUsd=0;return}
-    let total=0,faltan=0;
+    const sel=_bomSel[codigo]||{};
+    const inc=bomIncluidos(comps,sel),incStd=bomIncluidos(comps,null),grp=bomGrupos(comps);
+    let total=0,faltan=0,fijo=0,fijoOk=true,std=0,stdOk=true;
     const cq=String(codigo).replace(/'/g,"\\'");
+    const subt=comps.map(c=>{const cu=c.u==="MM"?null:_costoComponente(c.cod);return{cu:cu,sub:cu!=null?cu*(parseFloat(c.uso)||1):null}});
     const filas=comps.map((c,i)=>{
         const uso=parseFloat(c.uso)||1;
-        const costoUnit=_costoComponente(c.cod);
-        const subtotal=costoUnit!=null?costoUnit*uso:null;
-        if(subtotal!=null)total+=subtotal;else if(c.u!=="MM")faltan++;
+        const costoUnit=subt[i].cu,subtotal=subt[i].sub;
+        const g=c.g?String(c.g).trim():"",usa=inc.has(i);
+        if(usa){if(subtotal!=null)total+=subtotal;else if(c.u!=="MM")faltan++}
+        if(!g){if(subtotal!=null)fijo+=subtotal;else if(c.u!=="MM")fijoOk=false}
+        if(incStd.has(i)){if(subtotal!=null)std+=subtotal;else if(c.u!=="MM")stdOk=false}
+        const gq=g.replace(/'/g,"\\'"),codq=String(c.cod).replace(/'/g,"\\'");
         const mpCarta=DB_CARTAS_PLANOS[c.cod]?.mp;
         const mpMaestro=c.mp;
         const hayDiferenciaMp=mpCarta&&mpMaestro&&mpMaestro!=="Ensamble"&&mpCarta!==mpMaestro;
-        return `<tr>
+        const celdaGrupo=`<input type="text" value="${g.replace(/"/g,"&quot;")}" placeholder="fija" title="Dejalo vacío si la pieza va siempre. Escribí un nombre (ej. TALLO, MÓDULO) si es una opción a elegir: las filas con el mismo nombre son alternativas y se usa una sola." onchange="bomSetGrupo('${cq}',${i},this.value)" style="width:76px;font-size:11px;padding:1px 4px">`+
+            (g?` <label title="Usar esta opción en el cálculo" style="font-size:10px;white-space:nowrap"><input type="radio" name="bomsel_${g.replace(/[^A-Za-z0-9]/g,"_")}" ${usa?"checked":""} onchange="bomElegir('${cq}','${gq}','${codq}')"> usar</label> <button onclick="bomSetDef('${cq}',${i})" title="${c.def?"Es la opción estándar (la que se usa en «Costos de todos»)":"Marcar como opción estándar"}" style="font-size:12px;padding:0 4px;background:none;border:none;cursor:pointer;color:${c.def?"#d97706":"#cbd5e1"}">★</button>`:"");
+        return `<tr style="${g&&!usa?"opacity:.55":""}${g?";background:#faf5ff":""}">
             <td style="font-family:monospace;font-size:11px">${c.cod}</td>
             <td style="font-size:11px">${c.desc||""}</td>
+            <td style="font-size:11px;white-space:nowrap">${celdaGrupo}</td>
             <td style="text-align:center;font-size:11px"><input type="number" min="0" step="1" value="${uso}" onchange="bomSetUso('${cq}',${i},this.value)" style="width:56px;text-align:center"></td>
-            <td class="ars">${c.u==="MM"?`<span style="font-size:10px;color:#64748b">materia prima directa: ${uso} mm</span>`:costoUnit!=null?"USD "+costoUnit.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2}):`<button onclick="irACalcularComponente('${c.cod}','${(c.desc||"").replace(/'/g,"\\'")}')" style="font-size:10px;padding:2px 8px;background:#e65100;color:#fff;border:none;border-radius:4px;cursor:pointer;">⚠ sin calcular — ir</button>`}</td>
-            <td class="ars">${subtotal!=null?"USD $"+subtotal.toFixed(4):"—"}</td>
+            <td class="ars">${c.u==="MM"?`<span style="font-size:10px;color:#64748b">materia prima directa: ${uso} mm</span>`:costoUnit!=null?_fmtUsd(costoUnit):`<button onclick="irACalcularComponente('${c.cod}','${(c.desc||"").replace(/'/g,"\\'")}')" style="font-size:10px;padding:2px 8px;background:#e65100;color:#fff;border:none;border-radius:4px;cursor:pointer;">⚠ sin calcular — ir</button>`}</td>
+            <td class="ars">${subtotal!=null?(usa?"USD $"+subtotal.toFixed(4):`<span style="color:#94a3b8">USD $${subtotal.toFixed(4)} (no elegida)</span>`):"—"}</td>
             <td>${hayDiferenciaMp?`<span style="color:#e65100;font-size:10px;">⚠ MP distinta — Carta: <strong>${mpCarta}</strong> / Maestro: <strong>${mpMaestro}</strong></span>`:""}</td>
             <td><button onclick="bomQuitar('${cq}',${i})" title="Quitar este componente del ensamble" style="font-size:11px;padding:1px 7px;background:#fff;color:#b91c1c;border:1px solid #fca5a5;border-radius:4px;cursor:pointer">✕</button></td>
             </tr>`;
     }).join("");
+    /* rango posible: partes fijas + la opción más barata / más cara de cada grupo */
+    let mn=fijo,mx=fijo,rangoOk=fijoOk;
+    const resGrupos=grp.orden.map(g=>{const vals=grp.gs[g].map(i=>subt[i].sub);const ok=vals.filter(v=>v!=null);if(ok.length<vals.length)rangoOk=false;const a=ok.length?Math.min.apply(null,ok):null,b=ok.length?Math.max.apply(null,ok):null;if(a!=null){mn+=a;mx+=b}
+        const iStd=[...incStd].find(i=>grp.gs[g].indexOf(i)>=0),cStd=comps[iStd];
+        return `<li><b>${g}</b>: ${grp.gs[g].length} opciones · ${a!=null?_fmtUsd(a)+" a "+_fmtUsd(b):"sin costos todavía"}${ok.length<vals.length?` <span style="color:#e65100">(${vals.length-ok.length} sin calcular)</span>`:""} · estándar: <span style="font-family:monospace">${cStd?cStd.cod:"—"}</span>${cStd&&!cStd.def?' <span style="color:#64748b">(la primera de la lista; marcá ★ para elegir otra)</span>':""}</li>`}).join("");
+    const conf=grp.orden.length>0;
     const modif=!!(BOM_USER[codigo]&&Array.isArray(BOM_USER[codigo].list));
+    const deLaPlanilla=modif&&BOM_USER[codigo].src==="planilla";
     const hayOrig=!!ENSAMBLES_ORIG[codigo];
-    box.innerHTML=`<div style="font-size:13px;font-weight:600;color:#6a1b9a;margin-bottom:4px">💰 Costo de Ensamble — componentes ${modif?'<span style="font-weight:400;font-size:11px;color:#b45309">· modificado por vos'+(hayOrig?'':' (ensamble nuevo)')+'</span>':'<span style="font-weight:400;font-size:11px;color:#64748b">· BOM del MAESTRO</span>'}</div>
-        <p style="font-size:11px;color:var(--color-text-tertiary);margin:0 0 8px">Este producto se arma a partir de estos componentes — no se mecaniza directo de materia prima. Podés <b>corregir las cantidades, quitar componentes o agregar otros</b>: los cambios se guardan y valen para todas las computadoras. El costo de cada componente sale del último cálculo guardado en Historial para ese código (o, si es a su vez un ensamble, de sus propios componentes); si falta, calculalo primero.</p>
-        ${comps.length?`<div style="overflow-x:auto"><table style="width:100%;font-size:12px;background:#fff;border-radius:6px"><thead><tr><th>Código</th><th>Descripción</th><th>Uso</th><th>Costo unit.</th><th>Subtotal</th><th>Aviso</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`:'<p style="font-size:12px;color:#b45309;margin:0 0 6px">Este producto todavía no tiene componentes definidos: agregalos abajo.</p>'}
+    const otros=bomListaEnsambles().filter(x=>x.c!==codigo);
+    box.innerHTML=`<div style="font-size:13px;font-weight:600;color:#6a1b9a;margin-bottom:4px">💰 Costo de Ensamble — componentes ${modif?(deLaPlanilla?'<span style="font-weight:400;font-size:11px;color:#0f766e">· traído de la planilla Ensambles</span>':'<span style="font-weight:400;font-size:11px;color:#b45309">· modificado por vos'+(hayOrig?'':' (ensamble nuevo)')+'</span>'):'<span style="font-weight:400;font-size:11px;color:#64748b">· BOM del MAESTRO</span>'}</div>
+        <p style="font-size:11px;color:var(--color-text-tertiary);margin:0 0 8px">Este producto se arma a partir de estos componentes — no se mecaniza directo de materia prima. Podés <b>corregir las cantidades, quitar componentes o agregar otros</b>: los cambios se guardan y valen para todas las computadoras. El costo de cada componente sale del último cálculo guardado en Historial para ese código (o, si es a su vez un ensamble, de sus propios componentes); si falta, calculalo primero.<br><b>Piezas a elegir</b> (tallos, módulos, tornillos de distinta medida): escribí el mismo nombre en la columna <b>Grupo</b> de cada alternativa; se usa una sola por grupo (elegila con «usar») y la ★ marca la estándar, que es la que va al Excel de «Costos de todos».</p>
+        ${comps.length?`<div style="overflow-x:auto"><table style="width:100%;font-size:12px;background:#fff;border-radius:6px"><thead><tr><th>Código</th><th>Descripción</th><th>Grupo</th><th>Uso</th><th>Costo unit.</th><th>Subtotal</th><th>Aviso</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>`:'<p style="font-size:12px;color:#b45309;margin:0 0 6px">Este producto todavía no tiene componentes definidos: agregalos abajo, copialos de otra medida o traelos de la planilla Ensambles.</p>'}
+        ${conf?`<div style="margin-top:8px;padding:8px 10px;background:#fff;border:1px dashed #c4b5fd;border-radius:6px;font-size:12px;color:#334155"><b>Ensamble configurable</b><ul style="margin:4px 0 0 18px;padding:0">${resGrupos}</ul><div style="margin-top:4px">Rango posible: <b>${_fmtUsd(mn)} a ${_fmtUsd(mx)}</b>${rangoOk?"":' <span style="color:#e65100">(parcial: faltan componentes por calcular)</span>'} · Configuración estándar: <b>${_fmtUsd(std)}</b>${stdOk?"":' <span style="color:#e65100">(incompleta)</span>'}</div></div>`:""}
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
           <div style="position:relative;flex:1;min-width:260px"><input id="bomAddQ" type="text" autocomplete="off" placeholder="➕ Agregar componente: buscar por código o descripción…" oninput="bomBuscarComp('${cq}',this.value)" style="width:100%;box-sizing:border-box;padding:6px 10px;font-size:12px;border:1px solid #cbd5e1;border-radius:6px"><div id="bomAddDD" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:1000;background:#fff;border:1px solid #dadce0;border-radius:0 0 6px 6px;max-height:220px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.18);font-size:12px"></div></div>
           <label style="font-size:12px;color:#334155;display:flex;gap:4px;align-items:center">Cantidad <input id="bomAddUso" type="number" min="1" step="1" value="1" style="width:56px;text-align:center"></label>
           ${modif?`<button onclick="bomRestaurar('${cq}')" style="font-size:11px;padding:5px 10px;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:6px;cursor:pointer" title="${hayOrig?'Vuelve a los componentes del MAESTRO':'Borra este ensamble nuevo'}">↺ ${hayOrig?'Volver al MAESTRO':'Quitar este ensamble'}</button>`:''}
         </div>
-        <div style="text-align:right;margin-top:8px;font-weight:600;color:#6a1b9a;">Subtotal Ensamble: USD ${total.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}${faltan?` <span style="font-weight:400;font-size:11px;color:#e65100;">(faltan ${faltan} componente${faltan===1?"":"s"} por calcular)</span>`:""}</div>`;
+        <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input id="bomCopiarQ" list="bomCopiarList" autocomplete="off" placeholder="📋 Copiar componentes de otra medida o ensamble (código)…" style="flex:1;min-width:260px;box-sizing:border-box;padding:6px 10px;font-size:12px;border:1px solid #cbd5e1;border-radius:6px"><datalist id="bomCopiarList">${otros.map(x=>`<option value="${x.c}">${String(x.d||"").replace(/"/g,"&quot;").replace(/</g,"&lt;")}</option>`).join("")}</datalist>
+          <button onclick="bomCopiarDe('${cq}',document.getElementById('bomCopiarQ').value)" style="font-size:11px;padding:5px 10px;background:#fff;color:#6a1b9a;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer">Copiar</button>
+          <button onclick="bomTraerPlanilla()" title="Lee todas las pestañas de la planilla «Ensambles» de Google Sheets (Tutores, Cabezales, Rótulas, Compresores, Adaptadores, Endoprótesis…) y actualiza los ensambles de la calculadora" style="font-size:11px;padding:5px 10px;background:#fff;color:#0f766e;border:1px solid #99f6e4;border-radius:6px;cursor:pointer">⟳ Traer de la planilla Ensambles</button>
+        </div>
+        <div style="text-align:right;margin-top:8px;font-weight:600;color:#6a1b9a;">${conf?"Configuración elegida: ":"Subtotal Ensamble: "}USD ${total.toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2})}${faltan?` <span style="font-weight:400;font-size:11px;color:#e65100;">(faltan ${faltan} componente${faltan===1?"":"s"} por calcular)</span>`:""}</div>`;
     box.style.display="block";
     _ensambleTotalUsd=total;
 }
@@ -1649,6 +1686,80 @@ function bomAgregar(codigo,cod){
     bomEditar(codigo,l=>{l.push({cod:cod,desc:it.d||"",uso:uso,mp:mp,mpDesc:mpd,mpCons:0})});
 }
 (function(){try{BOM_USER=JSON.parse(localStorage.getItem(LS_BOM_USER)||"{}")||{}}catch(e){BOM_USER={}}bomAplicar();setTimeout(bomBajar,1500)})();
+function bomSetGrupo(codigo,i,v){v=String(v||"").trim().toUpperCase();bomEditar(codigo,l=>{if(!l[i])return;if(v){l[i].g=v}else{delete l[i].g;delete l[i].def}})}
+function bomSetDef(codigo,i){bomEditar(codigo,l=>{const c=l[i];if(!c||!c.g)return;const g=String(c.g).trim(),era=!!c.def;l.forEach(x=>{if(x.g&&String(x.g).trim()===g)delete x.def});if(!era)c.def=true});if(_bomSel[codigo]){const c=(ENSAMBLES_MAESTRO[codigo]||[])[i];if(c&&c.g)delete _bomSel[codigo][String(c.g).trim()]}renderCostoEnsamble(codigo);calcularTodo()}
+function bomElegir(codigo,g,cod){(_bomSel[codigo]=_bomSel[codigo]||{})[g]=cod;renderCostoEnsamble(codigo);calcularTodo()}
+function bomCopiarDe(codigo,origen){
+    origen=String(origen||"").trim().toUpperCase();
+    const src=ENSAMBLES_MAESTRO[origen];
+    if(!src||!src.length){alert("No encontré componentes para «"+origen+"». Escribí o elegí el código de un ensamble de la lista.");return}
+    const cur=ENSAMBLES_MAESTRO[codigo]||[];
+    if(cur.length&&!confirm(`Se reemplazan los ${cur.length} componentes actuales por los ${src.length} de ${origen}. Después cambiá las piezas que sean de otra medida. ¿Seguir?`))return;
+    bomEditar(codigo,l=>{l.length=0;src.forEach(x=>l.push(JSON.parse(JSON.stringify(x))))});
+}
+/* ---------- Importar la planilla «Ensambles» de Google Sheets (todas las pestañas) ---------- */
+const URL_PLANILLA_ENS="https://docs.google.com/spreadsheets/d/1EinhYsmcNyRK7MOOYWFM8VlYbrACWYOeayBMiIUkUFY/export?format=xlsx";
+function bomParsearPlanilla(wb){
+    const out={},hojas=[];
+    wb.SheetNames.forEach(n=>{
+        const rows=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:"",raw:true});
+        const h=rows.findIndex(r=>(r||[]).some(x=>String(x).trim().toUpperCase()==="CODIGO"));if(h<0)return;
+        const H=rows[h].map(x=>String(x).trim().toUpperCase());
+        const ci=H.indexOf("CODIGO"),di=H.findIndex(x=>x.indexOf("DESCRIP")===0),qi=H.indexOf("CANTIDAD"),mi=H.indexOf("MATERIA PRIMA"),gi=H.indexOf("GRUPO");
+        let cur=null,n0=0;
+        for(let i=h+1;i<rows.length;i++){
+            const r=rows[i]||[];let cod=String(r[ci]||"").trim();if(!cod)continue;
+            const hijo=/^[└├\-–]/.test(cod);cod=cod.replace(/^[└├\-–\s]+/,"").trim().toUpperCase();if(!cod)continue;
+            if(!/\d/.test(cod)||/\s/.test(cod)){if(!hijo)cur=null;continue}
+            if(!hijo){cur=cod;if(!out[cur])out[cur]={hoja:n,desc:di>=0?String(r[di]||"").trim():"",list:[]};n0++;continue}
+            if(!cur)continue;
+            if(r.some(x=>/no se usa m[aá]s/i.test(String(x))))continue;
+            let q=parseFloat(String(qi>=0?r[qi]:"").replace(",","."));if(!(q>0))q=1;
+            let g=gi>=0?String(r[gi]||"").trim().toUpperCase():"",def=false;if(g.slice(-1)==="*"){def=true;g=g.slice(0,-1).trim()}
+            const mp=mi>=0?String(r[mi]||"").trim():"";
+            const it={cod:cod,desc:di>=0?String(r[di]||"").trim():"",uso:q,mp:mp,mpDesc:mi>=0?String(r[mi+1]||"").trim():"",mpCons:0};
+            if(g){it.g=g;if(def)it.def=true}
+            out[cur].list.push(it);
+        }
+        hojas.push(n+" ("+n0+")");
+    });
+    return{ens:out,hojas:hojas};
+}
+async function bomTraerPlanilla(){
+    if(typeof XLSX==="undefined")await new Promise(ok=>{const sc=document.createElement("script");sc.src="../assets/xlsx-0.18.5.full.min.js";sc.onload=ok;sc.onerror=ok;document.head.appendChild(sc)});
+    if(typeof XLSX==="undefined"){alert("No se pudo cargar la librería de Excel; revisá la conexión y probá de nuevo.");return}
+    let buf;
+    try{const r=await fetch(URL_PLANILLA_ENS+"&t="+Date.now());if(!r.ok)throw new Error("HTTP "+r.status);buf=await r.arrayBuffer()}
+    catch(e){alert("No se pudo leer la planilla: "+(e.message||e)+"\nRevisá la conexión o que la planilla siga compartida con el enlace.");return}
+    let res;try{res=bomParsearPlanilla(XLSX.read(buf,{type:"array"}))}catch(e){alert("No se pudo interpretar la planilla: "+(e.message||e));return}
+    /* Seguro por defecto: se agregan los ensambles nuevos y se aplican los grupos (piezas a elegir) a los que tienen las mismas piezas.
+       Los que difieren en piezas o cantidades (la calculadora puede tener correcciones propias, ej. materia prima directa de PI) se muestran y solo se reemplazan con una segunda confirmación. */
+    const firmaPiezas=l=>JSON.stringify((l||[]).map(x=>x.cod+"×"+(+x.uso||1)).sort());
+    const firma=l=>JSON.stringify((l||[]).map(x=>[x.cod,+x.uso||1,x.g||"",!!x.def]).sort());
+    let nuevos=[],grupos=[],distintos=[],iguales=0,vacios=0;const ahora=Date.now();
+    Object.keys(res.ens).forEach(k=>{
+        const e=res.ens[k];if(!e.list.length){if(!ENSAMBLES_MAESTRO[k])vacios++;return}
+        const cur=ENSAMBLES_MAESTRO[k]||[];
+        e.list.forEach(x=>{const v=cur.find(y=>y.cod===x.cod);if(v){if(v.u)x.u=v.u;if(v.mpCons)x.mpCons=v.mpCons;if(!x.mp&&v.mp){x.mp=v.mp;x.mpDesc=v.mpDesc||""}}});
+        if(cur.length&&firma(cur)===firma(e.list)){iguales++;return}
+        if(!cur.length){nuevos.push(k);BOM_USER[k]={t:ahora,list:e.list,src:"planilla"};if(e.desc&&typeof DESC_EXTRA!=="undefined"&&!DESC_EXTRA[k])try{DESC_EXTRA[k]=e.desc}catch(_){}return}
+        if(firmaPiezas(cur)===firmaPiezas(e.list)){
+            const g=JSON.parse(JSON.stringify(cur));g.forEach(x=>{const p=e.list.find(y=>y.cod===x.cod);delete x.g;delete x.def;if(p&&p.g){x.g=p.g;if(p.def)x.def=true}});
+            grupos.push(k);BOM_USER[k]={t:ahora,list:g,src:"planilla"};return}
+        const A=cur.map(x=>x.cod+"×"+(+x.uso||1)),B=e.list.map(x=>x.cod+"×"+(+x.uso||1));
+        distintos.push({k:k,e:e,txt:k+": quita "+(A.filter(x=>!B.includes(x)).join(" ")||"—")+" / agrega "+(B.filter(x=>!A.includes(x)).join(" ")||"—")});
+    });
+    let reemplazados=0;
+    if(distintos.length&&confirm("Leí la planilla. Hay "+distintos.length+" ensamble(s) que en la calculadora tienen OTRAS piezas o cantidades (pueden ser correcciones hechas acá):\n\n"+distintos.slice(0,12).map(d=>"• "+d.txt).join("\n")+(distintos.length>12?"\n…":"")+"\n\n¿Reemplazarlos por lo que dice la planilla? (Cancelar = dejarlos como están)")){
+        distintos.forEach(d=>{BOM_USER[d.k]={t:ahora,list:d.e.list,src:"planilla"};reemplazados++})}
+    if(nuevos.length||grupos.length||reemplazados){bomAplicar();bomGuardar();bomRefrescar()}
+    alert("Planilla Ensambles leída — pestañas: "+res.hojas.join(", ")+
+        "\n\n• Ensambles nuevos agregados: "+nuevos.length+(nuevos.length?" ("+nuevos.slice(0,15).join(", ")+(nuevos.length>15?"…":"")+")":"")+
+        "\n• Con piezas a elegir (grupos) actualizados: "+grupos.length+(grupos.length?" ("+grupos.slice(0,15).join(", ")+(grupos.length>15?"…":"")+")":"")+
+        "\n• Con otras piezas en la planilla: "+distintos.length+(distintos.length?(reemplazados?" — reemplazados":" — se dejaron como estaban"):"")+
+        "\n• Sin cambios: "+iguales+
+        "\n• En la planilla sin componentes todavía: "+vacios);
+}
 function irACalcularComponente(codigo,desc){
     seleccionarItem(codigo,desc);
     window.scrollTo({top:0,behavior:"smooth"});
@@ -2733,7 +2844,7 @@ window.expDiscBuscar=function(v){DISC_Q=v;var e=document.getElementById("expDisc
 window.expDiscActivar=function(cod,on){if(on){delete PRECIOS["dmanual:"+cod];if(Object.prototype.hasOwnProperty.call(DISCONTINUOS_MAESTRO,cod))PRECIOS["disc:"+cod]={on:1}}else delete PRECIOS["disc:"+cod];guardarPrecios();render()};
 window.expDiscontinuar=function(cod){PRECIOS["dmanual:"+cod]={x:1};delete PRECIOS["disc:"+cod];guardarPrecios();render()};
 function esEns(cod){var b=ENSAMBLES_MAESTRO[cod];return!!(b&&b.length)}
-function ensamblar(m){var d=m.ownD||0,c=m.ownC||0,falt=[];(m.comps||[]).forEach(function(x){var dd=x.d,cc=x.c;if(dd==null){var p=PRECIOS["comp:"+x.cod];if(p&&p.precio>0){dd=p.precio*(p.moneda==="ars"?1/tc():1);cc=0}}if(dd==null){falt.push(x.cod);return}d+=x.uso*dd;c+=x.uso*(cc||0)});return{directo:d,cif:c,faltan:falt}}
+function ensamblar(m){var d=m.ownD||0,c=m.ownC||0,falt=[],L=m.comps||[],inc=bomIncluidos(L,null),gr=bomGrupos(L),val=[];L.forEach(function(x,i){var dd=x.d,cc=x.c;if(dd==null){var p=PRECIOS["comp:"+x.cod];if(p&&p.precio>0){dd=p.precio*(p.moneda==="ars"?1/tc():1);cc=0}}val[i]=dd==null?null:x.uso*(dd+(cc||0));if(!inc.has(i))return;if(dd==null){falt.push(x.cod);return}d+=x.uso*dd;c+=x.uso*(cc||0)});var r={directo:d,cif:c,faltan:falt};if(gr.orden.length){var mn=(m.ownD||0)+(m.ownC||0),mx=mn,ok=true;L.forEach(function(x,i){if(x.g)return;if(val[i]==null)ok=false;else{mn+=val[i];mx+=val[i]}});gr.orden.forEach(function(g){var v=gr.gs[g].map(function(i){return val[i]}).filter(function(v){return v!=null});if(v.length<gr.gs[g].length)ok=false;if(v.length){mn+=Math.min.apply(null,v);mx+=Math.max.apply(null,v)}});r.rango={min:mn,max:mx,completo:ok,grupos:gr.orden}}return r}
 function faltantesComp(){var out={};if(!MAS||!MAS.items)return[];Object.keys(MAS.items).forEach(function(k){var m=MAS.items[k];if(!m.ensamble)return;(m.comps||[]).forEach(function(x){if(x.d!=null)return;var o=out[x.cod]||(out[x.cod]={cod:x.cod,desc:x.desc,n:0,motivo:x.motivo||""});o.n++})});return Object.keys(out).map(function(k){return out[k]}).sort(function(a,b){return a.cod<b.cod?-1:a.cod>b.cod?1:0})}
 function compSection(){if(!MAS||!MAS.items)return"";var enss=Object.keys(MAS.items).filter(function(k){return MAS.items[k].ensamble}).length;if(!enss)return"";var l=faltantesComp();
  var h='<div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin-bottom:12px"><p style="font-weight:700;color:#1e3a8a;margin:0 0 4px;font-size:13px"><span class="bt-n">3</span>Componentes de ensambles sin costo</p><p style="font-size:12px;color:#334155;margin:0 0 6px">El costo de un ensamble es la suma de sus componentes. Acá están los que todavía no tienen costo: cargales el costo unitario.</p><details class="bt-mas"><summary>Más detalle</summary><p style="font-size:12px;color:#64748b;margin:0 0 8px">El costo de un ensamble (tutores, cabezales, etc.) es la <b>suma del costo de los componentes que lleva</b>, según el BOM del MAESTRO, más su armado si tiene carta propia. Cada componente toma su cálculo guardado o el que se calculó acá. Cada componente tiene que tener su carta de proceso; si no la tiene, se busca como pieza comprada (tuercas, tornillos, arandelas) en las Órdenes de Compra. Los que no tienen ni una cosa ni la otra quedan en esta lista con el motivo: cargales abajo el costo unitario y los ensambles se actualizan solos.</p></details>';
@@ -2962,6 +3073,7 @@ window.expCalcular=async function(){if(corriendo)return;corriendo=true;cancelar=
      if(!k){var r0=items[b.cod];motivo=r0?(r0.estado==="sin_precio"?(r0.mp?"sin precio de la materia prima ("+r0.mp+")":"la carta no indica la materia prima"):(r0.estado==="sin_carta"?"sin carta de proceso":"sin cálculo")):"sin carta de proceso";
       if(!r0||r0.estado==="sin_carta"){var oc=precioCompOC(b);if(oc){k={d:oc.usd,c:0,src:"pieza comprada, sin carta · "+oc.txt};motivo=""}}}
      return{cod:b.cod,desc:b.desc||"",uso:parseFloat(b.uso)||1,d:k?k.d:null,c:k?k.c:null,src:k?k.src:null,motivo:motivo}});
+    rec.comps.forEach(function(x,i){if(bom[i]&&bom[i].g){x.g=String(bom[i].g).trim();if(bom[i].def)x.def=true}});
     var t=ensamblar(rec);rec.directo=t.directo;rec.cif=t.cif;rec.faltan=t.faltan;rec.estado=t.faltan.length?"sin_precio":"ok";
     if(!it.extra){if(rec.estado==="ok")cont.ok++;else cont.sin_precio++}
     items[it.cod]=rec};
@@ -3050,8 +3162,8 @@ function modeloExcel(){var filas=armar(),mon=S.moneda==="ARS"?tc():1,desc=descri
    mpU:(m&&m.mpU!=null&&f.origen!=="Guardado"&&m.estado==="ok")?vx(m.mpU):null,opU:(m&&m.opU!=null&&f.origen!=="Guardado")?vx(m.opU):null,
    origen:(f.origen||"Sin costo")+(f.nota||""),falta:f.directo===null?(f.nota||"").replace(/^ · /,"")||"sin cálculo":"",comps:[]};
   o.tot=(o.dir===null&&o.cif===null)?null:(o.dir||0)+(o.cif||0);o.anual=o.tot===null?null:o.tot*o.qty;
-  if(ens){(m.comps||[]).forEach(function(x){var dd=x.d,cc=x.c,fuente=x.src||"";if(dd==null){var pm=PRECIOS["comp:"+x.cod];if(pm&&pm.precio>0){dd=pm.precio*(pm.moneda==="ars"?1/tc():1);cc=0;fuente="costo cargado a mano"}}
-    var u=dd==null?null:(dd+(cc||0))*x.uso;o.comps.push({cod:x.cod,desc:x.desc,uso:x.uso,mm:x.mm,dir:dd==null?null:vx(dd),cif:dd==null?null:vx(cc||0),tot:dd==null?null:vx(dd+(cc||0)),sub:u===null?null:vx(u),origen:dd==null?"⚠ "+(x.motivo||"sin costo"):fuente})})}
+  if(ens){var _inc=bomIncluidos(m.comps||[],null),_rg=ensamblar(m).rango;if(_rg)o.origen+=" · configurable ("+_rg.grupos.join(", ")+"): costo con la opción estándar; rango "+(S.moneda==="ARS"?"ARS":"USD")+" "+vx(_rg.min).toLocaleString("es-AR",{maximumFractionDigits:2})+" a "+vx(_rg.max).toLocaleString("es-AR",{maximumFractionDigits:2})+(_rg.completo?"":" (parcial)");(m.comps||[]).forEach(function(x,_i){var dd=x.d,cc=x.c,fuente=x.src||"";if(dd==null){var pm=PRECIOS["comp:"+x.cod];if(pm&&pm.precio>0){dd=pm.precio*(pm.moneda==="ars"?1/tc():1);cc=0;fuente="costo cargado a mano"}}
+    var u=dd==null?null:(dd+(cc||0))*x.uso;var _op=x.g?(_inc.has(_i)?"opción "+x.g+" (estándar) · ":"opción "+x.g+" (no incluida en el costo) · "):"";o.comps.push({cod:x.cod,desc:x.desc,uso:x.uso,mm:x.mm,dir:dd==null?null:vx(dd),cif:dd==null?null:vx(cc||0),tot:dd==null?null:vx(dd+(cc||0)),sub:(u===null||(x.g&&!_inc.has(_i)))?null:vx(u),origen:_op+(dd==null?"⚠ "+(x.motivo||"sin costo"):fuente)})})}
   return o})}
 /* gráfico de barras horizontales en PNG (alta resolución) para insertar en el Excel */
 function graficoBarrasPNG(titulo,etiquetas,valores,opt){opt=opt||{};var esc=2,W=opt.w||620,fila=26,H=70+etiquetas.length*fila,cv=document.createElement("canvas");cv.width=W*esc;cv.height=H*esc;var g=cv.getContext("2d");g.scale(esc,esc);
