@@ -3156,6 +3156,9 @@ var FAM_GER=[["10","Tutores externos"],["1","Tutores externos"],["2","Columna po
 function famGer(cod){cod=String(cod||"").toUpperCase();for(var i=0;i<FAM_GER.length;i++)if(cod.indexOf(FAM_GER[i][0])===0)return FAM_GER[i][1];return"Otros"}
 function modeloExcel(){var filas=armar(),mon=S.moneda==="ARS"?tc():1,desc=descripciones();
  var vx=function(v){if(v===null||v===undefined||isNaN(v))return null;v=v*mon;return S.dec==="ceil2"?redArriba(v):(S.dec==="full"?Math.round(v*1e4)/1e4:Math.round(v*1e6)/1e6)};
+
+ /* 2026-11-11: fuera del Excel los codigos que no son BIOTROM (no empiezan con numero, sin descripcion: AC30, GM20, MC20150...) */
+ filas=filas.filter(function(f){return /^[0-9]/.test(String(f.cod||"").trim())});
  return filas.map(function(f){var m=f.m,ens=!!(m&&m.ensamble),compra=!!(m&&m.carta&&/producto comprado/.test(m.carta)),c=null;try{c=cartaDe(f.cod,f.desc)}catch(e){}
   var mpCod=(m&&m.mp&&m.mp!=="componentes")?m.mp:((c&&c.mp)||""),mpTxt=mpCod?(mpCod+(typeof descMP==="function"&&descMP(mpCod)?" · "+descMP(mpCod):"")):(ens?"Componentes del ensamble":"");
   var o={cod:f.cod,desc:f.desc,fam:famGer(f.cod),qty:f.qty,dir:vx(f.directo),cif:vx(f.cif),tipo:ens?"Ensamble":(compra?"Comprado":"Fabricado"),mp:mpTxt,

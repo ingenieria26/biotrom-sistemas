@@ -133,6 +133,8 @@ td.pr b{display:block;font-size:12.5px;font-family:'JetBrains Mono',monospace}td
       <div class="tab" data-t="grp">Grupos</div>
       <div class="tab" data-t="cli">Clientes</div>
       <div class="tab" data-t="heat">Mapa del año</div>
+      <div class="tab" data-t="inm">Stock inmovilizado</div>
+      <div class="tab" data-t="acc">Acierto de la proyección</div>
       <div class="tab" data-t="up">Actualizar ventas</div>
     </div>
     <div id="view"></div>
@@ -205,39 +207,50 @@ function serieMeses() {
   const meses = []; for (let i = iMax; i >= iMin; i--) { const t = L - i; meses.push({ i, y: Math.floor(t / 12), m: t % 12, esc: i === 0 && covL < 1 ? 1 / covL : 1 }); }
   return meses;
 }
+// ventana de los últimos 12 meses y la de los 12 anteriores (si hay menos de 6 meses antes, no hay "año anterior")
+const ventana = y => { const T = y.length, l = y.slice(-12), q = y.slice(Math.max(0, T - 24), T - 12); return { l, sp: q.length >= 6 ? sum(q) * 12 / q.length : 0 }; };
+const futuro = (last, n) => { const f = []; for (let h = 1; h <= n; h++) { const t = last.y * 12 + last.m + h; f.push({ y: Math.floor(t / 12), m: t % 12 }); } return f; };
+// estacionalidad y tendencia de toda la fábrica (sin tendencia, promedio por mes del año, suavizado a la mitad)
+function modeloGlobal(meses, ys, est) {
+  const T = meses.length, tot = meses.map((_, t) => sum(ys.map(y => y[t])));
+  const xm = (T - 1) / 2, ymn = sum(tot) / T; let sxy = 0, sxx = 0; tot.forEach((v, t) => { sxy += (t - xm) * (v - ymn); sxx += (t - xm) ** 2; });
+  const b = sxx ? sxy / sxx : 0, fit = t => Math.max(ymn * 0.2, ymn + b * (t - xm));
+  const acc = Array(12).fill(0), cnt = Array(12).fill(0); tot.forEach((v, t) => { acc[meses[t].m] += v / fit(t); cnt[meses[t].m]++; });
+  let Sr = acc.map((a, i) => cnt[i] ? a / cnt[i] : 1); const mS = sum(Sr) / 12; Sr = Sr.map(s => s / mS);
+  const S = Sr.map(s => est ? 1 + 0.6 * (s - 1) : 1);
+  const w = ventana(tot), g0 = w.sp > 0 ? sum(w.l) / w.sp - 1 : 0;
+  return { tot, Sr, S, g0 };
+}
+// proyección de un producto: promedio de 12 meses sin estacionalidad × tendencia × estacionalidad del mes
+function pronProd(y, meses, S, g0, fut, H) {
+  const T = y.length, { l: l12, sp } = ventana(y), s12 = sum(l12);
+  const des = l12.map((v, j) => v / S[meses[T - 12 + j].m]);
+  const Lv = sum(des) / 12, sd = Math.sqrt(sum(des.map(v => (v - Lv) ** 2)) / 11);
+  const gp = sp > 0 ? s12 / sp - 1 : (s12 > 0 ? g0 : 0), w = s12 / (s12 + 40);
+  const g = Math.max(-0.6, Math.min(1, w * gp + (1 - w) * g0));
+  const F = fut.map((f, h) => Lv * Math.pow(1 + g, (h + 6.5) / 12) * S[f.m]);
+  const nv = l12.filter(v => v > 0).length, cv = Lv > 0 ? sd / Lv : 9;
+  const conf = s12 === 0 ? 0 : nv >= 9 && cv < 0.6 ? 3 : nv <= 3 ? 1 : 2;
+  return { s12, sp, Lv, sd, g, gp, F, fH: sum(F.slice(0, H)), band: 1.28 * sd * Math.sqrt(H), nv, conf };
+}
 function calcular() {
   const H = PREF.h, V = D.v, meses = serieMeses(), T = meses.length;
   const serie = m => { const o = asObj(m); return meses.map(x => (o[x.i] || 0) * x.esc); };
   const prods = [];
   for (const [k, m] of Object.entries(V.m)) { if (excluido(k)) continue; const y = serie(m); if (!sum(y)) continue; prods.push({ k, y, desc: (V.desc && V.desc[k]) || D.stkDesc[k] || '' }); }
-  // estacionalidad de toda la fábrica: total sin tendencia, promedio por mes del año, suavizado a la mitad
-  const tot = meses.map((_, t) => sum(prods.map(p => p.y[t])));
-  const xm = (T - 1) / 2, ymn = sum(tot) / T; let sxy = 0, sxx = 0; tot.forEach((v, t) => { sxy += (t - xm) * (v - ymn); sxx += (t - xm) ** 2; });
-  const b = sxx ? sxy / sxx : 0, fit = t => Math.max(ymn * 0.2, ymn + b * (t - xm));
-  const acc = Array(12).fill(0), cnt = Array(12).fill(0); tot.forEach((v, t) => { acc[meses[t].m] += v / fit(t); cnt[meses[t].m]++; });
-  let Sr = acc.map((a, i) => cnt[i] ? a / cnt[i] : 1); const mS = sum(Sr) / 12; Sr = Sr.map(s => s / mS);
-  const S = Sr.map(s => PREF.est ? 1 + 0.6 * (s - 1) : 1);
-  const s12t = sum(tot.slice(-12)), sp12t = sum(tot.slice(-24, -12)), g0 = sp12t > 0 ? s12t / sp12t - 1 : 0;
-  const last = meses[T - 1], fut = []; for (let h = 1; h <= 24; h++) { const t = last.y * 12 + last.m + h; fut.push({ y: Math.floor(t / 12), m: t % 12 }); }
+  const { tot, Sr, S, g0 } = modeloGlobal(meses, prods.map(p => p.y), PREF.est);
+  const fut = futuro(meses[T - 1], 24);
   const hoy = new Date(Date.UTC(fut[0].y, fut[0].m, 1));
   // resultados de Stock y MP (punto de reposición de la ecuación elegida)
   const PRm = {}; if (D.res && D.res.k) D.res.k.forEach((c, i) => { const o = D.res.v[i] && (D.res.v[i][D.op - 1] || D.res.v[i][1]); if (o) PRm[c] = o[1]; });
   for (const p of prods) {
-    const y = p.y, l12 = y.slice(-12), p12 = y.slice(-24, -12), s12 = sum(l12), sp = sum(p12);
-    const des = l12.map((v, j) => v / S[meses[T - 12 + j].m]);
-    const Lv = sum(des) / 12, sd = Math.sqrt(sum(des.map(v => (v - Lv) ** 2)) / 11);
-    const gp = sp > 0 ? s12 / sp - 1 : (s12 > 0 ? g0 : 0), w = s12 / (s12 + 40);
-    const g = Math.max(-0.6, Math.min(1, w * gp + (1 - w) * g0));
-    const F = fut.map((f, h) => Lv * Math.pow(1 + g, (h + 6.5) / 12) * S[f.m]);
-    const nv = l12.filter(v => v > 0).length, cv = Lv > 0 ? sd / Lv : 9;
-    const conf = s12 === 0 ? 0 : nv >= 9 && cv < 0.6 ? 3 : nv <= 3 ? 1 : 2;
+    const r = pronProd(p.y, meses, S, g0, fut, H), F = r.F, fH = r.fH, band = r.band;
     const stock = D.stk[p.k] ?? null;
     // hasta cuándo alcanza: se descuenta la proyección mes a mes
     let alc = null; if (stock != null) { let st = stock; alc = 99; for (let h = 0; h < 24; h++) { if (F[h] <= 0) continue; if (st < F[h]) { alc = h + st / F[h]; break; } st -= F[h]; } }
     let rep = null; const pr = PRm[p.k]; if (stock != null && pr != null) { let st = stock; if (st <= pr) rep = 0; else { for (let h = 0; h < 24; h++) { st -= F[h]; if (st <= pr) { rep = h + 1; break; } } } }
-    const fH = sum(F.slice(0, H)), band = 1.28 * sd * Math.sqrt(H);
-    Object.assign(p, { grp: p.k.slice(0, 4), s12, sp, g, gp, Lv, sd, F, fH, band, conf, nv, stock, alc, rep, pr,
-      fab: stock == null ? null : Math.max(0, Math.ceil(fH - stock)), ult: (() => { for (let t = T - 1; t >= 0; t--) if (y[t] > 0) return t; return -1; })() });
+    Object.assign(p, { grp: p.k.slice(0, 4), s12: r.s12, sp: r.sp, g: r.g, gp: r.gp, Lv: r.Lv, sd: r.sd, F, fH, band, conf: r.conf, nv: r.nv, stock, alc, rep, pr,
+      fab: stock == null ? null : Math.max(0, Math.ceil(fH - stock)), ult: (() => { for (let t = T - 1; t >= 0; t--) if (p.y[t] > 0) return t; return -1; })() });
   }
   // grupos: nombre = descripción del más vendido
   const G = {}; for (const p of prods) { const x = G[p.grp] = G[p.grp] || { g: p.grp, ps: [], y: Array(T).fill(0), F: Array(24).fill(0) }; x.ps.push(p); p.y.forEach((v, t) => x.y[t] += v); p.F.forEach((v, h) => x.F[h] += v); }
@@ -395,6 +408,8 @@ function vista(bps) {
       <div class="tw"><table class="heat"><thead><tr><th style="text-align:left">Familia / grupo</th>${MESES.map(m => `<th style="text-align:center">${m}</th>`).join('')}</tr></thead><tbody>
       ${gl.map(x => { const a = Array(12).fill(0), c = Array(12).fill(0); x.y.forEach((v, t) => { a[M.meses[t].m] += v; c[M.meses[t].m]++; }); const pm = a.map((s, i) => c[i] ? s / c[i] : 0), mm = sum(pm) / 12 || 1;
         return `<tr class="${x.esFam ? 'fam' : 'sg'}"><td style="text-align:left" class="pr">${x.esFam ? `<b class="fn">${esc(famL(x.fam))}</b>` : `<b>${esc(x.g)}</b><span>${esc(x.nombre)}</span>`}</td>${pm.map((s, i) => { const r = s / mm; return `<td style="background:${col(r)};color:${fg(r)}" title="${MESL[i]}: ${fmt(r * 100)}">${fmt(r * 100)}</td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div>`;
+  } else if (TAB === 'inm') { vistaInm();
+  } else if (TAB === 'acc') { vistaAcc(bps);
   } else {
     const s = D.vsrc;
     v.innerHTML = `<div class="card"><h3>Ventas cargadas</h3><p class="hint" style="margin-top:4px">${s ? `<b>${esc(s.file)}</b> · ${esc(s.msg)} · cargado el ${new Date(s.at).toLocaleString('es-AR')}` : 'Todavía no hay ventas.'}</p>
@@ -407,6 +422,159 @@ function vista(bps) {
     dz.ondragover = e => { e.preventDefault(); dz.classList.add('ov'); }; dz.ondragleave = () => dz.classList.remove('ov');
     dz.ondrop = e => { e.preventDefault(); dz.classList.remove('ov'); if (e.dataTransfer.files[0]) subir(e.dataTransfer.files[0]); };
   }
+}
+
+// ═══════════════ stock inmovilizado ═══════════════
+let FILTI = '*', QI = '', SORTI = { k: 'val', d: 1 };
+const usdF = (v, d = 0) => v == null ? '–' : 'USD ' + fmt(v, d);
+const enSel = k => { const s = PREF.grp, g = M.G[s]; return s === '*' || !g || (g.esFam ? famDe(k) === g.fam : k.slice(0, 4) === s); };
+function prepCostos(c) {
+  const o = { tc: (c && c.tc) || 0, fecha: (c && c.fecha) || '', ok: {}, par: {}, med: {} }, porG = {};
+  const it = c && c.items ? (Array.isArray(c.items) ? c.items : Object.values(c.items)) : [];
+  it.forEach(e => { if (!e || !e[1]) return; const k = norm(e[0]), m = e[1], usd = (m.directo || 0) + (m.cif || 0); if (!(usd > 0)) return;
+    if (m.estado === 'ok') { o.ok[k] = usd; (porG[k.slice(0, 4)] = porG[k.slice(0, 4)] || []).push(usd); } else o.par[k] = usd; });
+  for (const [g, a] of Object.entries(porG)) { a.sort((x, y) => x - y); o.med[g] = a[Math.floor(a.length / 2)]; }
+  return o;
+}
+function inmov() {
+  const rows = [], byK = {}; M.prods.forEach(p => byK[p.k] = p);
+  for (const [k, st] of Object.entries(D.stk)) {
+    if (!(st > 0) || excluido(k) || !enSel(k)) continue;
+    const p = byK[k]; if (p && p.s12 > 0) continue;
+    const c = D.cost, g = k.slice(0, 4); let usd = null, org = 'sin';
+    if (c.ok[k] != null) { usd = c.ok[k]; org = 'calc'; } else if (c.par[k] != null) { usd = c.par[k]; org = 'parc'; } else if (c.med[g] != null) { usd = c.med[g]; org = 'est'; }
+    rows.push({ k, desc: (p && p.desc) || D.stkDesc[k] || (D.v.desc && D.v.desc[k]) || '', stock: st, fam: famDe(k), grp: g, antes: !!p, ult: p ? p.ult : -1, usd, org, val: usd == null ? null : usd * st });
+  }
+  return rows;
+}
+const ORG = { calc: ['p-grn', 'costo calculado'], parc: ['p-amb', 'costo parcial (falta materia prima)'], est: ['p-gry', 'aprox. por grupo'], sin: ['p-red', 'sin costo'] };
+function vistaInm() {
+  const v = $('#view');
+  if (!D.hayStk) { v.innerHTML = '<div class="card"><h3>Falta el stock</h3><p class="hint" style="margin-top:6px">El MAESTRO todavía no subió el stock de producto terminado.</p></div>'; return; }
+  if (D.cost === undefined || D.cost === null) {
+    v.innerHTML = '<div class="skel">Trayendo los costos de la Calculadora…</div>';
+    if (D.cost === undefined) { D.cost = null; getJ('costos_calculadora_por_producto/costos_masivo').then(c => { D.cost = prepCostos(c); if (TAB === 'inm') vistaInm(); }); }
+    return;
+  }
+  const all = inmov(), tc = D.cost.tc, q = plain(QI);
+  const cnt = { '*': all.length, antes: all.filter(r => r.antes).length, nunca: all.filter(r => !r.antes).length, calc: all.filter(r => r.org === 'calc').length, aprox: all.filter(r => r.org === 'parc' || r.org === 'est').length, sin: all.filter(r => r.org === 'sin').length };
+  const ok = r => FILTI === '*' || (FILTI === 'antes' && r.antes) || (FILTI === 'nunca' && !r.antes) || (FILTI === 'calc' && r.org === 'calc') || (FILTI === 'aprox' && (r.org === 'parc' || r.org === 'est')) || (FILTI === 'sin' && r.org === 'sin');
+  const vCalc = sum(all.filter(r => r.org === 'calc').map(r => r.val)), vAprox = sum(all.filter(r => r.org === 'parc' || r.org === 'est').map(r => r.val)), uni = sum(all.map(r => r.stock));
+  const sinC = all.filter(r => r.org === 'sin');
+  const key = { val: r => r.val ?? -1, stock: r => r.stock, k: r => r.k, usd: r => r.usd ?? -1, ult: r => r.ult };
+  const f = key[SORTI.k] || key.val;
+  const arr = all.filter(r => ok(r) && (!q || plain(r.k).includes(q) || plain(r.desc).includes(q))).sort((a, b) => { const x = f(a), y = f(b); return (x < y ? 1 : x > y ? -1 : 0) * SORTI.d || b.stock - a.stock; });
+  const th = (k, l, n) => `<th class="${n ? 'n' : ''}" data-s="${k}">${l}${SORTI.k === k ? ` <span class="ar">${SORTI.d > 0 ? '▼' : '▲'}</span>` : ''}</th>`;
+  const chips = [['*', 'Todos'], ['antes', 'Dejó de vender'], ['nunca', `Sin ventas desde ${etMes(M.meses[0])}`], ['calc', 'Con costo calculado'], ['aprox', 'Costo aproximado'], ['sin', 'Sin costo']];
+  // por familia
+  const fams = {}; all.forEach(r => { const x = fams[r.fam] = fams[r.fam] || { fam: r.fam, n: 0, u: 0, vc: 0, va: 0 }; x.n++; x.u += r.stock; if (r.org === 'calc') x.vc += r.val; else if (r.val != null) x.va += r.val; });
+  const fl = Object.values(fams).sort((a, b) => (b.vc + b.va) - (a.vc + a.va));
+  const mxF = Math.max(1, ...fl.map(x => x.vc + x.va));
+  v.innerHTML = `<div class="tiles">
+      <div class="tile"><div class="v">${fmt(all.length)}</div><div class="l">productos con stock y sin ventas en 12 meses</div><div class="s">${fmt(uni)} unidades · ${fmt(cnt.antes)} dejaron de vender, ${fmt(cnt.nunca)} sin ventas desde ${etMes(M.meses[0])}</div></div>
+      <div class="tile"><div class="v">${usdF(vCalc)}</div><div class="l">a costo calculado</div><div class="s">${tc ? '$ ' + fmt(vCalc * tc) + ' · ' : ''}${fmt(cnt.calc)} productos con costo de la Calculadora</div></div>
+      <div class="tile"><div class="v" style="color:var(--amber)">${usdF(vAprox)}</div><div class="l">a costo aproximado</div><div class="s">${fmt(cnt.aprox)} productos: costo parcial o estimado con la mediana de su grupo</div></div>
+      <div class="tile"><div class="v" style="color:${sinC.length ? 'var(--red)' : 'var(--green)'}">${fmt(sinC.length)}</div><div class="l">productos sin ningún costo</div><div class="s">${fmt(sum(sinC.map(r => r.stock)))} unidades que no se pueden valorizar</div></div></div>
+    <div class="card"><h3>Dónde está el dinero parado</h3><div class="sub">Valor del stock sin ventas por familia. Verde: costo calculado · ámbar: aproximado.</div>
+      <table class="mt"><tbody>${fl.map(x => `<tr><td style="white-space:nowrap"><b>${esc(famL(x.fam))}</b></td><td class="n">${fmt(x.n)} prod.</td><td class="n">${fmt(x.u)} u.</td>
+        <td style="width:46%"><div style="display:flex;height:14px;border-radius:4px;overflow:hidden;background:var(--surface3)"><i style="width:${x.vc / mxF * 100}%;background:var(--green)"></i><i style="width:${x.va / mxF * 100}%;background:var(--amber)"></i></div></td><td class="n"><b>${usdF(x.vc + x.va)}</b></td></tr>`).join('')}</tbody></table></div>
+    <div class="bar" style="margin-bottom:10px"><input type="search" id="qi" placeholder="Buscar código o descripción…" value="${esc(QI)}" style="flex:1;min-width:220px" aria-label="Buscar producto"><button class="btn" id="xli">⬇ Excel</button></div>
+    <div class="chips" style="margin-bottom:10px">${chips.filter(c => c[0] === '*' || cnt[c[0]]).map(c => `<span class="chip ${FILTI === c[0] ? 'on' : ''}" data-f="${c[0]}">${c[1]} <b>${fmt(cnt[c[0]])}</b></span>`).join('')}</div>
+    <div class="tw"><table><thead><tr>${th('k', 'Producto')}${th('stock', 'Stock', 1)}${th('ult', 'Última venta')}${th('usd', 'Costo unitario', 1)}${th('val', 'Valor del stock', 1)}<th>Costo</th></tr></thead><tbody>
+      ${arr.slice(0, 600).map(r => `<tr><td class="pr"><b>${esc(r.k)}</b><span>${esc(r.desc)}</span></td><td class="n">${fmt(r.stock)}</td><td>${r.ult >= 0 ? etMes(M.meses[r.ult]) : '<span class="hint">sin ventas desde ' + etMes(M.meses[0]) + '</span>'}</td>
+        <td class="n">${r.usd == null ? '–' : fmt(r.usd, 2)}</td><td class="n"><b>${r.val == null ? '–' : usdF(r.val)}</b></td><td><span class="pill ${ORG[r.org][0]}">${ORG[r.org][1]}</span></td></tr>`).join('')}</tbody></table>
+      ${arr.length ? '' : '<div class="empty">Nada para mostrar con este filtro.</div>'}</div>
+    <p class="hint" style="margin-top:8px">${fmt(arr.length)} productos${arr.length > 600 ? ' (se ven los primeros 600; el Excel trae todos)' : ''}. Stock del MAESTRO (producto terminado). "Sin ventas" mira los últimos 12 meses del archivo de ventas cargado, que empieza en ${etMes(M.meses[0])}: un producto sin ventas desde entonces puede llevar más de 2 años parado. Costo = directo + indirecto por pieza de la Calculadora${D.cost.fecha ? ' del ' + esc(D.cost.fecha) : ''}${tc ? ' (dólar $ ' + fmt(tc) + ')' : ''}. "Aproximado" es el costo parcial (le falta alguna materia prima) o la mediana de los productos de su mismo grupo (primeras 4 letras) cuando no tiene costo propio: sirve de orden de magnitud, no de valor contable.</p>`;
+  $('#qi').oninput = e => { QI = e.target.value; clearTimeout(v._t); v._t = setTimeout(() => { vistaInm(); const i = $('#qi'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
+  $$('#view [data-f]').forEach(c => c.onclick = () => { FILTI = c.dataset.f; vistaInm(); });
+  $$('#view th[data-s]').forEach(t => t.onclick = () => { SORTI = { k: t.dataset.s, d: SORTI.k === t.dataset.s ? -SORTI.d : 1 }; vistaInm(); });
+  $('#xli').onclick = () => {
+    if (!window.XLSX) return toast('No se pudo cargar la librería de Excel');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(arr.map(r => ({ Codigo: r.k, Descripcion: r.desc, Familia: famL(r.fam), Grupo: r.grp, Stock: r.stock, 'Ultima venta': r.ult >= 0 ? etMes(M.meses[r.ult]) : 'sin ventas desde ' + etMes(M.meses[0]), 'Costo unitario USD': r.usd == null ? '' : +r.usd.toFixed(2), 'Valor stock USD': r.val == null ? '' : +r.val.toFixed(0), 'Valor stock ARS': r.val == null || !tc ? '' : Math.round(r.val * tc), 'Origen del costo': ORG[r.org][1] }))), 'Stock inmovilizado');
+    XLSX.writeFile(wb, `Stock_inmovilizado_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+}
+
+// ═══════════════ qué tan bien acertó la proyección (prueba hacia atrás) ═══════════════
+// Se repite la proyección como si se hubiera hecho hace H meses (con las ventas que había hasta ese momento) y se compara con lo que se vendió de verdad.
+function backtest() {
+  const H = PREF.h, key = H + '|' + PREF.est; M.bt = M.bt || {}; if (M.bt[key]) return M.bt[key];
+  const T = M.T, orig = [];
+  for (let o = H; o <= H + 5 && T - o >= 12; o++) {
+    const mt = M.meses.slice(0, T - o), ys = M.prods.map(p => p.y.slice(0, T - o)), gl = modeloGlobal(mt, ys, PREF.est), fut = futuro(mt[mt.length - 1], H), filas = [];
+    M.prods.forEach((p, i) => {
+      const r = pronProd(ys[i], mt, gl.S, gl.g0, fut, H), am = p.y.slice(T - o, T - o + H), a = sum(am);
+      if (r.fH < 0.5 && a <= 0) return;
+      filas.push({ k: p.k, desc: p.desc, f: r.fH, a, band: r.band, conf: r.conf, naive: r.s12 / 12 * H, fm: r.F.slice(0, H), am });
+    });
+    orig.push({ o, desde: mt[mt.length - 1], ini: fut[0], hasta: M.meses[T - o + H - 1], filas });
+  }
+  return M.bt[key] = orig;
+}
+function statsBt(fs) {
+  const f = sum(fs.map(x => x.f)), a = sum(fs.map(x => x.a)), ae = sum(fs.map(x => Math.abs(x.f - x.a))), ne = sum(fs.map(x => Math.abs(x.naive - x.a)));
+  const hit = fs.filter(x => Math.abs(x.f - x.a) <= x.band).length;
+  return { n: fs.length, f, a, dif: a > 0 ? f / a - 1 : null, wape: a > 0 ? ae / a : null, nwape: a > 0 ? ne / a : null, hit: fs.length ? hit / fs.length : null };
+}
+function graficoPar(lab, F, A) {
+  const Wd = 760, Ht = 230, pl = 46, pr = 10, pt = 16, pb = 28, n = lab.length, bw = (Wd - pl - pr) / n, max = Math.max(1, ...F, ...A) * 1.12;
+  const yv = v => pt + (Ht - pt - pb) * (1 - v / max), p10 = Math.pow(10, Math.floor(Math.log10(max))), r = max / p10, step = p10 * (r > 5 ? 2 : r > 2 ? 1 : 0.5);
+  let s = `<svg viewBox="0 0 ${Wd} ${Ht}" width="100%" role="img" aria-label="Proyectado contra vendido, mes a mes" style="display:block">`;
+  for (let v = 0; v <= max; v += step) s += `<line x1="${pl}" x2="${Wd - pr}" y1="${yv(v)}" y2="${yv(v)}" stroke="var(--grid)"/><text x="${pl - 6}" y="${yv(v) + 4}" text-anchor="end" font-size="10.5" fill="var(--text3)">${fmt(v)}</text>`;
+  lab.forEach((l, i) => { const X = pl + i * bw, w = Math.min(34, bw * 0.38);
+    s += `<rect x="${X + bw / 2 - w - 2}" y="${yv(F[i])}" width="${w}" height="${Math.max(0, Ht - pb - yv(F[i]))}" rx="2" fill="var(--fc)"><title>${l}: se proyectaron ${fmt(F[i])}</title></rect>`
+      + `<rect x="${X + bw / 2 + 2}" y="${yv(A[i])}" width="${w}" height="${Math.max(0, Ht - pb - yv(A[i]))}" rx="2" fill="var(--acc)"><title>${l}: se vendieron ${fmt(A[i])}</title></rect>`
+      + (n <= 12 ? `<text x="${X + bw / 2 - w / 2 - 2}" y="${yv(F[i]) - 4}" text-anchor="middle" font-size="10" fill="var(--text2)">${fmt(F[i])}</text><text x="${X + bw / 2 + w / 2 + 2}" y="${yv(A[i]) - 4}" text-anchor="middle" font-size="10" fill="var(--text2)">${fmt(A[i])}</text>` : '')
+      + `<text x="${X + bw / 2}" y="${Ht - 9}" text-anchor="middle" font-size="10.5" fill="var(--text3)">${l}</text>`; });
+  return s + '</svg>';
+}
+const pcS = v => v == null ? '–' : pct(v), pmS = v => v == null ? '–' : '±' + fmt(v * 100) + ' %';
+function vistaAcc(bps) {
+  const v = $('#view'), H = PREF.h, bt = backtest();
+  if (!bt.length) { v.innerHTML = `<div class="card"><h3>Faltan meses de historia</h3><p class="hint" style="margin-top:6px">Para probar una proyección a ${H} meses hacen falta al menos ${H + 12} meses de ventas cargadas (12 para proyectar + ${H} para comparar) y hay ${M.T}. Probá con un horizonte más corto.</p></div>`; return; }
+  const sel = new Set(bps.map(p => p.k)), T = M.T;
+  const cada = bt.map(b => { const fs = b.filas.filter(x => sel.has(x.k)); return Object.assign({ b, fs }, statsBt(fs)); }), c0 = cada[0];
+  const pool = cada.flatMap(c => c.fs), sp = statsBt(pool);
+  const mejor = c0.wape != null && c0.nwape != null ? c0.wape < c0.nwape : null;
+  const prom = a => { const x = a.filter(z => z != null); return x.length ? sum(x) / x.length : null; };
+  const lab0 = futuro(c0.b.desde, H).map(etMes), F0 = Array(H).fill(0), A0 = Array(H).fill(0); c0.fs.forEach(x => { x.fm.forEach((z, i) => F0[i] += z); x.am.forEach((z, i) => A0[i] += z); });
+  const lado = c0.dif == null ? '' : Math.abs(c0.dif) < 0.05 ? 'bien centrada' : c0.dif > 0 ? 'de más' : 'de menos';
+  const dsde = etMes(c0.b.desde), rg = etMes(c0.b.ini) + ' a ' + etMes(c0.b.hasta);
+  const NIV = ['Sin ventas en el año previo', 'Confianza baja', 'Confianza media', 'Confianza alta'];
+  const porConf = [3, 2, 1, 0].map(c => Object.assign({ c }, statsBt(pool.filter(x => x.conf === c)))).filter(x => x.n);
+  const fl = PREF.grp === '*' ? [...new Set(pool.map(x => famDe(x.k)))].sort((a, b) => (a || 9) - (b || 9)).map(fm => Object.assign({ fm }, statsBt(pool.filter(x => famDe(x.k) === fm)))) : [];
+  const top = c0.fs.slice().sort((a, b) => Math.abs(b.f - b.a) - Math.abs(a.f - a.a)).slice(0, 30);
+  const cc = x => `<span class="${x.wape == null ? 'flat' : x.nwape != null && x.wape < x.nwape ? 'up' : 'down'}">${pmS(x.wape)}</span>`;
+  v.innerHTML = `<div class="tiles">
+      <div class="tile"><div class="v">${fmt(c0.f)} → ${fmt(c0.a)}</div><div class="l">proyectado → vendido de verdad</div><div class="s">proyección hecha a fin de ${dsde} para ${rg}: ${c0.dif == null ? 'sin ventas para comparar' : `<b class="${Math.abs(c0.dif) < 0.1 ? 'up' : 'down'}">${pcS(c0.dif)}</b>, ${lado}`}</div></div>
+      <div class="tile"><div class="v">${pmS(c0.wape)}</div><div class="l">error promedio por producto</div><div class="s">${mejor == null ? '' : `repetir el promedio del último año habría errado ${pmS(c0.nwape)} → la proyección es <b class="${mejor ? 'up' : 'down'}">${mejor ? 'mejor' : 'peor'}</b>`}</div></div>
+      <div class="tile"><div class="v">${c0.hit == null ? '–' : fmt(c0.hit * 100) + ' %'}</div><div class="l">de los productos cayó dentro del rango probable</div><div class="s">el rango se anuncia como "8 de cada 10 veces" · ${fmt(c0.n)} productos comparados</div></div>
+      <div class="tile"><div class="v">${pmS(prom(cada.map(c => c.wape)))}</div><div class="l">error promedio en ${cada.length} ${cada.length === 1 ? 'prueba' : 'pruebas'}</div><div class="s">${cada.length === 1 ? 'con 24 meses de ventas solo alcanza para 1 prueba a ' + H + ' meses' : 'proyecciones hechas a fin de ' + etMes(cada[cada.length - 1].b.desde) + ' … ' + dsde}</div></div></div>
+    <div class="card"><div class="chead"><div><h3>Hace ${H} meses se proyectó esto…</h3><div class="sub">Proyección hecha a fin de ${dsde} (usando solo las ventas hasta ese mes) contra lo que se vendió ${rg}. ${PREF.grp === '*' ? 'Toda la fábrica.' : 'Solo lo elegido arriba en "Ver".'}</div></div></div>
+      ${graficoPar(lab0, F0, A0)}<div class="leg"><span><i style="background:var(--fc)"></i>Proyectado</span><span><i style="background:var(--acc)"></i>Vendido de verdad</span></div></div>
+    <div class="card"><h3>Distintos momentos de partida</h3><div class="sub">La misma prueba, corrida desde meses anteriores, para ver si el resultado es parejo o fue casualidad.</div>
+      <div class="tw" style="margin-top:8px;max-height:none"><table><thead><tr><th>Proyección hecha a fin de</th><th>Comparada con</th><th class="n">Proyectado</th><th class="n">Vendido</th><th class="n">Diferencia</th><th class="n">Error por producto</th><th class="n">Repetir promedio</th><th class="n">En el rango</th></tr></thead><tbody>
+      ${cada.map(c => `<tr><td><b>${etMes(c.b.desde)}</b></td><td>${etMes(c.b.ini)} a ${etMes(c.b.hasta)}</td><td class="n">${fmt(c.f)}</td><td class="n">${fmt(c.a)}</td><td class="n">${c.dif == null ? '–' : `<span class="${Math.abs(c.dif) < 0.1 ? 'up' : 'down'}">${pct(c.dif)}</span>`}</td><td class="n">${cc(c)}</td><td class="n">${pmS(c.nwape)}</td><td class="n">${c.hit == null ? '–' : fmt(c.hit * 100) + ' %'}</td></tr>`).join('')}</tbody></table></div>
+      ${H === 12 ? '<p class="hint" style="margin-top:6px">A 12 meses solo hay una prueba posible con los 24 meses de ventas. Con 3 o 6 meses salen más pruebas.</p>' : ''}</div>
+    <div class="card"><h3>¿Sirve el indicador de confianza?</h3><div class="sub">Todas las pruebas juntas. Si el indicador sirve, los de confianza alta tienen que errar menos que los de confianza baja.</div>
+      <div class="tw" style="margin-top:8px;max-height:none"><table><thead><tr><th>Nivel</th><th class="n">Comparaciones</th><th class="n">Proyectado</th><th class="n">Vendido</th><th class="n">Error por producto</th><th class="n">Repetir promedio</th><th class="n">En el rango</th></tr></thead><tbody>
+      ${porConf.map(x => `<tr><td><b>${NIV[x.c]}</b> ${x.c ? confH(x.c) : ''}</td><td class="n">${fmt(x.n)}</td><td class="n">${fmt(x.f)}</td><td class="n">${fmt(x.a)}</td><td class="n">${cc(x)}</td><td class="n">${pmS(x.nwape)}</td><td class="n">${x.hit == null ? '–' : fmt(x.hit * 100) + ' %'}</td></tr>`).join('')}</tbody></table></div></div>
+    ${fl.length ? `<div class="card"><h3>Por familia</h3><div class="sub">Todas las pruebas juntas. Diferencia = proyectado contra vendido de toda la familia; error por producto = qué tanto se equivocó producto por producto.</div>
+      <div class="tw" style="margin-top:8px;max-height:none"><table><thead><tr><th>Familia</th><th class="n">Comparaciones</th><th class="n">Proyectado</th><th class="n">Vendido</th><th class="n">Diferencia</th><th class="n">Error por producto</th><th class="n">En el rango</th></tr></thead><tbody>
+      ${fl.map(x => `<tr><td><b>${esc(famL(x.fm))}</b></td><td class="n">${fmt(x.n)}</td><td class="n">${fmt(x.f)}</td><td class="n">${fmt(x.a)}</td><td class="n">${x.dif == null ? '–' : `<span class="${Math.abs(x.dif) < 0.1 ? 'up' : 'down'}">${pct(x.dif)}</span>`}</td><td class="n">${cc(x)}</td><td class="n">${x.hit == null ? '–' : fmt(x.hit * 100) + ' %'}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+    <div class="card"><div class="chead"><div><h3>Los 30 productos donde más se erró</h3><div class="sub">Proyección hecha a fin de ${dsde}, comparada con ${rg}. Tocá uno para ver su historia.</div></div><button class="btn" id="xla">⬇ Excel</button></div>
+      <div class="tw" style="margin-top:8px;max-height:none"><table><thead><tr><th>Producto</th><th class="n">Proyectado</th><th class="n">Vendido</th><th class="n">Diferencia</th><th>Confianza</th><th>¿En el rango?</th></tr></thead><tbody>
+      ${top.map(x => { const d = x.f - x.a, en = Math.abs(d) <= x.band; return `<tr class="r" data-k="${esc(x.k)}"><td class="pr"><b>${esc(x.k)}</b><span>${esc(x.desc)}</span></td><td class="n">${fmt(x.f)}</td><td class="n">${fmt(x.a)}</td><td class="n"><span class="${d > 0 ? 'down' : 'up'}" style="color:${d > 0 ? 'var(--amber)' : 'var(--red)'}">${d > 0 ? '+' : ''}${fmt(d)}</span> <span class="hint">${x.a > 0 ? pct(d / x.a) : 'no se vendió'}</span></td><td>${confH(x.conf)}</td><td>${en ? '<span class="pill p-grn">sí</span>' : '<span class="pill p-red">no</span>'}</td></tr>`; }).join('')}</tbody></table></div></div>
+    <p class="hint">Cómo se mide: se vuelve a correr la proyección con las ventas que había hasta cada mes de partida (sin mirar lo que vino después) y se la compara con lo vendido. "Error por producto" suma lo que se erró en cada producto (para arriba o para abajo) y lo divide por lo vendido: así los errores no se compensan entre sí. "Repetir el promedio" es la regla simple de proyectar el promedio mensual de los últimos 12 meses; la proyección tiene que ganarle para justificarse. Los productos que no se vendían antes y aparecen de golpe cuentan como error. Las pruebas se superponen, no son independientes.</p>`;
+  $$('#view tr.r').forEach(tr => tr.onclick = () => detalle(tr.dataset.k));
+  $('#xla').onclick = () => {
+    if (!window.XLSX) return toast('No se pudo cargar la librería de Excel');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(cada.map(c => ({ 'Proyeccion hecha a fin de': etMes(c.b.desde), 'Comparada con': etMes(c.b.ini) + ' a ' + etMes(c.b.hasta), Proyectado: Math.round(c.f), Vendido: Math.round(c.a), 'Diferencia %': c.dif == null ? '' : +(c.dif * 100).toFixed(1), 'Error por producto %': c.wape == null ? '' : +(c.wape * 100).toFixed(1), 'Repetir promedio %': c.nwape == null ? '' : +(c.nwape * 100).toFixed(1), 'En el rango %': c.hit == null ? '' : +(c.hit * 100).toFixed(0) }))), 'Pruebas');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(c0.fs.map(x => ({ Codigo: x.k, Descripcion: x.desc, Proyectado: +x.f.toFixed(1), Vendido: +x.a.toFixed(1), Diferencia: +(x.f - x.a).toFixed(1), Confianza: ['', 'baja', 'media', 'alta'][x.conf], 'En el rango': Math.abs(x.f - x.a) <= x.band ? 'si' : 'no' }))), 'Productos ' + dsde.replace(' ', '-'));
+    XLSX.writeFile(wb, `Acierto_proyeccion_${H}m_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
 }
 
 // ═══════════════ detalle ═══════════════
