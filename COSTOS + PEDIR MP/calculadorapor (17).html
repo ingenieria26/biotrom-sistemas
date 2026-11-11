@@ -2659,7 +2659,7 @@ function ocIndiceCompras(){var ocs=_cargarOrdenesCompra(),n=Object.keys(ocs).len
 document.addEventListener("oc-actualizadas",function(){_ocIdx=null;_ocIdxN=-1});
 /* Vinculos producto <-> item de OC (por codigo de producto). tipo: "compra" = se compra terminado (sin materia prima); "servicio" = se manda a cortar con materia prima propia;
    "no" = no es una compra. Se guardan en PRECIOS["oclink:<codigo>"] (valen para todas las computadoras). OCLINK_BASE: vinculos conocidos de entrada. */
-var OCLINK_BASE={"1CX01060":{k:"MORDAZAS",tipo:"compra",moneda:""},"1CA01340":{k:"MORDAZAS",tipo:"compra",moneda:""},"1CA01310":{k:"ARANDELASSIMPLES",tipo:"compra",moneda:""},"1CX01360":{k:"ARANDELASDOBLES",tipo:"compra",moneda:""}};
+var OCLINK_BASE={"1CX01060":{k:"MORDAZAS",tipo:"compra",moneda:""},"1CA01340":{k:"MORDAZAS",tipo:"compra",moneda:""},"1CA01310":{k:"ARANDELASSIMPLES",tipo:"compra",moneda:""},"61U08":{k:"ARANDELASSIMPLES",tipo:"compra",moneda:""},"61U06":{k:"ARANDELASSIMPLES",tipo:"compra",moneda:""},"1CX01360":{k:"ARANDELASDOBLES",tipo:"compra",moneda:""}};
 /* costos unitarios de componentes comprados informados por gerencia (USD); se pueden pisar a mano en la tabla de componentes */
 var COMP_BASE={"comp:1CA01290":{precio:0.30,moneda:"usd"}};
 function _aplicarCompBase(){Object.keys(COMP_BASE).forEach(function(k){if(!PRECIOS[k])PRECIOS[k]=Object.assign({},COMP_BASE[k])})}
@@ -2954,7 +2954,7 @@ window.expCalcular=async function(){if(corriendo)return;corriendo=true;cancelar=
       var fin=parseUsd($("final_indirectos_usd").innerText),ind=parseFloat($("globalIndirectos").value)||0;ownD=fin/(1+ind/100);ownC=fin-ownD;rec.carta=c.origen+" (armado)";rec.det=leerDetalle(rec,c,ownD,ownC);
       var nOps=0,nReal=0,nTerc=0;w.document.querySelectorAll('#operaciones-container [id$="_maq"]').forEach(function(s){nOps++;if(s.value==="terceros")nTerc++;else if(w._tiempoRealParaMaquina&&w._tiempoRealParaMaquina(it.cod,s.value))nReal++});rec.ops=nOps;rec.opsReal=nReal;rec.terceros=nTerc}}catch(e){rec.error=String(e.message||e)}}
     rec.ownD=ownD;rec.ownC=ownC;
-    rec.comps=bom.map(function(b){if(b.u==="UN"){var pmu=PRECIOS["comp:"+b.cod],ocu=precioCompOC({desc:b.desc,mpDesc:b.desc}),du=null,su=null;if(pmu&&pmu.precio>0){du=pmu.precio*(pmu.moneda==="ars"?1/tc():1);su="costo cargado a mano"}else if(ocu){du=ocu.usd;su="pieza comprada · "+ocu.txt}
+    rec.comps=bom.map(function(b){if(b.u==="UN"){var pmu=PRECIOS["comp:"+b.cod],ocu=(function(){var cp=compraDe(b.cod,b.desc);return cp&&!cp.serv?{usd:cp.usd,txt:cp.txt}:precioCompOC({desc:b.desc,mpDesc:b.desc})})(),du=null,su=null;if(pmu&&pmu.precio>0){du=pmu.precio*(pmu.moneda==="ars"?1/tc():1);su="costo cargado a mano"}else if(ocu){du=ocu.usd;su="pieza comprada · "+ocu.txt}
      return{cod:b.cod,desc:b.desc||"",uso:parseFloat(b.uso)||1,d:du,c:du==null?null:0,src:su,motivo:du==null?"sin precio en OC (pieza comprada)":""}}
      if(b.u==="MM"){var cmM=(b.cod in cmCache)?cmCache[b.cod]:(cmCache[b.cod]=costoMetroMP(w,b.cod,PRECIOS[b.cod])),okM=!!(cmM&&cmM.cm);return{cod:b.cod,desc:b.desc||"",uso:1,d:okM?cmM.cm*(parseFloat(b.uso)||0)/1000:null,c:0,src:okM?"materia prima directa: "+b.uso+" mm de "+b.cod+" ("+cmM.fuente+")":null,motivo:okM?"":"sin precio de la materia prima ("+b.cod+")",mm:b.uso}}
      var k=costoComp(b.cod),motivo="";
