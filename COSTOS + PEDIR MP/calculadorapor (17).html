@@ -1678,8 +1678,10 @@ function bomListaEnsambles(){
     return Object.keys(ENSAMBLES_MAESTRO).sort().map(c=>({c:c,d:dd[c]||(typeof DESC_EXTRA!=="undefined"&&DESC_EXTRA[c])||(ENSAMBLES_MAESTRO[c][0]&&"")||""}));
 }
 function bomBuscable(){
-    const ens=bomListaEnsambles(),vistos=new Set(ens.map(x=>x.c));
-    return ens.concat(getDBProd().concat(getDBComp()).filter(x=>x&&x.c&&!vistos.has(x.c)));
+    /* los componentes que lleva algun ensamble (y que no son ensambles) se calculan en la solapa COMPONENTE, no en ENSAMBLES */
+    const ens=bomListaEnsambles(),vistos=new Set(ens.map(x=>x.c)),comp=new Set();
+    [ENSAMBLES_MAESTRO,ENSAMBLES_ORIG].forEach(B=>Object.keys(B||{}).forEach(k=>(B[k]||[]).forEach(c=>{if(c&&c.cod&&!vistos.has(c.cod))comp.add(c.cod)})));
+    return ens.concat(getDBProd().concat(getDBComp()).filter(x=>x&&x.c&&!vistos.has(x.c)&&!comp.has(x.c)));
 }
 function bomBuscarComp(codigo,q){
     const dd=document.getElementById("bomAddDD");if(!dd)return;
