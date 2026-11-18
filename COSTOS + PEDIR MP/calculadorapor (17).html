@@ -1243,12 +1243,17 @@ function aplicarPrecioDesdeOC(desc){
     if(!info)return;
     const encontrado=_buscarPrecioEnOC(desc);
     if(!encontrado){info.style.color="#e65100";info.innerText="⚠ NO HAY $$ EN OC — no se encontró ninguna Orden de Compra guardada para este material";return;}
-    const unidad=(encontrado.item.unidad||"").toUpperCase();
-    let modalidad=(unidad==="KG"||unidad==="KGS")?"kg":"metro";
-    /* si cantidad x P.U. no da el total y la diferencia es el peso por metro, el P.U. es por kilo (OC 1642: 15 m a 10,83 = 279,81) */
+    /* Modalidad de compra: se mira el ENCABEZADO de la OC (columna "CANT. Metros", "CANT. Kg", "precio por ...") y, si el ítem trae su propia unidad, esa */
+    const ocH=encontrado.oc||{},unidad=String(encontrado.item.unidad||ocH.unidadCant||"").toUpperCase().replace(/\./g,"").trim();
+    const unidadTxt={M:"metros",MT:"metros",MTS:"metros",METRO:"metros",METROS:"metros",KG:"kilos",KGS:"kilos",U:"unidades",UN:"unidades",UNID:"unidades",UNIDAD:"unidades",UNIDADES:"unidades",BARRA:"barras",BARRAS:"barras"}[unidad]||(unidad?unidad.toLowerCase():"");
+    let modalidad,razon;
+    if(ocH.precioPor==="kg"){modalidad="kg";razon="el encabezado de la OC dice precio por kg"}
+    else if(ocH.precioPor==="m"){modalidad="metro";razon="el encabezado de la OC dice precio por metro"}
+    else{modalidad=/^KGS?$/.test(unidad)?"kg":/^BARRAS?$/.test(unidad)?"barra":"metro";razon=unidad?"el encabezado de la OC dice cantidad en "+unidadTxt:"la OC no indica la unidad: se supuso por metro"}
+    /* si la cantidad está en metros y cantidad x P.U. no da el total, pero la diferencia es el peso por metro, el P.U. es por kilo (OC 1642: 15 m a 10,83 = 279,81) */
     try{const fm=window.formaMP?window.formaMP(desc):null,q=_numOCs(encontrado.item.cantidad)[0],pu0=_puOC(encontrado.item),tt=_numOCs(encontrado.item.total)[0];
-        if(fm&&fm.f==="R"&&q>0&&pu0>0&&tt>0){const codM=(document.getElementById("mp_codigo_seleccionado")?.innerText||"").replace("✔","").trim().split(" ")[0];const kgm=Math.PI*fm.d[0]*fm.d[0]/4*mpDetectarDensidad(codM,desc)/1000,r=tt/(q*pu0);
-            if(Math.abs(r-1)>0.12&&Math.abs(r-kgm)/kgm<0.12)modalidad="kg";}}catch(e){}
+        if(!ocH.precioPor&&/^(|M|MT|MTS|METRO|METROS)$/.test(unidad)&&fm&&fm.f==="R"&&q>0&&pu0>0&&tt>0){const codM=(document.getElementById("mp_codigo_seleccionado")?.innerText||"").replace("✔","").trim().split(" ")[0];const kgm=Math.PI*fm.d[0]*fm.d[0]/4*mpDetectarDensidad(codM,desc)/1000,r=tt/(q*pu0);
+            if(Math.abs(r-1)>0.12&&Math.abs(r-kgm)/kgm<0.12){modalidad="kg";razon="cantidad en "+(unidadTxt||"metros")+": "+q+" × P.U. "+pu0.toFixed(2)+" no da el total "+tt.toFixed(2)+"; la diferencia es el peso por metro ("+kgm.toFixed(2)+" kg/m), el P.U. es por kg"}}}catch(e){}
     const sel=document.getElementById("mp_modalidad");
     if(sel){sel.value=modalidad;mpOnChangeModalidad();}
     const moneda=document.getElementById("mp_moneda");
@@ -1256,7 +1261,7 @@ function aplicarPrecioDesdeOC(desc){
     const precioInput=document.getElementById("mp_precio");
     if(precioInput)precioInput.value=_puOC(encontrado.item).toFixed(2);
     info.style.color="#1a73e8";
-    info.innerText="✓ Precio tomado de OC Nº "+encontrado.oc.numero+" ("+(encontrado.oc.fecha||"")+") — "+encontrado.oc.proveedor+", $"+encontrado.item.precioUnitario+(unidad?"/"+unidad:"/m");
+    info.innerText="✓ Precio tomado de OC Nº "+encontrado.oc.numero+" ("+(encontrado.oc.fecha||"")+") — "+encontrado.oc.proveedor+", $"+encontrado.item.precioUnitario+" por "+(modalidad==="kg"?"kg":modalidad==="barra"?"barra":"metro")+" · "+razon;
 }
 // Busca en las Ordenes de Compra guardadas items cuya DESCRIPCION se parezca
 // a la del producto actual (_descActual) - para el paso "Trabajo Terceros" de
@@ -3072,7 +3077,7 @@ function precioAuto(cod){var d=descMP(cod),pf=String(cod).slice(0,2),re=MATS2[pf
  if(re&&/CHAPA/i.test(d)&&!/PLANCH/i.test(d)){var pc=precioChapa(cod,d,re);return pc||{ok:false}}
  if(!re||!band||!fm)return{ok:false};band=bandaForma(band,fm.f);
  var dens=mpDetectarDensidad(cod,d),kgm=areaMP(fm)*dens/1000,centro=Math.sqrt(band[0]*band[1]),cand=candidatosMP(cod,d,re,fm);
- for(var i=0;i<cand.length;i++){var c=cand[i],un=String(c.it.unidad||"").toUpperCase().replace(/\./g,"").trim(),opts,metodo="",forz=null;
+ for(var i=0;i<cand.length;i++){var c=cand[i],un=String(c.it.unidad||c.oc.unidadCant||"").toUpperCase().replace(/\./g,"").trim(),opts,metodo="",forz=null;
   /* OC en pesos: se compara en dólares al tipo de cambio actual, y solo si es de los últimos 6 meses (las más viejas quedarían baratas por la inflación) */
   var esArs=c.oc.moneda==="ars",tcOC=esArs?tcDeFechaOC(c.oc.fecha):1;var pu=esArs?c.p/tcOC:c.p;
   /* 1) la descripcion o la unidad dicen "kg"; 2) la relacion precio/diametro dentro de la OC; 3) la columna de unidad (casi nunca viene); 4) el precio habitual del material */
