@@ -1972,6 +1972,7 @@ function routePT(r){var comp={},pt={},mp={},pc={};
  Object.keys(r.tot).forEach(function(c){var k=NC(c),ums=Object.keys(r.um[c]||{}),destino;
   if(comp[k])destino="comp";else if(pt[k])destino="pt";
   else if(mp[k]||/^\d{2}[A-Z]\d{2}$/.test(k)||(ums.length&&ums.every(function(u){return u==="MM"}))){ign.push(c);return}
+  else if(window._mxCompSet&&window._mxCompSet[k])destino="comp";
   else if(plan[k]!==undefined)destino=plan[k]==="COMPONENTE"?"comp":"pt";
   else{var v=votes[k.slice(0,4)];destino=(v&&v.comp>v.pt)?"comp":"pt";porCodigo[destino]++}
   var T=destino==="comp"?B:A;T.tot[c]=r.tot[c];T.desc[c]=r.desc[c]});
@@ -2019,6 +2020,103 @@ document.addEventListener("drop",function(e){if(window.__depRedrop)return;var fs
  dep.forEach(function(f){conXlsxDep(function(){procDepFile(f)})});
  var dt=new DataTransfer();all.filter(function(f){return dep.indexOf(f)<0}).forEach(function(f){dt.items.add(f)});
  window.__depRedrop=1;try{document.dispatchEvent(new DragEvent("drop",{dataTransfer:dt,bubbles:true,cancelable:true}))}finally{window.__depRedrop=0}},true);
+
+/* ===================== IMPORTAR productos.csv + despieces.csv de Produccion Integral (PI manda; si PI no tiene MP, queda la del MAESTRO) ===================== */
+var _impProd=null;
+window._mxCompSet=(function(){var o={};try{JSON.parse(localStorage.getItem("btmp2_comp_codes")||"[]").forEach(function(c){o[c]=1})}catch(e){}return o})();
+function impCsv(t){var rows=[],r=[],f="",q=false;t=String(t).replace(/^﻿/,"");for(var i=0;i<t.length;i++){var c=t[i];if(q){if(c==='"'){if(t[i+1]==='"'){f+='"';i++}else q=false}else f+=c}else if(c==='"')q=true;else if(c===";"){r.push(f);f=""}else if(c==="\n"){r.push(f.replace(/\r$/,""));rows.push(r);r=[];f=""}else f+=c}if(f!==""||r.length){r.push(f);rows.push(r)}return rows}
+function impKind(l){return(l.u==="MM"||l.u==="MM²")?"mp":(/^\d{2}[A-Z]\d{2}$/i.test(l.c)?"mpun":"comp")}
+function impOkMP(c){return/^\d{2}[A-Z]\d{2}$/i.test(String(c||""))}
+function impLeerProd(rows){var H=rows[0].map(depNorm),ic=H.indexOf("codigo"),id=H.indexOf("descripcion"),ifa=H.indexOf("familia"),im=H.indexOf("material"),ie=H.indexOf("estado");if(ic<0||id<0||ie<0)return null;
+ var o={};rows.slice(1).forEach(function(r){var c=String(r[ic]||"").trim();if(c)o[NC(c)]={c:c,d:String(r[id]||"").trim(),fam:String(r[ifa]||"").trim(),mat:String(r[im]||"").trim(),est:String(r[ie]||"").trim()}});return o}
+function impLeerBom(rows){var H=rows[0].map(depNorm),ip=H.indexOf("producto"),id=H.indexOf("descripcion"),icl=H.indexOf("clase"),ico=H.indexOf("componente"),icd=H.indexOf("descripcion del componente"),iq=H.indexOf("cantidad"),iu=H.indexOf("unidad");if(ip<0||ico<0||iq<0)return null;
+ var bom={},cur=null;rows.slice(1).forEach(function(r){var p=String(r[ip]||"").trim();if(p){cur={c:p,d:String(r[id]||"").trim(),clase:String(r[icl]||"").trim(),l:[]};bom[NC(p)]=cur}else if(cur&&String(r[ico]||"").trim()){var q=numAR(r[iq]);cur.l.push({c:String(r[ico]).trim(),d:String(r[icd]||"").trim(),q:isFinite(q)?q:0,u:String(r[iu]||"").trim().toUpperCase()})}});return bom}
+function impPlanData(){var st=window._ppState;return(st&&st.data&&st.data.length)?st.data:((state.tabs.maestropt&&state.tabs.maestropt.data)||[])}
+function impFila(n){var d=n.pi.d,m=/\(([A-Za-z])\)\s*$/.exec(d),disc=n.pi.est!=="Activo";
+ return{Tipo:"PROD TERM",SF:1,Famil:n.b.c.slice(0,4),Codigo:n.b.c,Descripcion:d,Estado:disc?"DISCONTINUO":"Pregunta",Venta:0,"Stock DPT":0,"Stock Proceso":null,"Dias Stock":0,"Maquina 1ra oper":null,"TpoSd CNC":null,"TpoSd MOD":null,MP:m?m[1].toUpperCase():"","Codigo MP":disc?"DISCONTINUO":n.want.mp,"Descripcion MP":disc?"DISCONTINUO":n.want.d,"Consumo UnitUario":disc?0:n.want.cu,_baseCU:disc?0:n.want.cu,"Necesidad de MP":0,"Pedir MP":0,"aumento de Ventas":0,"pz x caja":0,Stock:0,"stk var":0,"Stock Min 3 meses":0,"Cons mensual":0,"Stock.1":0,"alcance Meses":0,"Quiero Tener":0,"Unnamed: 28":0,Pedir:0,1350:null}}
+function impCalc(bom,prod){
+ var rows=impPlanData(),idx={};rows.forEach(function(r){idx[NC(r.Codigo)]=r});
+ var ensOld=typeof window.getEnsambles==="function"?window.getEnsambles():{},byComp={};
+ Object.keys(ensOld).forEach(function(p){(ensOld[p]||[]).forEach(function(e){var k=NC(e.cod);if(!byComp[k]&&impOkMP(e.mp)&&(parseFloat(e.mpCons)||0)>0)byComp[k]=e})});
+ var R={ens:{},compSet:{},sinMP:{},mod:[],nuevos:[],instr:[],inact:[],st:{prod:0,simples:0,ensambles:0,igual:0,disc:0,sinFila:0,sinMPprod:0}};
+ function esEns(b){return b.l.some(function(l){return impKind(l)==="comp"})}
+ function aplanar(b,mult,prof,visit,root){var out=[];
+  b.l.forEach(function(l){var k=impKind(l);
+   if(k==="mp")out.push({cod:l.c,desc:l.d,uso:mult,consumo:mult,mp:l.c,mpDesc:l.d,mpCons:l.q});
+   else if(k==="mpun")out.push({cod:l.c,desc:l.d,uso:l.q*mult,consumo:l.q*mult,mp:l.c,mpDesc:l.d,mpCons:1});
+   else{var nk=NC(l.c),sub=bom[nk],q=l.q*mult;R.compSet[nk]=1;
+    if(sub&&esEns(sub)&&prof<3&&!visit[nk]){var v2={};Object.keys(visit).forEach(function(x){v2[x]=1});v2[nk]=1;aplanar(sub,q,prof+1,v2,root).forEach(function(e){out.push(e)})}
+    else{var mp=null;
+     if(sub){var m=sub.l.filter(function(x){return impKind(x)!=="comp"})[0];if(m)mp={c:m.c,d:m.d,q:m.q}}
+     if(!mp){var old=((ensOld[root]||[]).filter(function(e){return NC(e.cod)===nk&&impOkMP(e.mp)&&(parseFloat(e.mpCons)||0)>0})[0])||byComp[nk];if(old)mp={c:old.mp,d:old.mpDesc||"",q:parseFloat(old.mpCons)}}
+     out.push({cod:l.c,desc:l.d,uso:q,consumo:q,mp:mp?mp.c:"",mpDesc:mp?mp.d:"",mpCons:mp?mp.q:0});
+     if(!mp)R.sinMP[nk]=l.c+" "+l.d}}});
+  var m2={},res=[];out.forEach(function(e){var k=NC(e.cod)+"|"+e.mp+"|"+e.mpCons;if(m2[k]){m2[k].uso+=e.uso;m2[k].consumo+=e.consumo}else{m2[k]=e;res.push(e)}});return res}
+ Object.keys(bom).forEach(function(k){var b=bom[k];R.st.prod++;
+  if(b.clase==="Instrumental"){R.instr.push(b);return}
+  if(b.clase==="Componente")R.compSet[k]=1;
+  var want;
+  if(esEns(b)){want={mp:"ENSAMBLE",d:"ENSAMBLE",cu:1};var v={};v[k]=1;R.ens[b.c]=aplanar(b,1,0,v,b.c);R.st.ensambles++}
+  else{var m=b.l[0];if(!m)return;want={mp:m.c,d:m.d,cu:m.q};R.st.simples++}
+  var row=idx[k],pi=prod?prod[k]:null;
+  if(row){var est=String(row.Estado||"").trim().toUpperCase();
+   if(est==="DISCONTINUO"&&String(row["Codigo MP"]||"").trim().toUpperCase()==="DISCONTINUO"){R.st.disc++;return}
+   var mpDif=NC(row["Codigo MP"])!==NC(want.mp),cuDif=want.cu>0&&Math.abs((parseFloat(row["Consumo UnitUario"])||0)-want.cu)>0.005;
+   if(mpDif||cuDif)R.mod.push({row:row,want:want,mpDif:mpDif,cuDif:cuDif,b:b});else R.st.igual++;
+   if(pi&&pi.est==="Inactivo"&&est!=="DISCONTINUO")R.inact.push(row)}
+  else if(pi&&b.clase!=="Instrumental")R.nuevos.push({b:b,pi:pi,want:want});else R.st.sinFila++});
+ R.instrFill=R.instr.filter(function(b){var rec=window.instrFindByCod?window.instrFindByCod(b.c):null;return rec&&(!rec.mps||!rec.mps.length)&&b.l.some(function(l){return impKind(l)!=="comp"})});
+ R.sinMPn=Object.keys(R.sinMP).length;
+ return R}
+function impDetalleCsv(R){var L=["Tipo;Codigo;Descripcion;MP antes;MP despues;Consumo antes;Consumo despues"];
+ R.mod.forEach(function(x){L.push(["Cambio",x.b.c,x.b.d,x.row["Codigo MP"],x.want.mp,x.row["Consumo UnitUario"],x.want.cu].map(function(v){return String(v==null?"":v).replace(/;/g,",")}).join(";"))});
+ R.nuevos.forEach(function(n){L.push(["Producto nuevo",n.b.c,n.pi.d,"",n.want.mp,"",n.want.cu].map(function(v){return String(v==null?"":v).replace(/;/g,",")}).join(";"))});
+ R.inact.forEach(function(r){L.push(["Inactivo en PI",r.Codigo,r.Descripcion,r["Codigo MP"],"","",""].map(function(v){return String(v==null?"":v).replace(/;/g,",")}).join(";"))});
+ Object.keys(R.sinMP).forEach(function(k){L.push(["Componente sin MP",R.sinMP[k].split(" ")[0],R.sinMP[k].replace(/^\S+\s/,""),"","","",""].join(";"))});
+ var a=document.createElement("a");a.href=URL.createObjectURL(new Blob(["﻿"+L.join("\r\n")],{type:"text/csv;charset=utf-8"}));a.download="cambios_MAESTRO_desde_PI.csv";a.click()}
+function impAplicar(R,optInact){var rows=impPlanData();
+ R.mod.forEach(function(x){var r=x.row;r["Codigo MP"]=x.want.mp;r["Descripcion MP"]=x.want.d;if(r["Descripcion  MP"]!==undefined)r["Descripcion  MP"]=x.want.d;if(x.want.cu>0){r["Consumo UnitUario"]=x.want.cu;r["_baseCU"]=x.want.cu}});
+ R.nuevos.forEach(function(n){rows.push(impFila(n))});
+ if(optInact)R.inact.forEach(function(r){r.Estado="DISCONTINUO"});
+ var cur=typeof window.getEnsambles==="function"?window.getEnsambles():{};var out={};Object.keys(cur).forEach(function(k){out[k]=cur[k]});Object.keys(R.ens).forEach(function(k){out[k]=R.ens[k]});out._ver="v2";
+ var ok=true;try{localStorage.setItem("btmp2_ensambles_override",JSON.stringify(out))}catch(e){ok=false}
+ try{var cs=window._mxCompSet;Object.keys(R.compSet).forEach(function(k){cs[k]=1});localStorage.setItem("btmp2_comp_codes",JSON.stringify(Object.keys(cs)))}catch(e){}
+ var nI=0;R.instrFill.forEach(function(b){var rec=window.instrFindByCod(b.c);if(!rec)return;rec.mps=b.l.filter(function(l){return impKind(l)!=="comp"}).map(function(l){return{cod:l.c,des:l.d,cu:l.q}});nI++});if(nI&&window.instrSaveAll)window.instrSaveAll();if(nI&&window.instrRender)try{window.instrRender()}catch(e){}
+ try{localStorage.setItem("btmp2_maestropt",(window.mxPlanJSON||JSON.stringify)(rows))}catch(e){ok=false}
+ state.tabs.maestropt.data=rows;state.tabs.maestropt.filtered=rows.slice();
+ if(window._ppState){window._ppState.data=rows;if(typeof window._ppInit==="function")try{window._ppInit()}catch(e){}}
+ if(window.rebuildMPPlan)setTimeout(window.rebuildMPPlan,150);
+ toastMsg((ok?"✔ ":"⚠ No cabe todo en la memoria del navegador. ")+"Actualizado desde PI: "+R.mod.length+" productos con otra MP/consumo, "+R.nuevos.length+" nuevos, "+Object.keys(R.ens).length+" ensambles"+(nI?", "+nI+" instrumentales con MP":""),ok)}
+function impMostrar(R,hayProd){var old=document.getElementById("impModal");if(old)old.remove();
+ var mpD=R.mod.filter(function(x){return x.mpDif}).length,cuD=R.mod.filter(function(x){return x.cuDif&&!x.mpDif}).length,toEns=R.mod.filter(function(x){return x.want.mp==="ENSAMBLE"}).length;
+ var d=document.createElement("div");d.id="impModal";d.style.cssText="position:fixed;inset:0;z-index:9900;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center";
+ var sin=Object.keys(R.sinMP).map(function(k){return R.sinMP[k]}).slice(0,60).join("<br>");
+ d.innerHTML=`<div style="background:#fff;color:#202124;border-radius:12px;padding:20px 24px;max-width:640px;width:92%;max-height:86vh;overflow:auto;font:14px/1.5 system-ui,sans-serif;box-shadow:0 10px 40px rgba(0,0,0,.4)">
+ <h3 style="margin:0 0 4px;font-size:17px">Actualizar el MAESTRO con lo que tiene Producción Integral</h3>
+ <div style="color:#5f6368;font-size:12px;margin-bottom:10px">Manda PI: si el despiece tiene MP, se usa. Si PI no tiene despiece del producto, queda la del MAESTRO. DISCONTINUO con MP "DISCONTINUO" no se toca.</div>
+ <ul style="margin:0 0 10px;padding-left:18px">
+ <li><b>${R.st.prod}</b> productos con despiece en PI (${R.st.simples} con MP directa, ${R.st.ensambles} ensambles, ${R.instr.length} instrumentales).</li>
+ <li><b>${R.mod.length}</b> productos del Plan cambian: ${mpD} con otra MP, ${cuD} solo en consumo (${toEns} pasan a ENSAMBLE). ${R.st.igual} ya coincidían. ${R.st.disc} DISCONTINUO sin tocar.</li>
+ <li><b>${R.nuevos.length}</b> productos nuevos en el Plan (con despiece y no estaban)${hayProd?"":" — falta productos.csv: no se agregan"}.</li>
+ <li><b>${Object.keys(R.ens).length}</b> ensambles se reemplazan por el despiece de PI. Componentes sin MP conocida: <b>${R.sinMPn}</b>.</li>
+ <li><b>${R.instrFill.length}</b> instrumentales sin MP cargada reciben la de PI.</li></ul>
+ ${R.inact.length?`<label style="display:block;margin:6px 0;padding:8px;background:#fff8e1;border-radius:8px"><input type="checkbox" id="impInact"> Pasar a DISCONTINUO los <b>${R.inact.length}</b> productos que PI tiene <b>Inactivos</b> y el Plan no.</label>`:""}
+ ${R.sinMPn?`<details style="margin:6px 0"><summary style="cursor:pointer">Ver componentes sin MP (${R.sinMPn})</summary><div style="font-size:12px;max-height:160px;overflow:auto;padding:6px;background:#f6f6f6;border-radius:6px">${sin}${R.sinMPn>60?"<br>…":""}</div></details>`:""}
+ <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap"><button id="impCsv" style="padding:8px 14px;border:1px solid #bbb;background:#fff;border-radius:8px;cursor:pointer">Descargar detalle (CSV)</button><button id="impNo" style="padding:8px 14px;border:1px solid #bbb;background:#fff;border-radius:8px;cursor:pointer">Cancelar</button><button id="impSi" style="padding:8px 16px;border:none;background:#1565c0;color:#fff;font-weight:700;border-radius:8px;cursor:pointer">Aplicar cambios</button></div></div>`;
+ document.body.appendChild(d);
+ d.querySelector("#impNo").onclick=function(){d.remove()};d.querySelector("#impCsv").onclick=function(){impDetalleCsv(R)};
+ d.querySelector("#impSi").onclick=function(){var c=d.querySelector("#impInact");d.remove();impAplicar(R,c&&c.checked)}}
+function impLeer(files){Promise.all(files.map(function(f){return new Promise(function(ok){var rd=new FileReader();rd.onload=function(){ok({f:f,t:rd.result})};rd.onerror=function(){ok({f:f,t:""})};rd.readAsText(f,"utf-8")})})).then(function(a){var bom=null;
+ a.forEach(function(x){var rows=impCsv(x.t);if(!rows.length||!rows[0])return;var H=rows[0].map(depNorm);
+  if(H.indexOf("componente")>=0&&H.indexOf("producto")>=0)bom=impLeerBom(rows);
+  else if(H.indexOf("codigo")>=0&&H.indexOf("estado")>=0&&H.indexOf("familia")>=0){_impProd=impLeerProd(rows);if(_impProd)toastMsg("productos.csv leído: "+Object.keys(_impProd).length+" códigos",true)}
+  else toastMsg("No reconozco el archivo "+x.f.name+" (esperaba productos.csv o despieces.csv de PI)",false)});
+ if(bom)impMostrar(impCalc(bom,_impProd),!!_impProd);else if(_impProd)toastMsg("Ahora soltá también el archivo despieces_….csv de PI",false)})}
+(function(){document.addEventListener("drop",function(e){var fs=e.dataTransfer&&e.dataTransfer.files;if(!fs||!fs.length)return;
+ var all=Array.from(fs),mine=all.filter(function(f){return/^(productos|despieces?).*\.csv$/i.test(String(f.name).trim())});if(!mine.length)return;
+ e.stopImmediatePropagation();e.preventDefault();impLeer(mine);
+ var dt=new DataTransfer();all.filter(function(f){return mine.indexOf(f)<0}).forEach(function(f){dt.items.add(f)});
+ document.dispatchEvent(new DragEvent("drop",{dataTransfer:dt,bubbles:true,cancelable:true}))},true)})();
 
 document.addEventListener("drop",function(e){var fs=e.dataTransfer&&e.dataTransfer.files;if(!fs)return;
  Array.from(fs).forEach(function(f){if(!/\.csv$/i.test(f.name))return;var t=csvTipo(f.name);
